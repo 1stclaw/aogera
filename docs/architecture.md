@@ -161,7 +161,7 @@ Attack bound persistent player entity
   -> emit Effect::DamageCharacter(:player, amount)
 ```
 
-Persistent effects are applied by `Session`, keeping persistent mutation outside `World`.
+When local runtime `Health` reaches zero during an `Attack`, the executor immediately retires that entity's gameplay components. Command producers therefore do not need to predict lethal damage or append a separate `Defeat` command. Explicit `Defeat` remains available as a command for already-zero-health entities.\n\nPersistent effects are applied by `Session`, keeping persistent mutation outside `World`.
 
 ## Fixed-step scheduling
 

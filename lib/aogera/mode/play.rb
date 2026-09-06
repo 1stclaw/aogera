@@ -20,7 +20,6 @@ module Aogera
 
         validate_player!
       end
-
       def advance(input:)
         return :quit if input.pressed?(:quit)
         return :quit if input.pressed?(:cancel)
@@ -38,7 +37,6 @@ module Aogera
 
         :advanced
       end
-
       def level = simulation.level
       def world_view = simulation.world_view
       def step_number = simulation.step_number
@@ -46,7 +44,6 @@ module Aogera
       def controlled_entity_id
         simulation.entity_id_for_character(player_key)
       end
-
       def status_text
         player = player_character
         "#{player_key.to_s.capitalize} " \
@@ -57,7 +54,6 @@ module Aogera
       end
 
       private
-
       def commands_for(input)
         planned = controller.build(
           input: input,
@@ -73,7 +69,6 @@ module Aogera
           player_attack_commands + planned.to_a
         )
       end
-
       def player_attack_commands
         target_id = adjacent_target_id
         return [] unless target_id
@@ -82,24 +77,14 @@ module Aogera
         combatant = world_view.component(target_id, :combatant)
         return [] unless health && combatant
 
-        damage = player_character.attack
-        commands = [
+        [
           Simulation::Commands::Attack.new(
             attacker_id: controlled_entity_id,
             target_id: target_id,
-            damage: damage
+            damage: player_character.attack
           )
         ]
-
-        if damage >= health.current
-          commands << Simulation::Commands::Defeat.new(
-            entity_id: target_id
-          )
-        end
-
-        commands
       end
-
       def interaction_transition
         target_id = adjacent_target_id
         return unless target_id
@@ -114,7 +99,6 @@ module Aogera
           )
         )
       end
-
       def adjacent_target_id
         origin = world_view.component(controlled_entity_id, :position)
         facing = world_view.component(controlled_entity_id, :facing)
@@ -128,7 +112,6 @@ module Aogera
 
         world_view.entity_ids.find do |entity_id|
           next if entity_id == controlled_entity_id
-
           position = world_view.component(entity_id, :position)
           position && position.x == target_x && position.y == target_y
         end
@@ -141,7 +124,6 @@ module Aogera
       def player_defeated?
         player_character.hp.zero?
       end
-
       def validate_player!
         player_character
         controlled_entity_id

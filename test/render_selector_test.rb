@@ -13,7 +13,6 @@ class RenderSelectorTest < Minitest::Test
 
     assert_instance_of Aogera::Render::Kitty, renderer
   end
-
   def test_rejects_terminal_without_kitty_graphics
     error = assert_raises(
       Aogera::Render::Selector::UnsupportedTerminal
@@ -27,7 +26,7 @@ class RenderSelectorTest < Minitest::Test
     end
 
     assert_equal(
-      "Aogera v0.1.0 requires Kitty graphics protocol support",
+      "Aogera v#{Aogera::VERSION} requires Kitty graphics protocol support",
       error.message
     )
   end

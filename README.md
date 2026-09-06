@@ -4,7 +4,7 @@ Aogera is an experimental Ruby game runtime for a single-character, real-time ac
 
 The current prototype deliberately keeps the world simple: integer-grid geometry, direct map combat, and a Kitty-terminal presentation backend. The architecture is not intended to depend on terminal rendering. Its purpose is to make simulation, scheduling, input, persistent state, and authored content explicit enough to evolve or be reimplemented independently.
 
-Aogera begins its own version line at **0.1.0**.
+Aogera begins its own version line at **0.1.1**.
 
 ## Core model
 
@@ -111,7 +111,7 @@ Simulation::Executor
               Session
 ```
 
-For example, damage to a local world entity mutates its runtime health component, while damage to a bound persistent player character can be emitted as a persistent effect for `Session` to apply.
+For example, damage to a local world entity mutates its runtime health component; if that health reaches zero, the executor immediately retires the entity's gameplay components. Damage to a bound persistent player character can be emitted as a persistent effect for `Session` to apply.
 
 ## Authored content
 

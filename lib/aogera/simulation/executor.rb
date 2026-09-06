@@ -13,7 +13,6 @@ module Aogera
 
       def execute(level:, world:, commands:, bindings:)
         effects = []
-
         commands.each do |command|
           effect = case command
           in Commands::Move
@@ -27,7 +26,6 @@ module Aogera
           else
             raise ArgumentError, "unsupported command: #{command.inspect}"
           end
-
           effects << effect if effect
         end
 
@@ -45,7 +43,6 @@ module Aogera
         update_facing(world, command)
         next_x = position.x + command.dx
         next_y = position.y + command.dy
-
         return unless @movement.traversable?(
           level: level,
           world: world,
@@ -65,7 +62,6 @@ module Aogera
       def update_facing(world, command)
         current = world.component(command.entity_id, :facing)
         return unless current
-
         direction = direction_for(command.dx, command.dy)
         return unless direction
 
@@ -91,6 +87,7 @@ module Aogera
             :health,
             Component::Health.new(current: current, max: health.max)
           )
+          retire_entity(world, command.target_id) if current.zero?
           return nil
         end
 
@@ -110,7 +107,6 @@ module Aogera
 
         attacker_health = world.component(command.attacker_id, :health)
         return false if attacker_health&.current&.zero?
-
         attacker = world.component(command.attacker_id, :position)
         target = world.component(command.target_id, :position)
         return false unless attacker && target
@@ -124,11 +120,16 @@ module Aogera
         health = world.component(command.entity_id, :health)
         return unless health&.current&.zero?
 
-        RETIRED_COMPONENTS.each do |name|
-          world.remove_component(command.entity_id, name)
-        end
+        retire_entity(world, command.entity_id)
         nil
       end
+
+      def retire_entity(world, entity_id)
+        RETIRED_COMPONENTS.each do |name|
+          world.remove_component(entity_id, name)
+        end
+      end
+
       def execute_despawn(world, command, bindings)
         return unless world.entity?(command.entity_id)
 

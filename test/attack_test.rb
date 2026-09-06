@@ -13,7 +13,6 @@ class AttackTest < Minitest::Test
     @executor = Aogera::Simulation::Executor.new
     @bindings = Aogera::Simulation::Bindings.new
   end
-
   def test_adjacent_attack_reduces_local_health
     world = Aogera::World.new
     attacker = world.spawn(
@@ -32,8 +31,41 @@ class AttackTest < Minitest::Test
         damage: 1
       )
     )
-
     assert_equal 9, world.component(target, :health).current
+    assert_empty effects
+  end
+
+  def test_lethal_local_attack_retires_target
+    world = Aogera::World.new
+    attacker = world.spawn(
+      position: Aogera::Component::Position.new(x: 1, y: 1)
+    )
+    target = world.spawn(
+      position: Aogera::Component::Position.new(x: 2, y: 1),
+      health: Aogera::Component::Health.new(current: 2, max: 2),
+      renderable: Aogera::Component::Renderable.new(
+        render_key: :goblin, glyph: "G", layer: 10
+      ),
+      behavior: Aogera::Component::Behavior.new(kind: :chase),
+      collision: Aogera::Component::Collision.new(blocks_movement: true),
+      combatant: Aogera::Component::Combatant.new(attack: 1)
+    )
+
+    effects = execute(
+      world,
+      Aogera::Simulation::Commands::Attack.new(
+        attacker_id: attacker,
+        target_id: target,
+        damage: 2
+      )
+    )
+
+    assert_equal 0, world.component(target, :health).current
+    assert_nil world.component(target, :renderable)
+    assert_nil world.component(target, :behavior)
+    assert_nil world.component(target, :collision)
+    assert_nil world.component(target, :combatant)
+    assert world.component(target, :position)
     assert_empty effects
   end
 
@@ -46,7 +78,6 @@ class AttackTest < Minitest::Test
       position: Aogera::Component::Position.new(x: 2, y: 1)
     )
     @bindings.bind(character_key: :hero, entity_id: target)
-
     effects = execute(
       world,
       Aogera::Simulation::Commands::Attack.new(
@@ -63,7 +94,6 @@ class AttackTest < Minitest::Test
     assert_equal 2, effect.amount
     assert_nil world.component(target, :health)
   end
-
   def test_attack_is_rejected_when_target_is_not_adjacent
     world = Aogera::World.new
     attacker = world.spawn(
@@ -73,7 +103,6 @@ class AttackTest < Minitest::Test
       position: Aogera::Component::Position.new(x: 3, y: 1),
       health: Aogera::Component::Health.new(current: 10, max: 10)
     )
-
     assert_empty execute(
       world,
       Aogera::Simulation::Commands::Attack.new(
