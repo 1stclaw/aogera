@@ -1,0 +1,58 @@
+# frozen_string_literal: true
+
+require_relative "aogera/version"
+require_relative "aogera/content/ruby_source"
+require_relative "aogera/dialogue/catalog"
+require_relative "aogera/dialogue/loader"
+
+require_relative "aogera/component"
+require_relative "aogera/prototype"
+require_relative "aogera/prototype/catalog"
+require_relative "aogera/prototype/loader"
+require_relative "aogera/character"
+require_relative "aogera/effect"
+require_relative "aogera/direction"
+require_relative "aogera/realtime"
+
+require_relative "aogera/world/component_table"
+require_relative "aogera/world/relations"
+require_relative "aogera/world/view"
+require_relative "aogera/world"
+
+require_relative "aogera/level"
+require_relative "aogera/level/terrain"
+require_relative "aogera/level/loader"
+require_relative "aogera/session"
+
+require_relative "aogera/input/action"
+require_relative "aogera/input/mapper"
+require_relative "aogera/input/handoff"
+require_relative "aogera/input/snapshot"
+require_relative "aogera/input/tracker"
+
+require_relative "aogera/simulation/commands"
+require_relative "aogera/simulation/movement"
+require_relative "aogera/simulation/pathfinder"
+require_relative "aogera/simulation/bindings"
+require_relative "aogera/simulation/executor"
+require_relative "aogera/simulation"
+require_relative "aogera/realtime_controller"
+
+require_relative "aogera/mode_stack"
+require_relative "aogera/mode/transitions"
+require_relative "aogera/mode/dialogue"
+require_relative "aogera/mode/play"
+
+require_relative "aogera/render/scene"
+require_relative "aogera/render/projector"
+require_relative "aogera/render/ascii"
+require_relative "aogera/render/asset_catalog"
+require_relative "aogera/render/kitty"
+require_relative "aogera/render/selector"
+
+require_relative "aogera/host"
+require_relative "aogera/host/terminal_capabilities"
+require_relative "aogera/host/terminal_input"
+require_relative "aogera/host/terminal"
+require_relative "aogera/fixed_step"
+require_relative "aogera/app"
