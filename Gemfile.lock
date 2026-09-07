@@ -1,7 +1,6 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    base64 (0.3.0)
     ffi (1.17.4)
     ffi (1.17.4-x86_64-linux-gnu)
     minitest (5.27.0)
@@ -15,12 +14,10 @@ PLATFORMS
   x86_64-linux
 
 DEPENDENCIES
-  base64
   minitest (~> 5.0)
   raylib-bindings (= 0.8.3)
 
 CHECKSUMS
-  base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   bundler (4.0.19) sha256=b48056e4c77fb3853cc47775b5447ede44aaa4f53c32f168014ab4fe86587d47
   ffi (1.17.4) sha256=bcd1642e06f0d16fc9e09ac6d49c3a7298b9789bcb58127302f934e437d60acf
   ffi (1.17.4-x86_64-linux-gnu) sha256=9d3db14c2eae074b382fa9c083fe95aec6e0a1451da249eab096c34002bc752d

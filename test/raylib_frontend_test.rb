@@ -4,7 +4,7 @@ require "minitest/autorun"
 require_relative "../lib/aogera"
 
 class RaylibFrontendTest < Minitest::Test
-  Item = Data.define(:x, :y, :render_key, :glyph)
+  Item = Data.define(:x, :y, :render_key, :fallback_glyph)
   Scene = Data.define(:width, :height, :tiles, :entities)
 
   class FakeAPI
@@ -40,6 +40,15 @@ class RaylibFrontendTest < Minitest::Test
     def screen_height = 768
   end
 
+  def test_raylib_host_uses_version_in_default_title
+    api = FakeAPI.new
+    host = Aogera::Host::Raylib.new(api: api)
+
+    host.open
+
+    assert_equal("Aogera #{Aogera::VERSION}", api.calls[0].last[:title])
+  end
+
   def test_raylib_host_focuses_window_after_opening
     api = FakeAPI.new
     host = Aogera::Host::Raylib.new(api: api)
@@ -58,13 +67,8 @@ class RaylibFrontendTest < Minitest::Test
 
     events = host.poll_events
 
-    if defined?(Aogera::Host::KeyEvent)
-      assert(events.any? { |event| event.key == :w && event.state == :pressed })
-      assert(events.any? { |event| event.key == :space && event.state == :released })
-    else
-      assert_includes(events, :w)
-      refute_includes(events, :space)
-    end
+    assert(events.any? { |event| event.key == :w && event.state == :pressed })
+    assert(events.any? { |event| event.key == :space && event.state == :released })
   end
 
   def test_raylib_renderer_draws_existing_scene_shape
@@ -74,11 +78,11 @@ class RaylibFrontendTest < Minitest::Test
       width: 2,
       height: 1,
       tiles: [
-        Item.new(x: 0, y: 0, render_key: :grass, glyph: "."),
-        Item.new(x: 1, y: 0, render_key: :wall, glyph: "#")
+        Item.new(x: 0, y: 0, render_key: :grass, fallback_glyph: "."),
+        Item.new(x: 1, y: 0, render_key: :wall, fallback_glyph: "#")
       ],
       entities: [
-        Item.new(x: 0, y: 0, render_key: :player, glyph: "@")
+        Item.new(x: 0, y: 0, render_key: :player, fallback_glyph: "@")
       ]
     )
 
