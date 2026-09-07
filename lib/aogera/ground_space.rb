@@ -7,16 +7,7 @@ module Aogera
     EPSILON = 1e-9
 
     def position(world:, entity_id:)
-      ground = world.component(entity_id, :ground_position)
-      return ground if ground
-
-      grid = world.component(entity_id, :position)
-      return unless grid
-
-      Component::GroundPosition.new(
-        x: grid.x + 0.5,
-        z: grid.y + 0.5
-      )
+      world.component(entity_id, :position)
     end
 
     def radius(world:, entity_id:)

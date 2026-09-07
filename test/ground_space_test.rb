@@ -8,9 +8,9 @@ class GroundSpaceTest < Minitest::Test
     @world = Aogera::World.new
   end
 
-  def test_grid_position_projects_to_ground_cell_center
+  def test_position_returns_canonical_world_position
     entity_id = @world.spawn(
-      position: Aogera::Component::Position.new(x: 3, y: 4)
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 4.5)
     )
 
     position = @space.position(world: @world.view, entity_id: entity_id)
@@ -19,10 +19,9 @@ class GroundSpaceTest < Minitest::Test
     assert_in_delta 4.5, position.z
   end
 
-  def test_continuous_ground_position_takes_precedence_over_grid_position
+  def test_position_preserves_continuous_coordinates
     entity_id = @world.spawn(
-      position: Aogera::Component::Position.new(x: 3, y: 4),
-      ground_position: Aogera::Component::GroundPosition.new(x: 3.2, z: 4.8)
+      position: Aogera::Component::Position.new(x: 3.2, y: 0.0, z: 4.8)
     )
 
     position = @space.position(world: @world.view, entity_id: entity_id)
@@ -33,11 +32,11 @@ class GroundSpaceTest < Minitest::Test
 
   def test_separation_accounts_for_authored_body_radii
     source = @world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.2)
     )
     target = @world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
     )
 
@@ -50,15 +49,15 @@ class GroundSpaceTest < Minitest::Test
 
   def test_arc_hits_use_continuous_heading_instead_of_cardinal_cells
     source = @world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 2.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.2)
     )
     east = @world.spawn(
-      position: Aogera::Component::Position.new(x: 3, y: 2),
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
     )
     west = @world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 2),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
     )
     yaw = 40.0 * Math::PI / 180.0

@@ -48,7 +48,8 @@ class PlayModeTest < Minitest::Test
 
     assert_equal hero_id, @simulation.entity_id_for_character(:hero)
     assert_equal :hero, @simulation.character_key_for_entity(hero_id)
-    assert_equal [2, 2], [position.x, position.y]
+    assert_in_delta 2.5, position.x
+    assert_in_delta 2.5, position.z
   end
 
   def test_controlled_world_entity_has_no_persistent_combat_state
@@ -71,17 +72,16 @@ class PlayModeTest < Minitest::Test
     assert_match "Enter interact", @mode.status_text
   end
 
-  def test_continuous_player_motion_can_move_within_current_grid_cell
+  def test_player_motion_updates_canonical_world_position
     @mode.advance(input: move_input(:strafe_left))
 
     hero_id = @mode.controlled_entity_id
     position = @mode.world_view.component(hero_id, :position)
-    ground = @mode.world_view.component(hero_id, :ground_position)
     facing = @mode.world_view.component(hero_id, :facing)
 
-    assert_equal [2, 2], [position.x, position.y]
-    assert_operator ground.x, :>, 2.5
-    assert_in_delta 2.5, ground.z
+    assert_operator position.x, :>, 2.5
+    assert_in_delta 0.0, position.y
+    assert_in_delta 2.5, position.z
     assert_equal :south, facing.direction
     assert_equal 1, @mode.step_number
   end

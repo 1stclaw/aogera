@@ -30,6 +30,9 @@ module Aogera
             behavior: Component::Behavior.new(kind: :chase),
             collision: Component::Collision.new(blocks_movement: true),
             ground_body: Component::GroundBody.new(radius: 0.28),
+            melee_attack: Component::MeleeAttack.new(
+              reach: 0.65, arc_degrees: 110.0
+            ),
             combatant: Component::Combatant.new(attack: 1)
           }.freeze
         ),

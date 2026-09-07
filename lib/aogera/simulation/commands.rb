@@ -3,7 +3,6 @@
 module Aogera
   class Simulation
     module Commands
-      Move = Data.define(:entity_id, :dx, :dy)
       GroundMove = Data.define(:entity_id, :dx, :dz)
       Attack = Data.define(:attacker_id, :target_id, :damage)
       Defeat = Data.define(:entity_id)

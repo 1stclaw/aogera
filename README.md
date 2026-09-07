@@ -8,11 +8,19 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 **Version: 0.3.0**
 
-Aogera now has continuous first-person movement on the ground plane. The controlled character owns a runtime `GroundPosition(x, z)` in Aogera world space, while mouse yaw/pitch remains in `FirstPersonView`. raylib `Camera3D` is derived from those Aogera-owned values rather than acting as canonical gameplay state.
+Aogera is now a true first-person 3D runtime with one canonical continuous entity position model:
 
-The player moves continuously at the 30 Hz simulation cadence. W/S move forward/back relative to the exact current yaw and A/D strafe; diagonal input is normalized. `GroundBody(radius)` gives ground actors authored horizontal extent. `Simulation::GroundMovement` now consumes continuous swept-circle traces, accumulates contact normals for each movement command, and resolves sliding against the full active contact set instead of resolving X/Z independently or relying on anti-tunneling substeps.
+```text
+Component::Position(x, y, z)
+```
 
-`GroundSpace` provides shared X/Z spatial facts plus structured segment/sweep collision queries. Static terrain cells and dynamic ground bodies participate in one earliest-hit contract. Player melee and interaction retain authored reach/arc profiles, then use segment traces to reject targets obstructed by terrain or blocking actors. NPC movement, pathfinding and autonomous attack decisions remain on the established integer grid. The player's old `Position(x, y)` remains a synchronized coarse cell while `GroundPosition` is authoritative for player location and camera placement.
+All runtime actors—including the player, enemies and NPCs—use this world-space position. Authored grid spawns are converted to world-space cell centers when a level is instantiated; there is no separate runtime grid-position component and no player/NPC position synchronization bridge.
+
+`GroundBody(radius)` gives current ground actors authored horizontal extent. `Simulation::GroundMovement` consumes continuous swept-circle traces, accumulates contact normals for each movement command, and resolves sliding against the full active contact set. Player and NPC locomotion both use `Simulation::Commands::GroundMove` and the same collision solver.
+
+`GroundSpace` provides shared X/Z spatial facts plus structured segment/sweep collision queries. Static terrain cells and dynamic ground bodies participate in one earliest-hit contract. Melee and interaction keep authored reach/arc profiles and use segment traces to reject obstructed targets. NPC melee is also validated through the same continuous separation/trace rules as player melee.
+
+The existing grid now has two deliberately limited jobs: authored static terrain and temporary BFS navigation. `Simulation::Pathfinder` projects continuous positions to navigation cells with `floor(x), floor(z)` when planning a route, but those cells are not stored as entity state.
 
 ## Running
 
@@ -54,7 +62,7 @@ Simulation timing is independent from rendering. The simulation runs at a fixed 
 keyboard -> Host::Raylib -> Input::Action -> fixed-step gameplay
 mouse    -> Host::Raylib -> Input::LookDelta -> FirstPersonView
 
-GroundPosition + FirstPersonView
+Position + FirstPersonView
         -> Render::Raylib3D -> RaylibAPI -> raylib
 ```
 
@@ -63,15 +71,15 @@ The 3D coordinate convention is Y-up:
 ```text
 world +X -> east/right
 world +Y -> up
-world +Z -> south / old grid +Y
+world +Z -> south / authored grid +Y
 ```
 
-The temporary grid bridge uses one world unit per authored cell. A grid cell `(x, y)` has center `(x + 0.5, z = y + 0.5)`.
+One authored grid cell is currently one world unit. An authored cell `(x, y)` spawns an entity at `(x + 0.5, 0.0, y + 0.5)`.
 
-Aogera still has no generic scene/projector/transform layer, no general physics system and no general asset manager. The current renderer directly extrudes the authored grid because it remains the smallest useful bridge to the coming BSP work.
+Aogera still has no generic scene/projector/transform layer, no general physics system and no general asset manager. The current renderer directly extrudes the authored grid, and the current Pathfinder still uses that grid as a temporary navigation graph.
 
 ## Direction
 
-The next 0.3 work can now evaluate BSP29 against an established trace/sweep contract. The present static terrain-cell backend can later be replaced by BSP collision hulls while movement, melee and interaction continue consuming the same ground-space collision results.
+The next BSP work can now start from a normalized runtime: one continuous entity position model, one actor ground-movement path and one continuous melee/collision model. BSP can replace the static terrain collision backend without also having to migrate NPCs out of a second runtime coordinate system.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

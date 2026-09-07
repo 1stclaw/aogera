@@ -48,7 +48,9 @@ class PathfindingChaseTest < Minitest::Test
     simulation.step(commands: commands)
 
     position = simulation.world_view.component(hunter_id, :position)
-    refute_equal [2, 2], [position.x, position.y]
-    assert_equal 1, (position.x - 1).abs + (position.y - 2).abs
+    assert_in_delta 1.5, position.x
+    assert_in_delta 0.0, position.y
+    assert_operator (position.z - 2.5).abs, :>, 0.0
+    assert_in_delta (2.0 / Aogera::Realtime::TICK_HZ), (position.z - 2.5).abs
   end
 end

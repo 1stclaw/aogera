@@ -19,8 +19,7 @@ class GroundMovementTest < Minitest::Test
     )
     world = Aogera::World.new
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
 
@@ -28,7 +27,7 @@ class GroundMovementTest < Minitest::Test
       level: level,
       world: world.view,
       entity_id: hero_id,
-      position: world.component(hero_id, :ground_position),
+      position: world.component(hero_id, :position),
       dx: 0.4,
       dz: 0.2
     )
@@ -47,12 +46,11 @@ class GroundMovementTest < Minitest::Test
     )
     world = Aogera::World.new
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2),
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 2.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     world.spawn(
-      position: Aogera::Component::Position.new(x: 3, y: 2),
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 2.5),
       collision: Aogera::Component::Collision.new(blocks_movement: true),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28)
     )
@@ -61,7 +59,7 @@ class GroundMovementTest < Minitest::Test
       level: level,
       world: world.view,
       entity_id: hero_id,
-      position: world.component(hero_id, :ground_position),
+      position: world.component(hero_id, :position),
       dx: 0.4,
       dz: 0.0
     )
@@ -89,8 +87,7 @@ class GroundMovementSweepTest < Minitest::Test
     )
     world = Aogera::World.new
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
 
@@ -98,7 +95,7 @@ class GroundMovementSweepTest < Minitest::Test
       level: level,
       world: world.view,
       entity_id: hero_id,
-      position: world.component(hero_id, :ground_position),
+      position: world.component(hero_id, :position),
       dx: 2.0,
       dz: 0.0
     )
@@ -124,7 +121,7 @@ class GroundMovementCornerTest < Minitest::Test
     )
     world = Aogera::World.new
     hero_id = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 2.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
 
@@ -132,7 +129,7 @@ class GroundMovementCornerTest < Minitest::Test
       level: level,
       world: world.view,
       entity_id: hero_id,
-      position: world.component(hero_id, :ground_position),
+      position: world.component(hero_id, :position),
       dx: 0.8,
       dz: 0.8
     )
@@ -153,12 +150,11 @@ class GroundMovementBodyShapeTest < Minitest::Test
     )
     world = Aogera::World.new
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2),
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 2.1),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.1),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     world.spawn(
-      position: Aogera::Component::Position.new(x: 3, y: 2),
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 2.5),
       collision: Aogera::Component::Collision.new(blocks_movement: true),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28)
     )
@@ -167,7 +163,7 @@ class GroundMovementBodyShapeTest < Minitest::Test
       level: level,
       world: world.view,
       entity_id: hero_id,
-      position: world.component(hero_id, :ground_position),
+      position: world.component(hero_id, :position),
       dx: 0.6,
       dz: 0.0
     )
@@ -185,11 +181,11 @@ class GroundMovementBodyShapeTest < Minitest::Test
     )
     world = Aogera::World.new
     hero_id = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 2.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 3.0, z: 2.5),
+      position: Aogera::Component::Position.new(x: 3.0, y: 0.0, z: 2.5),
       collision: Aogera::Component::Collision.new(blocks_movement: false),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28)
     )
@@ -198,7 +194,7 @@ class GroundMovementBodyShapeTest < Minitest::Test
       level: level,
       world: world.view,
       entity_id: hero_id,
-      position: world.component(hero_id, :ground_position),
+      position: world.component(hero_id, :position),
       dx: 0.8,
       dz: 0.0
     )
@@ -216,12 +212,11 @@ class GroundMovementBodyShapeTest < Minitest::Test
     )
     world = Aogera::World.new
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2),
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 2.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.4)
     )
     world.spawn(
-      position: Aogera::Component::Position.new(x: 3, y: 2),
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 2.5),
       collision: Aogera::Component::Collision.new(blocks_movement: true),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.4)
     )
@@ -230,7 +225,7 @@ class GroundMovementBodyShapeTest < Minitest::Test
       level: level,
       world: world.view,
       entity_id: hero_id,
-      position: world.component(hero_id, :ground_position),
+      position: world.component(hero_id, :position),
       dx: 0.4,
       dz: 0.0
     )
@@ -256,11 +251,11 @@ class GroundMovementMultiContactTest < Minitest::Test
     )
     @world = Aogera::World.new
     @hero_id = @world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.7799998, z: 1.8),
+      position: Aogera::Component::Position.new(x: 2.7799998, y: 0.0, z: 1.8),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     @goblin_id = @world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       collision: Aogera::Component::Collision.new(blocks_movement: true),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28)
     )
@@ -311,7 +306,7 @@ class GroundMovementMultiContactTest < Minitest::Test
       level: @level,
       world: @world.view,
       entity_id: @hero_id,
-      position: @world.component(@hero_id, :ground_position),
+      position: @world.component(@hero_id, :position),
       dx: dx,
       dz: dz
     )

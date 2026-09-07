@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.0 runtime and its present boundaries.
+This document describes the current Aogera 0.3.0 development runtime and its present boundaries.
 
 ## Design goals
 
@@ -10,6 +10,7 @@ Aogera favors a small, explicit, data-oriented runtime over framework-heavy abst
 - keep `Simulation` independent of wall-clock time and host input;
 - schedule simulation with a fixed-step policy outside the core simulation;
 - keep rendering downstream of canonical runtime/control state;
+- maintain one canonical runtime spatial representation;
 - add abstractions only when concrete gameplay or performance requirements need them.
 
 ## Lifetime model
@@ -35,35 +36,39 @@ FirstPersonView
 
 `FirstPersonView` owns logical first-person orientation and updates at render cadence. It is not raylib camera state and it is not the player's physical position.
 
-The controlled character's continuous physical location now lives in `World` as `Component::GroundPosition(x, z)`, because player translation affects collision and gameplay and therefore belongs on the fixed-step simulation side of the boundary.
-
 `World::View` is a cached read-only facade over `World`; callers receive the same view object rather than allocating wrappers repeatedly. `World#entity_ids` similarly caches its immutable existing-entity snapshot and invalidates it only on spawn/despawn.
 
-Runtime lifetime now distinguishes existence from gameplay activity. `Component::Retired` marks an entity that still exists in `World` but no longer participates as an active actor. Retired entities remain in `entity_ids` and may retain descriptive state such as `Position`, `GroundPosition`, `GroundBody`, health, or prototype identity; retirement does not imply despawn or deletion of spatial history. The executor rejects action/movement commands from retired entities, while despawn remains the operation that removes runtime identity entirely.
+Runtime lifetime distinguishes existence from gameplay activity. `Component::Retired` marks an entity that still exists in `World` but no longer participates as an active actor. Retired entities remain in `entity_ids` and may retain descriptive state such as `Position`, `GroundBody`, health, or prototype identity. The executor rejects movement/action commands from retired entities; despawn removes runtime identity entirely.
 
-## Position models during the migration
+## Canonical runtime position
 
-Aogera currently has two explicit position representations with different jobs.
+Every spatial runtime entity uses:
 
 ```text
-GroundPosition(x, z)
-    continuous player ground-plane position
-    authoritative for player translation and camera location
-
-Position(x, y)
-    integer authored/runtime grid cell
-    authoritative for current NPC/grid systems
+Component::Position(x, y, z)
 ```
 
-A persistent controlled character is spawned at the center of its authored entry cell. Whenever its `GroundPosition` crosses into another passable cell, the executor synchronizes its coarse `Position` with `floor(x), floor(z)`.
+Aogera's coordinate convention is:
 
-This coexistence is intentional. It lets the player use a real continuous coordinate without forcing NPC pathfinding, authored spawns, or terrain representation through a speculative all-at-once rewrite.
+```text
++X = east/right
++Y = up
++Z = south
+```
 
-`GroundSpace` is the current shared ground-plane geometry boundary. It resolves an entity to continuous X/Z coordinates (using `GroundPosition` when present and the center of `Position` otherwise), reads authored `GroundBody` radii, computes separation/overlap, performs parameterized arc queries, and provides structured segment/swept-circle traces. Static terrain cells and active dynamic bodies participate in one earliest-hit result containing the reached fraction, end position, contact normal, dynamic entity/static-world identity, and start-blocked state. Automatic dynamic scans skip retired entities even when retained `GroundBody` data remains; direct position/distance queries can still inspect retained spatial state. It does not own combat, interaction, pathfinding, or physics policy.
+The current flat authored levels spawn actors at Y = 0.0. Authored cell coordinates are converted at instantiation time:
 
-There is still no generic `Transform`, `Spatial`, `Position3D`, or physics-body abstraction.
+```text
+cell (x, y) -> Position(x + 0.5, 0.0, y + 0.5)
+```
 
-## Simulation
+The grid coordinate is not retained as a second runtime entity position. There is no position synchronization step and no player/NPC distinction in spatial representation.
+
+`GroundSpace` is the current shared X/Z geometry boundary. It reads canonical `Position`, reads authored `GroundBody` radii, computes separation/overlap, performs parameterized arc queries, and provides structured segment/swept-circle traces. Static terrain cells and active dynamic bodies participate in one earliest-hit result containing reached fraction, end position, contact normal, dynamic entity/static-world identity, and start-blocked state. Automatic dynamic scans skip retired entities even when retained body data remains.
+
+`GroundSpace` is intentionally still ground-specific. A canonical 3D `Position` is now justified by the real runtime, but Aogera does not yet claim to have generic 3D physics, vertical actor collision, or a universal spatial framework.
+
+## Simulation and movement
 
 `Simulation` owns one running level:
 
@@ -78,31 +83,52 @@ Simulation
 
 Its mutation boundary is `Simulation#step(commands:)`. Command producers build `Simulation::Commands::Buffer` values; `Simulation::Executor` validates and applies them. Persistent effects are emitted separately and applied by `Session`.
 
-Two movement commands now coexist deliberately:
+All current actor locomotion uses one command:
 
 ```text
-Move(entity_id, dx, dy)
-    integer grid movement used by NPCs
-
 GroundMove(entity_id, dx, dz)
-    continuous ground-plane movement used by the controlled player
 ```
 
-`GroundMovement` resolves the latter through `GroundSpace#sweep_circle`. The moving entity's `GroundBody(radius)` is authored data. Impassable terrain remains cell-shaped, while blocking actors with `GroundBody` remain circles. The sweep finds the earliest collision across the complete requested displacement, so large commands cannot tunnel through a one-cell obstacle. `GroundMovement` accumulates distinct contact normals across the movement command and constrains the remaining displacement against the full active contact set. This prevents an actor contact from sliding the player through a neighboring wall at a compound contact. Movement is still bounded to a small fixed number of contacts.
+The player produces view-relative continuous displacement every fixed simulation tick. NPC behavior currently produces ground displacement at the lower NPC decision cadence. Both are executed by the same `GroundMovement` and the same `GroundSpace#sweep_circle` collision path.
 
-Trace endpoints are exact contact positions rather than epsilon-shifted positions. After a contact-resolved move, `GroundMovement` defensively verifies that the returned body does not begin inside active solid geometry; an invalid numerical result falls back to the command's known-valid start rather than being committed. This is ground collision logic, not a general physics engine. Shape intersection belongs to `GroundSpace`; movement owns only movement/slide policy.
+`GroundMovement` uses the moving entity's authored `GroundBody(radius)`. Impassable terrain is currently cell-shaped; blocking actors with `GroundBody` are circles. Sweeps find the earliest collision across the complete requested displacement. Distinct contact normals are accumulated during one movement command and remaining motion is constrained against the active contact set, handling wall/actor compound contacts without axis-order bias.
+
+Trace endpoints are exact contact positions. After contact resolution, `GroundMovement` verifies that the returned body does not begin inside active solid geometry; an invalid numerical result falls back to the command's known-valid start. This is collision/locomotion policy, not a general physics engine.
+
+## Navigation
+
+The current BFS Pathfinder remains grid-based because the authored test levels are grids. It is now explicitly a **navigation representation**, not an entity-position model.
+
+For planning only:
+
+```text
+Position(x, y, z)
+      |
+      v
+navigation cell = (floor(x), floor(z))
+```
+
+The Pathfinder checks terrain passability and projects active blocking entities into navigation cells. It returns a next-cell direction; `RealtimeController` converts that cell waypoint back into continuous world displacement and emits `GroundMove`.
+
+This keeps the useful existing BFS while allowing a future BSP/navigation system to replace it without changing canonical entity coordinates or collision execution.
+
+## Combat and interaction
+
+Ground actors use authored `MeleeAttack(reach, arc_degrees)` profiles. Player target selection uses current first-person heading, authored reach/arc and segment obstruction traces. NPC chase logic uses the same continuous body separation and obstruction checks before emitting an `Attack` command.
+
+`Simulation::Executor` validates melee attacks through continuous `GroundSpace` separation and trace queries regardless of whether the attacker is the player or an NPC. Manhattan/grid adjacency is no longer a combat rule.
+
+Interaction remains semantically separate from combat. `Interactor(reach, arc_degrees)` uses the same spatial facts and obstruction traces but selects only interactable targets.
+
+This common spatial model is also the intended foundation for future interactive entities such as doors: they should occupy canonical world space and expose their own interaction/collision state rather than requiring a separate coordinate system.
 
 ## Fixed-step scheduling
 
 `App` owns the host loop and a monotonic `FixedStep`. The engine advances simulation at 30 Hz while raylib targets 60 rendered frames per second. A rendered frame may therefore contain zero or more simulation steps.
 
-`RealtimeController` emits controlled-player ground motion every fixed simulation tick while movement is held. Player speed is expressed in world units per second. NPC behavior continues to run at its separate lower decision cadence.
-
-Mouse yaw/pitch remains render-frame control state; translational movement remains fixed-step world state.
+Keyboard/gameplay actions remain fixed-step input. Mouse yaw/pitch remains render-frame control state.
 
 ## Input
-
-Boolean gameplay actions and continuous mouse look still use different timing paths.
 
 Keyboard/gameplay actions:
 
@@ -134,7 +160,7 @@ Render::Raylib3D
 
 `Host::Raylib` captures the cursor once after opening/focusing the window and releases it before close.
 
-Dialogue remains modal and currently pauses world advancement, while the shared first-person view renders from the controlled character's current `GroundPosition`.
+Dialogue remains modal and currently pauses world advancement.
 
 ## 3D rendering
 
@@ -150,31 +176,11 @@ RaylibAPI
 raylib
 ```
 
-`Render::Raylib3D` still directly extrudes the current grid level into primitive floors/walls and draws renderable entities as primitive cubes. The controlled player is omitted from the first-person entity pass.
+`Render::Raylib3D` directly extrudes the current grid level into primitive floors/walls and draws renderable entities from canonical `Position`. The controlled player is omitted from the first-person entity pass.
 
-The camera eye uses the controlled entity's continuous `GroundPosition` plus logical eye height. Its target comes from the `FirstPersonView` forward vector.
+The camera eye uses the controlled entity's `Position` plus logical eye height. Its target comes from the `FirstPersonView` forward vector.
 
-There is no `Scene3D`, `Projector3D`, generic `Scene`, generic `Renderer`, or generic transform hierarchy. The direct path remains sufficient for this bridge and leaves BSP free to use a different representation later.
-
-`RaylibAPI` owns conversion from plain Ruby camera/geometry values into `raylib-bindings` FFI types. raylib `Camera3D`/vector structs do not enter simulation or authored gameplay data.
-
-### Coordinate convention
-
-Aogera's current 3D convention is:
-
-```text
-+X = east/right
-+Y = up
-+Z = south (the old grid +Y direction)
-```
-
-One authored grid cell is currently one world unit. Grid cell centers map as:
-
-```text
-(x, y) -> (x + 0.5, 0, y + 0.5)
-```
-
-This convention can later form the explicit boundary for Quake Z-up conversion.
+There is no `Scene3D`, `Projector3D`, generic transform hierarchy, or generic physics system. `RaylibAPI` owns conversion from plain Ruby camera/geometry values into `raylib-bindings` FFI types.
 
 ## Authored content and assets
 
@@ -186,10 +192,10 @@ content/levels/
 content/dialogue/
 ```
 
-`Content::Paths` centralizes paths used by the current Ruby loaders. There is intentionally no general asset manager yet. Models, textures, shaders, BSP data, and their lifetime rules will be introduced from concrete requirements.
+`Content::Paths` centralizes paths used by the current Ruby loaders. There is intentionally no general asset manager yet.
 
 ## Near-term boundary
 
-Aogera now has a real continuous player coordinate, view-relative ground movement, authored ground-body extents, and a structured ground trace/sweep contract shared by movement, melee and interaction. Player action targeting remains continuous and now rejects obstructed targets; NPC navigation and autonomous attack decisions remain intentionally grid-based.
+Aogera now has one continuous runtime position model for player, enemies and NPCs; one ground movement/collision execution path; one continuous melee validation model; and a separate temporary grid navigation representation.
 
-The terrain-cell collision representation should not grow into a general physics framework before BSP. The next BSP29 experiment can replace the static ground-trace backend with BSP collision data while preserving the movement and action-query contracts above it.
+The next BSP work can therefore focus on replacing static world geometry/collision and later navigation without first reconciling multiple runtime entity coordinate systems.

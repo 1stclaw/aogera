@@ -8,7 +8,8 @@ class RealtimeControllerTest < Minitest::Test
   def test_held_player_movement_produces_ground_motion_every_simulation_tick
     world = Aogera::World.new
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2)
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     controller = Aogera::RealtimeController.new(
       player_speed: 3.0,
@@ -45,7 +46,8 @@ class RealtimeControllerTest < Minitest::Test
   def test_player_forward_and_strafe_follow_continuous_view_heading
     world = Aogera::World.new
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2)
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     controller = Aogera::RealtimeController.new(
       player_speed: 3.0,
@@ -80,12 +82,15 @@ class RealtimeControllerTest < Minitest::Test
   def test_npc_behaviors_run_only_on_npc_cadence
     world = Aogera::World.new
     goblin_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 2),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      melee_attack: Aogera::Component::MeleeAttack.new(reach: 0.65, arc_degrees: 110.0),
       behavior: Aogera::Component::Behavior.new(kind: :chase),
       combatant: Aogera::Component::Combatant.new(attack: 1)
     )
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2)
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     world.add_relation(
       kind: :targets,
@@ -119,12 +124,15 @@ class RealtimeControllerTest < Minitest::Test
   def test_player_command_precedes_npc_command_when_both_are_due
     world = Aogera::World.new
     goblin_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 2),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      melee_attack: Aogera::Component::MeleeAttack.new(reach: 0.65, arc_degrees: 110.0),
       behavior: Aogera::Component::Behavior.new(kind: :chase),
       combatant: Aogera::Component::Combatant.new(attack: 1)
     )
     hero_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2)
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     world.add_relation(
       kind: :targets,

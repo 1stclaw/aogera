@@ -40,12 +40,11 @@ class Render3DContractTest < Minitest::Test
     def screen_height = 768
   end
 
-  def test_first_person_camera_uses_continuous_ground_position_and_y_up
+  def test_first_person_camera_uses_canonical_position_and_y_up
     api = FakeAPI.new
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 2),
-      ground_position: Aogera::Component::GroundPosition.new(x: 1.25, z: 2.75),
+      position: Aogera::Component::Position.new(x: 1.25, y: 0.0, z: 2.75),
       renderable: Aogera::Component::Renderable.new(
         render_key: :player,
         glyph: "P",
@@ -74,8 +73,7 @@ class Render3DContractTest < Minitest::Test
     api = FakeAPI.new
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1),
-      ground_position: Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5)
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5)
     )
     view = Aogera::FirstPersonView.for_direction(:east)
 
@@ -102,8 +100,7 @@ class Render3DContractTest < Minitest::Test
     )
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 0, y: 0),
-      ground_position: Aogera::Component::GroundPosition.new(x: 0.5, z: 0.5)
+      position: Aogera::Component::Position.new(x: 0.5, y: 0.0, z: 0.5)
     )
 
     Aogera::Render::Raylib3D.new(api: api).draw(
@@ -128,8 +125,7 @@ class Render3DContractTest < Minitest::Test
     api = FakeAPI.new
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 0, y: 0),
-      ground_position: Aogera::Component::GroundPosition.new(x: 0.5, z: 0.5),
+      position: Aogera::Component::Position.new(x: 0.5, y: 0.0, z: 0.5),
       renderable: Aogera::Component::Renderable.new(
         render_key: :player,
         glyph: "P",
@@ -137,7 +133,7 @@ class Render3DContractTest < Minitest::Test
       )
     )
     world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 0),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 0.5),
       renderable: Aogera::Component::Renderable.new(
         render_key: :goblin,
         glyph: "G",
@@ -166,10 +162,9 @@ class Render3DContractTest < Minitest::Test
     api = FakeAPI.new
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 0, y: 0),
-      ground_position: Aogera::Component::GroundPosition.new(x: 0.5, z: 0.5)
+      position: Aogera::Component::Position.new(x: 0.5, y: 0.0, z: 0.5)
     )
-    world.spawn(position: Aogera::Component::Position.new(x: 0, y: 0))
+    world.spawn(position: Aogera::Component::Position.new(x: 0.5, y: 0.0, z: 0.5))
 
     Aogera::Render::Raylib3D.new(api: api).draw(
       level: FakeLevel.new(width: 1, height: 1),

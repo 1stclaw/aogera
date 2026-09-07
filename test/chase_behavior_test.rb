@@ -20,7 +20,7 @@ class ChaseBehaviorTest < Minitest::Test
 
   def test_chaser_moves_toward_non_adjacent_target_on_npc_tick
     simulation, _session, hero_id = build_simulation(
-      hero_position: [5, 3],
+      hero_position: [4, 3],
       goblin_position: [2, 3]
     )
     goblin_id = entity_id_for(simulation, :goblin)
@@ -28,7 +28,8 @@ class ChaseBehaviorTest < Minitest::Test
     plan_and_step(simulation, hero_id)
     position = simulation.world_view.component(goblin_id, :position)
 
-    assert_equal [3, 3], [position.x, position.y]
+    assert_operator position.x, :>, 2.5
+    assert_in_delta 3.5, position.z
   end
 
   def test_chaser_uses_combatant_attack_value

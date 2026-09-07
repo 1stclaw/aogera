@@ -18,7 +18,7 @@ class RetirementLifecycleTest < Minitest::Test
     world = Aogera::World.new
     entity_id = world.spawn(
       health: Aogera::Component::Health.new(current: 0, max: 4),
-      position: Aogera::Component::Position.new(x: 2, y: 2),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       collision: Aogera::Component::Collision.new(blocks_movement: true)
     )
@@ -43,7 +43,7 @@ class RetirementLifecycleTest < Minitest::Test
     world = Aogera::World.new
     entity_id = world.spawn(
       health: Aogera::Component::Health.new(current: 0, max: 1),
-      position: Aogera::Component::Position.new(x: 2, y: 2),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       collision: Aogera::Component::Collision.new(blocks_movement: true)
     )
 
@@ -59,13 +59,16 @@ class RetirementLifecycleTest < Minitest::Test
     refute_includes world.entity_ids, entity_id
   end
 
-  def test_move_planned_before_lethal_attack_does_not_execute_after_retirement
+  def test_ground_move_planned_before_lethal_attack_does_not_execute_after_retirement
     world = Aogera::World.new
     attacker = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1)
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      melee_attack: Aogera::Component::MeleeAttack.new(reach: 0.65, arc_degrees: 110.0)
     )
     target = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       health: Aogera::Component::Health.new(current: 1, max: 1),
       behavior: Aogera::Component::Behavior.new(kind: :chase),
       collision: Aogera::Component::Collision.new(blocks_movement: true),
@@ -80,24 +83,24 @@ class RetirementLifecycleTest < Minitest::Test
           target_id: target,
           damage: 1
         ),
-        Aogera::Simulation::Commands::Move.new(
+        Aogera::Simulation::Commands::GroundMove.new(
           entity_id: target,
-          dx: 1,
-          dy: 0
+          dx: 1.0,
+          dz: 0.0
         )
       ]
     )
 
     position = world.component(target, :position)
     assert world.retired?(target)
-    assert_equal [2, 1], [position.x, position.y]
+    assert_in_delta 2.5, position.x
+    assert_in_delta 1.5, position.z
   end
 
   def test_ground_move_buffered_after_defeat_is_ignored
     world = Aogera::World.new
     entity_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2),
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 2.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
       health: Aogera::Component::Health.new(current: 0, max: 1),
       collision: Aogera::Component::Collision.new(blocks_movement: true)
@@ -115,7 +118,7 @@ class RetirementLifecycleTest < Minitest::Test
       ]
     )
 
-    ground = world.component(entity_id, :ground_position)
+    ground = world.component(entity_id, :position)
     assert world.retired?(entity_id)
     assert_in_delta 2.5, ground.x
     assert_in_delta 2.5, ground.z
@@ -124,8 +127,7 @@ class RetirementLifecycleTest < Minitest::Test
   def test_killing_blocker_while_moving_does_not_lock_player
     world = Aogera::World.new
     player = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1),
-      ground_position: Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
       melee_attack: Aogera::Component::MeleeAttack.new(
         reach: 0.65,
@@ -134,7 +136,7 @@ class RetirementLifecycleTest < Minitest::Test
       collision: Aogera::Component::Collision.new(blocks_movement: true)
     )
     goblin = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       health: Aogera::Component::Health.new(current: 1, max: 1),
       behavior: Aogera::Component::Behavior.new(kind: :chase),
@@ -158,7 +160,7 @@ class RetirementLifecycleTest < Minitest::Test
       ]
     )
 
-    after_kill = world.component(player, :ground_position)
+    after_kill = world.component(player, :position)
     assert world.retired?(goblin)
     assert_operator after_kill.x, :>, 2.0
 
@@ -171,18 +173,18 @@ class RetirementLifecycleTest < Minitest::Test
       )
     )
 
-    after_followup = world.component(player, :ground_position)
+    after_followup = world.component(player, :position)
     assert_operator after_followup.x, :>, after_kill.x
   end
 
   def test_arc_query_ignores_retired_target
     world = Aogera::World.new
     source = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
     )
     retired = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       retired: Aogera::Component::Retired.new
     )
@@ -203,7 +205,7 @@ class RetirementLifecycleTest < Minitest::Test
   def test_default_ground_trace_ignores_retired_body
     world = Aogera::World.new
     retired = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 3.0, z: 1.5),
+      position: Aogera::Component::Position.new(x: 3.0, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.3),
       retired: Aogera::Component::Retired.new
     )
@@ -254,13 +256,12 @@ class RetirementWallContactRegressionTest < Minitest::Test
     )
     world = Aogera::World.new
     player = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.7799998, z: 1.8),
+      position: Aogera::Component::Position.new(x: 2.7799998, y: 0.0, z: 1.8),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
       melee_attack: Aogera::Component::MeleeAttack.new(reach: 0.65, arc_degrees: 110.0)
     )
     goblin = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 2),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       health: Aogera::Component::Health.new(current: 1, max: 1),
       collision: Aogera::Component::Collision.new(blocks_movement: true),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28)
@@ -284,7 +285,7 @@ class RetirementWallContactRegressionTest < Minitest::Test
         dz: 0.5
       )
     ])
-    at_contact = world.component(player, :ground_position)
+    at_contact = world.component(player, :position)
     assert_operator at_contact.x, :<=, 2.78
 
     execute.call([
@@ -300,7 +301,7 @@ class RetirementWallContactRegressionTest < Minitest::Test
       )
     ])
 
-    after_kill = world.component(player, :ground_position)
+    after_kill = world.component(player, :position)
     assert world.retired?(goblin)
     assert_operator after_kill.z, :<, at_contact.z
 
@@ -312,7 +313,7 @@ class RetirementWallContactRegressionTest < Minitest::Test
       )
     ])
 
-    after_followup = world.component(player, :ground_position)
+    after_followup = world.component(player, :position)
     assert_operator after_followup.z, :<, after_kill.z
   end
 end

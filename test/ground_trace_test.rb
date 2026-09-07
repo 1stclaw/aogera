@@ -53,7 +53,7 @@ class GroundTraceTest < Minitest::Test
     level = blank_level(width: 6, height: 4)
     world = Aogera::World.new
     target = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 3.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
     )
 
@@ -76,7 +76,7 @@ class GroundTraceTest < Minitest::Test
     level = blank_level(width: 6, height: 4)
     world = Aogera::World.new
     source = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
     )
 
@@ -97,7 +97,7 @@ class GroundTraceTest < Minitest::Test
     level = row_level("      ", "    | ", "      ")
     world = Aogera::World.new
     blocker = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 2.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.25)
     )
 
@@ -138,7 +138,7 @@ class GroundTraceTest < Minitest::Test
     level = blank_level(width: 6, height: 4)
     world = Aogera::World.new
     blocker = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 3.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
     )
 

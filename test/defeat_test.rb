@@ -18,7 +18,7 @@ class DefeatTest < Minitest::Test
     world = Aogera::World.new
     entity_id = world.spawn(
       health: Aogera::Component::Health.new(current: 0, max: 4),
-      position: Aogera::Component::Position.new(x: 2, y: 2),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       renderable: Aogera::Component::Renderable.new(
         render_key: :goblin, glyph: "G", layer: 10
       ),

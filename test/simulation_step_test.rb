@@ -23,10 +23,10 @@ class SimulationStepTest < Minitest::Test
 
   def test_step_returns_explicit_result
     commands = Aogera::Simulation::Commands::Buffer.new([
-      Aogera::Simulation::Commands::Move.new(
+      Aogera::Simulation::Commands::GroundMove.new(
         entity_id: @hero_id,
-        dx: 1,
-        dy: 0
+        dx: 1.0,
+        dz: 0.0
       )
     ])
 
@@ -36,10 +36,11 @@ class SimulationStepTest < Minitest::Test
     assert_instance_of Aogera::Simulation::StepResult, result
     assert_equal 1, result.number
     assert_empty result.effects
-    assert_equal [3, 2], [position.x, position.y]
+    assert_in_delta 3.5, position.x
+    assert_in_delta 2.5, position.z
   end
 
-  def test_ground_move_updates_continuous_position_and_coarse_grid_cell
+  def test_ground_move_updates_canonical_position
     commands = Aogera::Simulation::Commands::Buffer.new([
       Aogera::Simulation::Commands::GroundMove.new(
         entity_id: @hero_id,
@@ -49,17 +50,18 @@ class SimulationStepTest < Minitest::Test
     ])
 
     @simulation.step(commands: commands)
-    ground = @simulation.world_view.component(@hero_id, :ground_position)
     position = @simulation.world_view.component(@hero_id, :position)
 
-    assert_in_delta 3.2, ground.x
-    assert_in_delta 2.5, ground.z
-    assert_equal [3, 2], [position.x, position.y]
+    assert_in_delta 3.2, position.x
+    assert_in_delta 0.0, position.y
+    assert_in_delta 2.5, position.z
   end
 
   def test_step_returns_persistent_effects
     enemy_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 3, y: 2)
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      melee_attack: Aogera::Component::MeleeAttack.new(reach: 0.65, arc_degrees: 110.0)
     )
     commands = Aogera::Simulation::Commands::Buffer.new([
       Aogera::Simulation::Commands::Attack.new(
@@ -94,7 +96,8 @@ class SimulationStepTest < Minitest::Test
     )
 
     assert_equal 1, commands.size
-    assert_equal [2, 2], [position.x, position.y]
+    assert_in_delta 2.5, position.x
+    assert_in_delta 2.5, position.z
     assert_equal 0, @simulation.step_number
     refute_respond_to @simulation, :plan
   end

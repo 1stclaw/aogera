@@ -5,7 +5,7 @@ require_relative "test_helper"
 class ComponentTableTest < Minitest::Test
   def test_values_are_indexed_by_entity_id
     table = Aogera::World::ComponentTable.new
-    position = Aogera::Component::Position.new(x: 2, y: 3)
+    position = Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 3.5)
 
     table[4] = position
     assert_equal position, table[4]

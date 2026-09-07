@@ -13,13 +13,18 @@ class AttackTest < Minitest::Test
     @executor = Aogera::Simulation::Executor.new
     @bindings = Aogera::Simulation::Bindings.new
   end
-  def test_adjacent_attack_reduces_local_health
+  def test_melee_attack_within_reach_reduces_local_health
     world = Aogera::World.new
     attacker = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1)
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      melee_attack: Aogera::Component::MeleeAttack.new(
+        reach: 0.65, arc_degrees: 110.0
+      )
     )
     target = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       health: Aogera::Component::Health.new(current: 10, max: 10)
     )
 
@@ -38,10 +43,15 @@ class AttackTest < Minitest::Test
   def test_lethal_local_attack_retires_target
     world = Aogera::World.new
     attacker = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1)
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      melee_attack: Aogera::Component::MeleeAttack.new(
+        reach: 0.65, arc_degrees: 110.0
+      )
     )
     target = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       health: Aogera::Component::Health.new(current: 2, max: 2),
       renderable: Aogera::Component::Renderable.new(
         render_key: :goblin, glyph: "G", layer: 10
@@ -69,13 +79,18 @@ class AttackTest < Minitest::Test
     assert_empty effects
   end
 
-  def test_adjacent_attack_on_bound_character_emits_persistent_damage
+  def test_melee_attack_on_bound_character_emits_persistent_damage
     world = Aogera::World.new
     attacker = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1)
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      melee_attack: Aogera::Component::MeleeAttack.new(
+        reach: 0.65, arc_degrees: 110.0
+      )
     )
     target = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1)
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28)
     )
     @bindings.bind(character_key: :hero, entity_id: target)
     effects = execute(
@@ -97,8 +112,7 @@ class AttackTest < Minitest::Test
   def test_continuous_attacker_uses_authored_melee_reach
     world = Aogera::World.new
     attacker = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1),
-      ground_position: Aogera::Component::GroundPosition.new(x: 1.1, z: 1.5),
+      position: Aogera::Component::Position.new(x: 1.1, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
       melee_attack: Aogera::Component::MeleeAttack.new(
         reach: 0.65,
@@ -106,7 +120,7 @@ class AttackTest < Minitest::Test
       )
     )
     target = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1),
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       health: Aogera::Component::Health.new(current: 10, max: 10)
     )
@@ -123,8 +137,8 @@ class AttackTest < Minitest::Test
 
     world.set_component(
       attacker,
-      :ground_position,
-      Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5)
+      :position,
+      Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5)
     )
     execute(
       world,
@@ -154,7 +168,7 @@ class AttackTest < Minitest::Test
     )
     world = Aogera::World.new
     attacker = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
       melee_attack: Aogera::Component::MeleeAttack.new(
         reach: 2.0,
@@ -162,7 +176,7 @@ class AttackTest < Minitest::Test
       )
     )
     target = world.spawn(
-      ground_position: Aogera::Component::GroundPosition.new(x: 3.5, z: 1.5),
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 1.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       health: Aogera::Component::Health.new(current: 10, max: 10)
     )
@@ -180,13 +194,18 @@ class AttackTest < Minitest::Test
     assert_equal 10, world.component(target, :health).current
   end
 
-  def test_attack_is_rejected_when_target_is_not_adjacent
+  def test_attack_is_rejected_when_target_is_out_of_melee_reach
     world = Aogera::World.new
     attacker = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1)
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      melee_attack: Aogera::Component::MeleeAttack.new(
+        reach: 0.65, arc_degrees: 110.0
+      )
     )
     target = world.spawn(
-      position: Aogera::Component::Position.new(x: 3, y: 1),
+      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       health: Aogera::Component::Health.new(current: 10, max: 10)
     )
     assert_empty execute(

@@ -1,471 +1,154 @@
-# Aogera 3D Migration: v0.2.3 to v0.3.0
+# Aogera 3D Migration: v0.2.3 to current 0.3 development
 
-This document summarizes the **current architectural changes** between the final 2D baseline, Aogera v0.2.3, and the present v0.3.0 runtime.
+This document summarizes the architectural state that now exists relative to the final 2D/raylib baseline, Aogera v0.2.3. It describes the **current surviving design**, not superseded intermediate solutions.
 
-It is intentionally a state comparison rather than a chronological changelog. Superseded intermediate solutions are omitted. Only systems and boundaries that still exist in v0.3.0 are described here.
+## Current runtime
 
-## Overview
-
-Aogera v0.2.3 ended the raylib 2D line with an explicitly 2D presentation path:
+Aogera now has a true first-person 3D frontend and a single continuous runtime entity position:
 
 ```text
-Level + World::View
-        |
-Render::Projector2D
-        |
-Render::Scene2D
-        |
-Render::Raylib2D
-        |
-raylib
+Component::Position(x, y, z)
 ```
 
-Aogera v0.3.0 is now a true 3D first-person runtime with a continuous controlled-player coordinate on the ground plane:
+All spatial runtime entities use the same world-space coordinate convention:
 
 ```text
-keyboard -> Host::Raylib -> Input::Action -> fixed-step gameplay
-mouse    -> Host::Raylib -> Input::LookDelta -> FirstPersonView
-
-GroundPosition + FirstPersonView
-        |
-Render::Raylib3D
-        |
-RaylibAPI
-        |
-raylib Camera3D / 3D primitives
-```
-
-The migration did **not** generalize the old 2D renderer into a universal scene system. The obsolete 2D presentation path was removed, while the existing simulation, world, session, mode, fixed-step, and authored-content systems were kept where they remained useful.
-
-## 1. Active presentation is now 3D
-
-The active presentation implementation is `Render::Raylib3D`.
-
-It consumes the current `Level`, cached `World::View`, logical `FirstPersonView`, and the controlled entity ID directly. There is no `Scene3D`, `Projector3D`, generic `Scene`, generic `Renderer`, or transform hierarchy.
-
-The current authored grid is rendered as simple 3D primitives:
-
-- wall cells become vertical cubes;
-- other terrain cells become thin floor cubes;
-- renderable entities become upright cubes;
-- the controlled player entity is omitted from the entity draw pass because the camera is first-person.
-
-Renderable entities with `GroundPosition` use their continuous X/Z coordinate. Other entities continue to render at the center of their integer grid cell.
-
-This primitive extrusion remains a direct bridge from the current authored level format to 3D. It is not intended to prescribe the eventual BSP rendering representation.
-
-### Removed 2D presentation files
-
-The active v0.2.3 presentation path is no longer present:
-
-```text
-lib/aogera/render/projector_2d.rb
-lib/aogera/render/scene_2d.rb
-lib/aogera/render/raylib_2d.rb
-docs/raylib_2d.md
-test/render_2d_contract_test.rb
-```
-
-The historical implementation remains available through Git history rather than through compatibility aliases or dead runtime code.
-
-## 2. Canonical 3D coordinate convention
-
-Aogera now has an explicit Y-up world convention:
-
-```text
-+X = east / right
++X = east/right
 +Y = up
-+Z = south / old grid +Y
++Z = south
 ```
 
-The current grid-to-world bridge uses one world unit per authored cell.
-
-A grid cell center maps as:
+Current grid-authored cells map to world-space centers only when entities are instantiated:
 
 ```text
-(x, y) -> (x + 0.5, 0, y + 0.5)
+cell (x, y) -> Position(x + 0.5, 0.0, y + 0.5)
 ```
 
-The controlled character's camera eye adds `FirstPersonView#eye_height` on the world Y axis.
+The authored grid is not retained as a second entity-position model.
 
-This gives later Quake/BSP loading a clear conversion boundary rather than allowing map-space axes to leak implicitly into the rest of the engine.
+## First-person control and rendering
 
-## 3. First-person view state is Aogera-owned
+`FirstPersonView` owns yaw, pitch, eye height, FOV and mouse sensitivity. Mouse deltas update view orientation at render cadence, while translational movement remains fixed-step simulation state.
 
-`FirstPersonView` is the canonical logical view state for the controlled player.
+`Render::Raylib3D` derives raylib `Camera3D` values from canonical `Position` plus `FirstPersonView`. It directly extrudes the current authored terrain into primitive floor/wall geometry and draws renderable entities at their runtime positions.
 
-It owns:
+There is still no generic scene/projector/transform hierarchy.
 
-- yaw;
-- pitch;
-- eye height;
-- vertical field of view;
-- mouse sensitivity.
+## Unified actor movement
 
-It can derive:
-
-- a normalized 3D forward vector;
-- a yaw-relative ground movement vector for forward/back/strafe input.
-
-Pitch is clamped and yaw wraps continuously.
-
-`FirstPersonView` is deliberately **not** a raylib `Camera3D`, a physical player transform, or a world component. raylib camera structs are derived presentation values.
-
-## 4. Raylib camera and FFI state remain at the frontend boundary
-
-`RaylibAPI` now wraps the raylib operations required by the 3D frontend, including:
-
-- `BeginMode3D` / `EndMode3D`;
-- perspective `Camera3D` construction;
-- `Vector3` construction through the binding;
-- cube drawing;
-- mouse delta polling;
-- cursor capture/release.
-
-Core gameplay and simulation code continue to pass ordinary Ruby numeric values instead of raylib FFI structs.
-
-`Render::Raylib3D` derives the camera from:
-
-```text
-controlled entity GroundPosition
-        +
-FirstPersonView eye height / forward vector / FOV
-```
-
-The camera therefore follows Aogera-owned state rather than becoming authoritative gameplay state itself.
-
-## 5. Mouse look has its own value-bearing input path
-
-The v0.2.3 boolean key-event contract remains appropriate for keyboard gameplay input, but continuous mouse displacement is represented separately.
-
-The host can now emit:
-
-```text
-Host::MouseMotion(dx, dy)
-```
-
-`Input::Mapper` maps it to:
-
-```text
-Input::LookDelta(dx, dy)
-```
-
-The current input paths are:
-
-```text
-keyboard
-Host::KeyEvent
-    |
-Input::Mapper -> Input::Action
-    |
-Input::Handoff -> Input::Tracker
-    |
-fixed-step Mode / Simulation
-```
-
-and:
-
-```text
-mouse
-Host::MouseMotion
-    |
-Input::Mapper -> Input::LookDelta
-    |
-FirstPersonView#rotate
-    |
-3D camera derivation
-```
-
-Mouse look is applied once per rendered frontend frame and is therefore not quantized to the 30 Hz simulation cadence.
-
-The raylib host captures the cursor once after opening/focusing the window and releases it during shutdown.
-
-## 6. Controlled-player position is now continuous
-
-The controlled persistent character receives:
-
-```text
-Component::GroundPosition(x, z)
-```
-
-This is the canonical physical position for player translation on the current ground plane.
-
-It is intentionally specific. Aogera still has no generic `Transform`, `Position3D`, velocity component, rigid body, or general-purpose physics abstraction.
-
-A persistent character spawned from an authored entry begins at the center of that entry cell:
-
-```text
-authored entry (x, y)
-    ->
-GroundPosition(x + 0.5, y + 0.5)
-```
-
-The camera uses this continuous position directly.
-
-## 7. Player translation is fixed-step and view-relative
-
-The controlled player no longer uses the integer `Move(dx, dy)` command for normal locomotion.
-
-Player movement enters the simulation as:
+Player and NPC locomotion both use:
 
 ```text
 Simulation::Commands::GroundMove(entity_id, dx, dz)
 ```
 
-`RealtimeController` creates a `GroundMove` every simulation tick while movement input is held.
+`GroundBody(radius)` supplies authored horizontal extent. `Simulation::GroundMovement` resolves every current actor move through `GroundSpace#sweep_circle`.
 
-The current simulation cadence remains:
+The solver:
 
-```text
-30 Hz fixed simulation
-60 FPS raylib target
-```
+- finds earliest collision across the full displacement;
+- tests static terrain cells and active dynamic ground bodies;
+- returns exact contact positions;
+- accumulates distinct contact normals;
+- constrains remaining motion against the active contact set;
+- validates that the final returned position is not already blocked.
 
-The default player speed is:
+This replaced separate grid actor movement and removed the need for a player/NPC coordinate synchronization bridge.
 
-```text
-2.4 world units / second
-```
+## Shared spatial queries
 
-Movement is calculated from the exact current view yaw:
+`GroundSpace` now operates directly on canonical `Position` values. It provides:
 
-- W / Up: forward;
-- S / Down: backward;
-- A / Left: strafe left;
-- D / Right: strafe right.
+- body radius lookup;
+- center distance and surface separation;
+- circle overlap tests;
+- parameterized forward-arc queries;
+- zero-radius segment traces;
+- swept-circle traces;
+- structured `GroundTrace` results.
 
-Combined forward/strafe input is normalized, so diagonal movement does not increase total speed.
+Static terrain and dynamic bodies share one earliest-hit result contract. Retired entities are omitted from ordinary active dynamic scans.
 
-Translation remains simulation-owned and therefore changes only through the fixed-step command/executor boundary, while yaw/pitch can update at render cadence.
+## Combat and interaction
 
-## 8. Continuous ground trace and sweep collision
+Player melee uses authored `MeleeAttack(reach, arc_degrees)`, current view heading and ground-space traces. Interaction uses independent `Interactor(reach, arc_degrees)` data with the same spatial facts.
 
-`GroundSpace` is now the collision-query boundary for current X/Z ground geometry. `GroundTrace` is an immutable result that records:
+NPC combat now uses the same continuous separation and obstruction model. Manhattan/grid adjacency is no longer an attack rule in the runtime.
 
-```text
-fraction
-end_x / end_z
-normal_x / normal_z
-entity_id
-world_hit
-start_blocked
-```
+Damage/lifecycle remain separate from targeting. Defeated local actors become explicitly `Retired`: runtime identity and retained descriptive/spatial state may remain, while active movement/combat/collision participation stops.
 
-Two query forms are active:
+## Navigation
 
-```text
-trace_segment(...)
-    zero-radius obstruction query
+The current Pathfinder deliberately remains a temporary grid BFS because the current authored level is still a grid.
 
-sweep_circle(...)
-    continuous circular-body movement query
-```
-
-The current static backend still treats impassable authored terrain as solid grid cells. Dynamic blocking entities use their authored `GroundBody(radius)` and current ground position (or projected grid-cell center). Static and dynamic candidates are combined and the earliest relevant hit is returned.
-
-`Simulation::GroundMovement` no longer resolves X and Z separately and no longer subdivides displacement into anti-tunneling substeps. It sweeps the moving actor across the entire requested displacement, moves to the exact returned contact position, accumulates distinct contact normals for that movement command, constrains the remaining displacement against the active contact set, and sweeps the resulting slide motion again. Collision resolution is bounded to a small fixed number of contacts.
-
-This preserves wall sliding without axis-order bias and establishes the same result shape that a later BSP collision backend can provide. It remains deliberately **ground collision**, not a general rigid-body or arbitrary-shape physics system.
-
-## 9. Integer grid position remains as an explicit compatibility bridge
-
-Aogera currently has two position representations with distinct responsibilities:
+It projects canonical runtime positions to cells only while planning:
 
 ```text
-GroundPosition(x, z)
-    continuous
-    authoritative for controlled-player translation
-    authoritative for first-person camera location
-
-Position(x, y)
-    integer grid cell
-    authoritative for current NPC/grid systems
+navigation cell = (floor(position.x), floor(position.z))
 ```
 
-After a successful `GroundMove`, the executor synchronizes the controlled player's coarse grid position as:
+Pathfinding returns a next-cell direction; `RealtimeController` converts that waypoint back to continuous displacement and emits `GroundMove`. Navigation cells are not stored on entities.
+
+This isolates the remaining grid dependency to authored terrain/navigation instead of runtime actor state.
+
+## Runtime boundaries retained from v0.2.3
+
+The following useful boundaries survived the 3D migration:
+
+- 30 Hz fixed-step simulation independent from 60 FPS rendering;
+- `Host::Raylib` as window/input owner;
+- `RaylibAPI` containing raylib/FFI-specific structures;
+- `Input::Mapper`, handoff and tracker for gameplay actions;
+- `Simulation#step(commands:)` as the mutation boundary;
+- cached `World::View` and `World#entity_ids`;
+- `Session` for persistent character state;
+- authored Ruby prototype/level/dialogue data.
+
+## Removed 2D/runtime-grid structures
+
+The current architecture no longer contains the active v0.2.3 presentation pipeline:
 
 ```text
-grid x = floor(ground x)
-grid y = floor(ground z)
+Render::Projector2D
+Render::Scene2D
+Render::Raylib2D
 ```
 
-This retained `Position` is not the player's precise physical location. It exists because several current systems are still intentionally grid-based:
+It also no longer contains separate runtime player/NPC position models or a grid-only actor movement command. Runtime actors have one `Position` and one ground-movement/collision execution path.
 
-- NPC movement;
-- NPC pathfinding;
-- NPC chase behavior;
-- NPC melee adjacency decisions;
-- authored level spawns and entries;
-- current terrain passability representation.
+## BSP direction
 
-The controlled player can therefore move continuously while existing NPC/gameplay systems continue to function without a speculative all-at-once 3D rewrite.
-
-## 10. NPC movement and pathfinding remain grid-based
-
-NPC behavior continues to use the existing command:
+This normalization leaves a cleaner BSP boundary:
 
 ```text
-Simulation::Commands::Move(entity_id, dx, dy)
+runtime entities
+    Position(x,y,z)
+    GroundBody / action data
+          |
+          v
+      GroundSpace
+          |
+          +-- dynamic bodies
+          |
+          +-- current static grid backend
+                       |
+                       v later
+                 BSP collision backend
 ```
 
-The existing integer movement resolver and BFS pathfinder remain active for NPCs.
+The existing grid BFS can likewise be replaced later by a navigation representation appropriate to BSP without changing canonical runtime entity coordinates.
 
-NPC behavior cadence is still lower than the main simulation cadence. Current realtime constants are:
+## Still absent by design
 
-```text
-simulation       30 Hz
-player movement  every simulation tick while held
-NPC decisions     2 Hz
-```
+The current architecture does not yet contain:
 
-The introduction of continuous player motion therefore did not force NPC navigation into a premature continuous or navmesh-based design.
+- BSP loading;
+- vertical actor collision/gravity/jumping;
+- general physics;
+- projectile/hitscan weapon systems;
+- general collision masks;
+- models/material framework;
+- generic asset management;
+- generic `Transform`/`Spatial` abstractions.
 
-## 11. Ground-space collision, melee and interaction share spatial facts
-
-`GroundSpace` is a small X/Z geometry service shared by the systems that need continuous ground relationships. It resolves `GroundPosition` directly, projects grid-only `Position` to cell center, reads `GroundBody` radii, computes center distance/separation, tests circle overlap, returns entities inside a parameterized forward arc, and supplies the segment/sweep traces described above.
-
-The service does not decide what an attack or interaction means. Player prototypes provide action geometry explicitly:
-
-```text
-MeleeAttack(reach, arc_degrees)
-Interactor(reach, arc_degrees)
-```
-
-`Mode::Play` supplies the current `FirstPersonView` direction and filters spatial hits by gameplay role. Melee chooses a living local-health target; interaction chooses an `Interactable`. The current single-target preference favors the target closest to the view center, then the nearer target on a tie. Reach and arc are authored data rather than constants inside targeting code. Candidates must also have an unobstructed ground segment: static terrain and blocking ground bodies can prevent melee or interaction from reaching a target.
-
-`Simulation::Executor` independently validates attacks from continuous attackers against authored melee reach and the same obstruction trace, so target selection is not the only protection against attacks through geometry. Grid-only NPC attackers retain established adjacency validation until NPC locomotion is migrated away from the grid.
-
-This removes the old four-cardinal player attack/interaction artifact and adds shared obstruction queries without introducing generic colliders or a physics system.
-
-## 12. Existing runtime boundaries preserved from v0.2.3
-
-The 3D migration retained the major runtime boundaries that were already useful:
-
-- `Session` remains persistent character state;
-- `Level` remains immutable authored structure;
-- `World` remains the mutable component/relation container;
-- `World::View` remains the cached read-only world facade;
-- `Simulation#step(commands:)` remains the mutation boundary;
-- `Simulation::Executor` still validates/applies commands;
-- persistent effects still flow back into `Session` separately;
-- `FixedStep` still schedules simulation independently from render cadence;
-- `ModeStack`, play mode, and dialogue mode remain active;
-- authored gameplay data remains Ruby content loaded through `Content::Paths`;
-- `Host::Raylib` remains the raylib window/input host;
-- raylib/FFI details remain concentrated in `RaylibAPI` and the presentation boundary.
-
-The 0.3 work therefore extends the existing runtime rather than replacing it with a new engine architecture.
-
-## 13. Dialogue and mode behavior in the 3D frontend
-
-Dialogue remains modal and pauses normal world advancement while active.
-
-The current mode still exposes the level/world/camera entity needed by the shared 3D renderer, so dialogue renders from the controlled character's current first-person location rather than switching to a separate presentation model.
-
-Mouse look remains part of the shared `FirstPersonView`, independent from simulation stepping.
-
-## 14. Current controls
-
-```text
-Mouse        look
-W / Up       forward
-S / Down     backward
-A / Left     strafe left
-D / Right    strafe right
-Space        melee attack
-Enter        interact / advance dialogue
-Q / Esc      quit
-```
-
-## 15. New active files introduced by the 3D migration
-
-The current 0.3.0 tree adds these principal runtime files relative to v0.2.3:
-
-```text
-lib/aogera/first_person_view.rb
-lib/aogera/input/look_delta.rb
-lib/aogera/render/raylib_3d.rb
-lib/aogera/simulation/ground_movement.rb
-```
-
-Supporting changes are present in the existing host, input mapper, app/mode, component, realtime controller, simulation command/executor, simulation spawning, and raylib API files.
-
-Current 3D-focused tests include:
-
-```text
-test/first_person_view_test.rb
-test/ground_movement_test.rb
-test/render_3d_contract_test.rb
-```
-
-Existing frontend, input, simulation, collision, combat, dialogue, and controller tests were also updated where their contracts changed.
-
-## 16. Current test baseline
-
-The current v0.3.0 tree passes:
-
-```text
-121 runs, 325 assertions, 0 failures, 0 errors, 0 skips
-```
-
-The project-standard full-suite command remains:
-
-```bash
-bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
-```
-
-Graphical/frontend changes should additionally be checked with:
-
-```bash
-bundle exec ruby bin/aogera
-```
-
-## 17. Systems intentionally not present
-
-The current 0.3.0 architecture does **not** contain:
-
-- BSP loading or BSP collision;
-- a custom native level format;
-- vertical player movement or jumping;
-- velocity or acceleration simulation;
-- generic rigid-body physics;
-- a generic `Transform` or `Spatial` abstraction;
-- continuous NPC navigation;
-- full 3D ray/capsule/volume tracing;
-- projectile simulation;
-- ranged-attack delivery systems;
-- 3D models or skeletal animation;
-- texture/material/shader architecture;
-- dynamic lighting/shadow systems;
-- a generic asset manager or VFS;
-- `Scene3D` / `Projector3D`;
-- a universal renderer abstraction.
-
-These omissions are deliberate. The current runtime establishes only the 3D concepts already required by first-person movement and rendering, leaving BSP and later gameplay work to introduce further abstractions from concrete requirements.
-
-## 18. Current migration boundary
-
-The current v0.3.0 state can be summarized as:
-
-```text
-Aogera v0.2.3
-    |
-    |  explicit raylib 2D presentation removed
-    |  canonical Y-up 3D coordinates established
-    |  first-person yaw/pitch and mouse input established
-    |  Camera3D derived from Aogera-owned state
-    |  controlled player gains continuous X/Z position
-    |  view-relative fixed-step movement established
-    |  minimal continuous ground collision established
-    |  old grid retained only where current gameplay still needs it
-    v
-Aogera v0.3.0
-    |
-    |  continuous first-person player + temporary grid world bridge
-    |  grid NPC/pathfinding/combat/interaction still active
-    |  no generic physics/render/asset framework
-    v
-next 3D requirements, especially BSP29
-```
-
-The important architectural result is that Aogera now has a real first-person spatial model **before** BSP is introduced, while the old grid remains contained as a known compatibility layer rather than being disguised as a universal 3D representation.
+The current milestone is deliberately narrower: **one continuous world-space model for runtime entities, one shared actor movement/collision path, and one continuous spatial basis for combat and interaction.**

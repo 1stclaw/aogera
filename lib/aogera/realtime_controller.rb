@@ -9,17 +9,23 @@ module Aogera
     }.freeze
 
     DEFAULT_PLAYER_SPEED = Realtime::PLAYER_SPEED
+    DEFAULT_NPC_SPEED = Realtime::NPC_SPEED
     DEFAULT_NPC_INTERVAL = Realtime::NPC_ACTION_INTERVAL
 
     def initialize(
       pathfinder: Simulation::Pathfinder.new,
+      ground_space: GroundSpace.new,
       player_speed: DEFAULT_PLAYER_SPEED,
+      npc_speed: DEFAULT_NPC_SPEED,
       npc_interval: DEFAULT_NPC_INTERVAL
     )
       @pathfinder = pathfinder
+      @ground_space = ground_space
       @player_step = validate_positive_number(player_speed, :player_speed) /
         Realtime::TICK_HZ
       @npc_interval = validate_interval(npc_interval, :npc_interval)
+      @npc_step = validate_positive_number(npc_speed, :npc_speed) *
+        (@npc_interval.to_f / Realtime::TICK_HZ)
     end
 
     def build(input:, level:, world:, controlled_id:, tick_number:, view: nil)
@@ -35,6 +41,7 @@ module Aogera
       if cadence_due?(tick_number, @npc_interval)
         world.entity_ids.each do |entity_id|
           next if entity_id == controlled_id
+          next if world.respond_to?(:retired?) && world.retired?(entity_id)
 
           command = behavior_command(level, world, entity_id)
           commands << command if command
@@ -61,11 +68,7 @@ module Aogera
         distance: @player_step
       )
 
-      Simulation::Commands::GroundMove.new(
-        entity_id: entity_id,
-        dx: dx,
-        dz: dz
-      )
+      ground_move(entity_id, dx, dz)
     end
 
     def default_view(world, entity_id)
@@ -95,12 +98,8 @@ module Aogera
     end
 
     def wander_behavior(_level, _world, entity_id)
-      dx, dy = Direction::VECTORS.sample
-      Simulation::Commands::Move.new(
-        entity_id: entity_id,
-        dx: dx,
-        dy: dy
-      )
+      dx, dz = Direction::VECTORS.sample
+      ground_move(entity_id, dx * @npc_step, dz * @npc_step)
     end
 
     def chase(level, world, entity_id)
@@ -109,11 +108,12 @@ module Aogera
         source_id: entity_id
       ).first
       return unless target_id
+      return if world.respond_to?(:retired?) && world.retired?(target_id)
 
-      if adjacent?(world, entity_id, target_id)
-        combatant = world.component(entity_id, :combatant)
-        return unless combatant&.attack&.positive?
-
+      combatant = world.component(entity_id, :combatant)
+      melee = world.component(entity_id, :melee_attack)
+      if combatant&.attack&.positive? && melee &&
+          melee_reachable?(level, world, entity_id, target_id, melee)
         return Simulation::Commands::Attack.new(
           attacker_id: entity_id,
           target_id: target_id,
@@ -129,21 +129,59 @@ module Aogera
       )
       return unless step
 
-      dx, dy = step
-      Simulation::Commands::Move.new(
-        entity_id: entity_id,
-        dx: dx,
-        dy: dy
-      )
+      source = world.component(entity_id, :position)
+      return unless source
+
+      cell_x = source.x.floor + step[0]
+      cell_z = source.z.floor + step[1]
+      target_x = cell_x + 0.5
+      target_z = cell_z + 0.5
+      dx = target_x - source.x
+      dz = target_z - source.z
+      distance = Math.hypot(dx, dz)
+      return if distance.zero?
+
+      scale = [@npc_step / distance, 1.0].min
+      ground_move(entity_id, dx * scale, dz * scale)
     end
 
-    def adjacent?(world, source_id, target_id)
-      source = world.component(source_id, :position)
-      target = world.component(target_id, :position)
+    def melee_reachable?(level, world, source_id, target_id, profile)
+      separation = @ground_space.separation(
+        world: world,
+        source_id: source_id,
+        target_id: target_id
+      )
+      return false unless separation && separation <= Float(profile.reach)
+
+      source = @ground_space.position(world: world, entity_id: source_id)
+      target = @ground_space.position(world: world, entity_id: target_id)
       return false unless source && target
 
-      (source.x - target.x).abs +
-        (source.y - target.y).abs == 1
+      trace = @ground_space.trace_segment(
+        level: level,
+        world: world,
+        start_x: source.x,
+        start_z: source.z,
+        end_x: target.x,
+        end_z: target.z,
+        ignore_entity_id: source_id,
+        entity_filter: lambda do |entity_id|
+          next true if entity_id == target_id
+
+          collision = world.component(entity_id, :collision)
+          collision&.blocks_movement || false
+        end
+      )
+
+      trace.clear? || trace.entity_id == target_id
+    end
+
+    def ground_move(entity_id, dx, dz)
+      Simulation::Commands::GroundMove.new(
+        entity_id: entity_id,
+        dx: dx,
+        dz: dz
+      )
     end
 
     def validate_interval(value, name)

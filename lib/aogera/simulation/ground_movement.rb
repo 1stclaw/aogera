@@ -46,7 +46,7 @@ module Aogera
           # A movement command should begin from valid state. If a later
           # internal sweep reports otherwise, do not commit a penetrated
           # position produced by this command.
-          return Component::GroundPosition.new(x: start_x, z: start_z) if trace.start_blocked
+          return Component::Position.new(x: start_x, y: position.y, z: start_z) if trace.start_blocked
 
           x = trace.end_x
           z = trace.end_z
@@ -78,7 +78,7 @@ module Aogera
           end
         end
 
-        resolved = Component::GroundPosition.new(x: x, z: z)
+        resolved = Component::Position.new(x: x, y: position.y, z: z)
         return resolved if contact_normals.empty?
         return resolved unless blocked_position?(
           level: level,
@@ -89,7 +89,7 @@ module Aogera
           entity_filter: blocker
         )
 
-        Component::GroundPosition.new(x: start_x, z: start_z)
+        Component::Position.new(x: start_x, y: position.y, z: start_z)
       end
 
       private

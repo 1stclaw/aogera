@@ -6,10 +6,10 @@ class WorldLifecycleTest < Minitest::Test
   def test_despawn_removes_entity_components_and_relations_without_reusing_id
     world = Aogera::World.new
     source_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1)
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5)
     )
     target_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 2, y: 1)
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 1.5)
     )
     world.add_relation(
       kind: :targets,

@@ -50,12 +50,7 @@ module Aogera
           "level entry already occupied: #{entry_definition.key.inspect}"
       end
 
-      extra = {
-        ground_position: Component::GroundPosition.new(
-          x: entry_definition.x + 0.5,
-          z: entry_definition.y + 0.5
-        )
-      }
+      extra = {}
       if entry_definition.facing
         extra[:facing] = Component::Facing.new(direction: entry_definition.facing)
       end
@@ -105,7 +100,11 @@ module Aogera
     def instantiate(prototype, x:, y:, extra_components: {})
       components = prototype.components.merge(
         prototype_ref: Component::PrototypeRef.new(name: prototype.name),
-        position: Component::Position.new(x: x, y: y)
+        position: Component::Position.new(
+          x: x + 0.5,
+          y: 0.0,
+          z: y + 0.5
+        )
       ).merge(extra_components)
 
       @world.spawn(**components)

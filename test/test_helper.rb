@@ -52,6 +52,10 @@ module AogeraTestSupport
           blocks_movement: true
         ),
         ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+        melee_attack: Aogera::Component::MeleeAttack.new(
+          reach: 0.65,
+          arc_degrees: 110.0
+        ),
         combatant: Aogera::Component::Combatant.new(
           attack: 1
         )

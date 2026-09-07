@@ -1,6 +1,6 @@
-# Aogera 0.3.0: continuous first-person ground movement
+# Aogera 0.3.0: unified continuous 3D runtime positions
 
-Aogera 0.3.0 replaces the temporary player grid-stepping bridge with continuous X/Z movement while keeping the existing grid systems alive for NPC gameplay.
+Aogera's active 3D frontend now consumes the same canonical runtime position used by simulation and collision.
 
 ## Active path
 
@@ -24,7 +24,7 @@ raylib frame
     |       |
     |       +-- LookDelta ---> FirstPersonView
     |
-    +-- GroundPosition + FirstPersonView
+    +-- Position + FirstPersonView
             |
             v
         Render::Raylib3D
@@ -36,89 +36,81 @@ raylib frame
           raylib
 ```
 
-Mouse look remains frontend/render-frame state. Player translation remains canonical simulation state and changes only through the fixed-step command/executor boundary.
+Mouse look remains frontend/render-frame state. Translation remains canonical simulation state and changes only through the fixed-step command/executor boundary.
 
-## GroundPosition
+## Position
 
-The controlled persistent character receives:
+Every runtime spatial entity uses:
 
 ```text
-Component::GroundPosition(x, z)
+Component::Position(x, y, z)
 ```
-
-This is deliberately a ground-plane coordinate rather than a padded `Position3D` or generic transform. Aogera does not yet have vertical player motion, velocity, acceleration or a general 3D body model.
 
 The coordinate convention is:
 
 ```text
 +X = east/right
 +Y = up
-+Z = south / old grid +Y
++Z = south / authored grid +Y
 ```
 
-Authored grid entries initialize continuous position at the cell center:
+Current grid-authored actors begin at cell centers:
 
 ```text
-grid (x, y) -> ground (x + 0.5, z = y + 0.5)
+cell (x, y) -> Position(x + 0.5, 0.0, y + 0.5)
 ```
 
-`Render::Raylib3D` now places the first-person camera directly at the controlled entity's `GroundPosition`, plus `FirstPersonView#eye_height` on Y.
+The renderer draws entities directly from these coordinates. The first-person camera uses the controlled entity's `Position`, adding `FirstPersonView#eye_height` to Y.
+
+There is no separate renderer position and no player-only ground-position component.
 
 ## GroundMove
 
-Player movement now enters simulation as:
+All current actor locomotion enters simulation as:
 
 ```text
 Simulation::Commands::GroundMove(entity_id, dx, dz)
 ```
 
-`RealtimeController` emits one ground-motion command for every simulation tick while movement input is held. The default speed is expressed in world units per second and converted to a 30 Hz per-tick displacement.
+Player movement is generated from exact view yaw every 30 Hz simulation tick while input is held. NPC behavior also emits `GroundMove`; its route selection currently runs at a lower decision cadence.
 
-Movement uses exact view yaw rather than reducing yaw to a cardinal direction. Forward and strafe vectors are combined and normalized, so diagonal input does not move faster.
-
-The old integer `Simulation::Commands::Move(dx, dy)` remains active for NPC wandering/pathfinding.
+Both are resolved by `Simulation::GroundMovement` and the same continuous collision path.
 
 ## Ground collision
 
-`Simulation::GroundMovement` is intentionally small and specific to ground-plane locomotion.
+Actors can carry `Component::GroundBody(radius)`. `GroundSpace#sweep_circle` sweeps that body across the requested X/Z displacement against impassable authored terrain cells and active blocking ground bodies, returning the earliest `GroundTrace`.
 
-Actors can carry `Component::GroundBody(radius)`. `GroundSpace#sweep_circle` continuously sweeps that circle across the complete requested X/Z displacement against impassable authored terrain cells and blocking ground bodies, returning the earliest `GroundTrace`. Large commands therefore cannot tunnel through a one-cell wall without relying on movement substeps.
+`GroundMovement` moves to exact contact, accumulates distinct contact normals, and constrains remaining displacement against the active contact set. This supports wall sliding and stable wall/actor compound contacts without X-first/Z-second resolution or anti-tunneling substeps.
 
-`GroundMovement` moves to the exact trace contact position and accumulates distinct contact normals during the movement command. Remaining displacement must satisfy the full active contact set before another sweep, so compound contacts such as an actor beside a wall stop or slide without pushing the player through either surface. Resolution remains bounded to a small fixed number of contacts. Wall sliding is therefore geometric rather than X-first/Z-second.
+This is not a generic physics system. Vertical actor collision, gravity, velocities, forces and arbitrary 3D shapes remain deferred.
 
-This is not a generic physics system. There are no velocities, forces, rigid bodies, collision layers, arbitrary 3D shapes or vertical collision rules.
+## Navigation is separate from position
 
-## Coarse grid synchronization
-
-Several established systems still consume `Component::Position(x, y)`:
-
-- NPC pathfinding;
-- NPC chase/adjacency decisions;
-- authored grid occupancy.
-
-For the controlled character, `GroundPosition` is now authoritative for physical location. After ground movement, the executor synchronizes `Position` to the cell containing the continuous player center:
+The current `Simulation::Pathfinder` still uses the authored terrain grid for BFS. It derives temporary navigation cells from canonical positions:
 
 ```text
-grid x = floor(ground x)
-grid y = floor(ground z)
+cell_x = floor(position.x)
+cell_z = floor(position.z)
 ```
 
-Dynamic blockers no longer occupy their whole authored cell for continuous collision. `GroundBody` supplies their horizontal radius, while their grid `Position` supplies a temporary center until they gain continuous positions of their own.
+Those cells are planning data only. NPC entities themselves remain continuously positioned and execute movement through the same sweep solver as the player.
 
-Player `Facing` is no longer updated by continuous translation. `FirstPersonView` owns actual look direction. `GroundSpace` combines that continuous heading with action-specific authored profiles: `MeleeAttack(reach, arc_degrees)` for melee and `Interactor(reach, arc_degrees)` for interaction. These queries are no longer cardinal or grid-adjacent. After reach/arc filtering, a zero-radius ground segment trace rejects targets hidden behind static terrain or another blocking ground body.
+## Combat and interaction
+
+`GroundSpace` combines canonical continuous positions, `GroundBody` radii and action-specific authored profiles. `MeleeAttack(reach, arc_degrees)` and `Interactor(reach, arc_degrees)` remain gameplay data rather than collision constants.
+
+Player and NPC melee validation use continuous body separation and segment obstruction traces. Interaction uses the same spatial foundation with separate eligibility semantics.
 
 ## Still deferred
 
-0.3.0 does **not** introduce:
+The current runtime does **not** introduce:
 
-- vertical player motion or jumping;
-- velocity/acceleration;
+- vertical actor movement, gravity or jumping;
 - generic physics or transforms;
-- continuous NPC navigation;
-- full 3D ray/capsule/volume tracing;
-- projectile simulation;
 - BSP loading/collision;
+- BSP/navigation integration;
+- projectile simulation;
 - models/textures/materials;
 - a general asset manager.
 
-The current ground trace/sweep contract gives BSP work a stable collision-query boundary: a later BSP backend can replace static terrain-cell intersection while movement and action code keep consuming structured trace results.
+The important normalization is already complete: BSP will not need to reconcile a player-only continuous coordinate with grid-positioned NPCs before replacing static world collision.

@@ -38,10 +38,9 @@ class CollisionTest < Minitest::Test
     end
 
     position = simulation.world_view.component(hero_id, :position)
-    ground = simulation.world_view.component(hero_id, :ground_position)
-    assert_equal [2, 2], [position.x, position.y]
-    assert_operator ground.x, :>, 2.5
-    assert_operator ground.x, :<=, 3.0
-    assert_in_delta 2.5, ground.z
+    assert_operator position.x, :>, 2.5
+    assert_operator position.x, :<=, 3.0
+    assert_in_delta 0.0, position.y
+    assert_in_delta 2.5, position.z
   end
 end

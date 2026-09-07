@@ -53,8 +53,8 @@ class SimulationLoadingTest < Minitest::Test
     )
   end
 
-  def test_character_starts_with_continuous_ground_position_at_entry_center
-    position = @simulation.world_view.component(@hero_id, :ground_position)
+  def test_character_starts_with_canonical_position_at_entry_center
+    position = @simulation.world_view.component(@hero_id, :position)
 
     assert_in_delta 2.5, position.x
     assert_in_delta 2.5, position.z
