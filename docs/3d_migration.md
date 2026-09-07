@@ -397,7 +397,7 @@ Existing frontend, input, simulation, collision, combat, dialogue, and controlle
 
 ## 16. Current test baseline
 
-The reconstructed v0.3.0 tree used for this migration work passes:
+The current v0.3.0 tree passes:
 
 ```text
 121 runs, 325 assertions, 0 failures, 0 errors, 0 skips
