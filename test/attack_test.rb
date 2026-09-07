@@ -94,6 +94,50 @@ class AttackTest < Minitest::Test
     assert_equal 2, effect.amount
     assert_nil world.component(target, :health)
   end
+  def test_continuous_attacker_uses_authored_melee_reach
+    world = Aogera::World.new
+    attacker = world.spawn(
+      position: Aogera::Component::Position.new(x: 1, y: 1),
+      ground_position: Aogera::Component::GroundPosition.new(x: 1.1, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      melee_attack: Aogera::Component::MeleeAttack.new(
+        reach: 0.65,
+        arc_degrees: 110.0
+      )
+    )
+    target = world.spawn(
+      position: Aogera::Component::Position.new(x: 2, y: 1),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      health: Aogera::Component::Health.new(current: 10, max: 10)
+    )
+
+    assert_empty execute(
+      world,
+      Aogera::Simulation::Commands::Attack.new(
+        attacker_id: attacker,
+        target_id: target,
+        damage: 1
+      )
+    )
+    assert_equal 10, world.component(target, :health).current
+
+    world.set_component(
+      attacker,
+      :ground_position,
+      Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5)
+    )
+    execute(
+      world,
+      Aogera::Simulation::Commands::Attack.new(
+        attacker_id: attacker,
+        target_id: target,
+        damage: 1
+      )
+    )
+
+    assert_equal 9, world.component(target, :health).current
+  end
+
   def test_attack_is_rejected_when_target_is_not_adjacent
     world = Aogera::World.new
     attacker = world.spawn(

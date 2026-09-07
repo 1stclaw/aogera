@@ -56,12 +56,6 @@ module Aogera
       ].freeze
     end
 
-    def cardinal_direction
-      normalized = yaw % FULL_TURN
-      index = ((normalized + (QUARTER_TURN / 2.0)) / QUARTER_TURN).floor % 4
-      Direction::ORDER.fetch(index)
-    end
-
     def ground_movement_delta(forward:, strafe:, distance:)
       x = (Math.sin(yaw) * forward) + (Math.cos(yaw) * strafe)
       z = (-Math.cos(yaw) * forward) + (Math.sin(yaw) * strafe)

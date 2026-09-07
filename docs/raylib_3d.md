@@ -78,13 +78,13 @@ Movement uses exact view yaw rather than reducing yaw to a cardinal direction. F
 
 The old integer `Simulation::Commands::Move(dx, dy)` remains active for NPC wandering/pathfinding.
 
-## Temporary collision
+## Ground collision
 
-`Simulation::GroundMovement` is intentionally small and specific to the current bridge.
+`Simulation::GroundMovement` is intentionally small and specific to ground-plane locomotion.
 
-The player is treated as a circle on the X/Z plane. Impassable authored cells and cells occupied by entities with `Collision(blocks_movement: true)` are treated as solid unit cells. X and Z are resolved independently, allowing the player to slide along a blocked axis rather than stopping all movement.
+Actors can carry `Component::GroundBody(radius)`. The moving actor is resolved as a circle on the X/Z plane. Impassable authored terrain remains cell-shaped, while blocking entities that also have a `GroundBody` collide circle-to-circle. X and Z are resolved independently, allowing the player to slide along a blocked axis rather than stopping all movement.
 
-Large displacement commands are split into small substeps before collision resolution so a command cannot tunnel directly across a one-cell wall.
+Large displacement commands are split into substeps based on the moving body's authored radius so a command cannot tunnel directly across a one-cell wall.
 
 This is not a generic physics system. There are no velocities, forces, rigid bodies, collision layers, arbitrary shapes or vertical collision rules.
 
@@ -93,9 +93,7 @@ This is not a generic physics system. There are no velocities, forces, rigid bod
 Several established systems still consume `Component::Position(x, y)`:
 
 - NPC pathfinding;
-- NPC targeting/adjoining checks;
-- melee validation;
-- interaction targeting;
+- NPC chase/adjacency decisions;
 - authored grid occupancy.
 
 For the controlled character, `GroundPosition` is now authoritative for physical location. After ground movement, the executor synchronizes `Position` to the cell containing the continuous player center:
@@ -105,9 +103,9 @@ grid x = floor(ground x)
 grid y = floor(ground z)
 ```
 
-Blocking entity cells remain solid to the continuous player, preserving the current grid occupancy invariant while the two models coexist.
+Dynamic blockers no longer occupy their whole authored cell for continuous collision. `GroundBody` supplies their horizontal radius, while their grid `Position` supplies a temporary center until they gain continuous positions of their own.
 
-Player `Facing` is no longer updated by continuous translation. The first-person view already owns actual look direction, and player melee/interaction direction continues to use the view's nearest cardinal heading while those mechanics remain grid-adjacent.
+Player `Facing` is no longer updated by continuous translation. `FirstPersonView` owns actual look direction. `GroundSpace` combines that continuous heading with action-specific authored profiles: `MeleeAttack(reach, arc_degrees)` for melee and `Interactor(reach, arc_degrees)` for interaction. These queries are no longer cardinal or grid-adjacent.
 
 ## Still deferred
 
@@ -117,7 +115,7 @@ Player `Facing` is no longer updated by continuous translation. The first-person
 - velocity/acceleration;
 - generic physics or transforms;
 - continuous NPC navigation;
-- continuous melee/raycast targeting;
+- raycast or full 3D volume targeting;
 - projectile simulation;
 - BSP loading/collision;
 - models/textures/materials;

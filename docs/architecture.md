@@ -55,7 +55,9 @@ Position(x, y)
 
 A persistent controlled character is spawned at the center of its authored entry cell. Whenever its `GroundPosition` crosses into another passable cell, the executor synchronizes its coarse `Position` with `floor(x), floor(z)`.
 
-This coexistence is temporary but intentional. It lets the player acquire a real continuous coordinate without forcing NPC pathfinding, melee adjacency, authored spawns, or terrain representation through a speculative 3D rewrite.
+This coexistence is intentional. It lets the player use a real continuous coordinate without forcing NPC pathfinding, authored spawns, or terrain representation through a speculative all-at-once rewrite.
+
+`GroundSpace` is the current shared ground-plane geometry boundary. It resolves an entity to continuous X/Z coordinates (using `GroundPosition` when present and the center of `Position` otherwise), reads authored `GroundBody` radii, computes separation/overlap, and performs parameterized arc queries. It does not own combat, interaction, pathfinding, or physics policy.
 
 There is still no generic `Transform`, `Spatial`, `Position3D`, or physics-body abstraction.
 
@@ -84,9 +86,9 @@ GroundMove(entity_id, dx, dz)
     continuous ground-plane movement used by the controlled player
 ```
 
-`GroundMovement` resolves the latter against the current authored grid. It treats the player as a small circle and impassable/blocking cells as solid unit squares. Axis-separated resolution permits wall sliding, and large commands are subdivided to avoid tunneling through a cell.
+`GroundMovement` resolves the latter against the current authored grid and `GroundSpace`. The moving entity's `GroundBody(radius)` is authored data. Impassable terrain remains cell-shaped, while blocking actors with `GroundBody` use circle-vs-circle overlap. Axis-separated resolution permits wall sliding, and large commands are subdivided according to the moving body's radius to avoid tunneling through terrain.
 
-This is collision logic, not a general physics engine.
+This is ground collision logic, not a general physics engine.
 
 ## Fixed-step scheduling
 
@@ -186,6 +188,6 @@ content/dialogue/
 
 ## Near-term boundary
 
-Aogera 0.3.0 now has a real continuous player coordinate, view-relative ground movement and a minimal collision boundary. NPC navigation and combat targeting remain intentionally grid-based.
+Aogera 0.3.0 now has a real continuous player coordinate, view-relative ground movement, authored ground-body extents, and shared X/Z queries used by movement, melee and interaction. Player action targeting is continuous; NPC navigation and autonomous attack decisions remain intentionally grid-based.
 
-The temporary cell collision resolver should not grow into a general physics framework before BSP. The next BSP29 experiment can use the continuous player coordinate to determine what world geometry, collision representation and map-space conversion Aogera actually needs.
+The terrain-cell collision representation should not grow into a general physics framework before BSP. The next BSP29 experiment can use the continuous player coordinate and `GroundSpace` boundary to determine what world geometry, collision representation and map-space conversion Aogera actually needs.

@@ -105,6 +105,22 @@ class PlayModeTest < Minitest::Test
     assert_equal before, mode.step_number
   end
 
+  def test_interaction_uses_continuous_view_arc_instead_of_cardinal_facing
+    yaw = 40.0 * Math::PI / 180.0
+    mode = Aogera::Mode::Play.new(
+      simulation: @simulation,
+      session: @session,
+      player_key: :hero,
+      dialogues: dialogue_catalog,
+      view: Aogera::FirstPersonView.new(yaw: yaw)
+    )
+
+    result = mode.advance(input: action_input(:interact))
+
+    assert_instance_of Aogera::Mode::Push, result
+    assert_instance_of Aogera::Mode::Dialogue, result.mode
+  end
+
   def test_interact_without_interactable_target_does_not_pause_world
     result = @mode.advance(input: action_input(:interact))
 

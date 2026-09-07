@@ -3,15 +3,22 @@
 module Aogera
   class Simulation
     class GroundMovement
-      RADIUS = 0.22
-      MAX_SUBSTEP = RADIUS
+      def initialize(ground_space: GroundSpace.new)
+        @ground_space = ground_space
+      end
 
       def resolve(level:, world:, entity_id:, position:, dx:, dz:)
+        radius = @ground_space.radius(world: world, entity_id: entity_id)
+        unless radius.positive?
+          raise ArgumentError,
+            "ground-moving entity has no positive GroundBody radius"
+        end
+
         dx = Float(dx)
         dz = Float(dz)
         steps = [
-          (dx.abs / MAX_SUBSTEP).ceil,
-          (dz.abs / MAX_SUBSTEP).ceil,
+          (dx.abs / radius).ceil,
+          (dz.abs / radius).ceil,
           1
         ].max
         step_x = dx / steps
@@ -24,6 +31,7 @@ module Aogera
             level: level,
             world: world,
             entity_id: entity_id,
+            radius: radius,
             x: x,
             z: z,
             dx: step_x,
@@ -36,12 +44,13 @@ module Aogera
 
       private
 
-      def resolve_step(level:, world:, entity_id:, x:, z:, dx:, dz:)
+      def resolve_step(level:, world:, entity_id:, radius:, x:, z:, dx:, dz:)
         candidate_x = x + dx
         if clear?(
           level: level,
           world: world,
           entity_id: entity_id,
+          radius: radius,
           x: candidate_x,
           z: z
         )
@@ -53,6 +62,7 @@ module Aogera
           level: level,
           world: world,
           entity_id: entity_id,
+          radius: radius,
           x: x,
           z: candidate_z
         )
@@ -62,51 +72,69 @@ module Aogera
         [x, z]
       end
 
-      def clear?(level:, world:, entity_id:, x:, z:)
-        min_x = (x - RADIUS).floor
-        max_x = (x + RADIUS).floor
-        min_y = (z - RADIUS).floor
-        max_y = (z + RADIUS).floor
+      def clear?(level:, world:, entity_id:, radius:, x:, z:)
+        clear_terrain?(level: level, x: x, z: z, radius: radius) &&
+          clear_entities?(
+            world: world,
+            entity_id: entity_id,
+            x: x,
+            z: z,
+            radius: radius
+          )
+      end
+
+      def clear_terrain?(level:, x:, z:, radius:)
+        min_x = (x - radius).floor
+        max_x = (x + radius).floor
+        min_y = (z - radius).floor
+        max_y = (z + radius).floor
 
         (min_y..max_y).each do |grid_y|
           (min_x..max_x).each do |grid_x|
-            next unless circle_overlaps_cell?(x, z, grid_x, grid_y)
-            next if passable_cell?(
-              level: level,
-              world: world,
-              entity_id: entity_id,
-              grid_x: grid_x,
-              grid_y: grid_y
+            next unless circle_overlaps_cell?(
+              x,
+              z,
+              radius,
+              grid_x,
+              grid_y
             )
-
-            return false
+            return false unless level.passable?(grid_x, grid_y)
           end
         end
 
         true
       end
 
-      def passable_cell?(level:, world:, entity_id:, grid_x:, grid_y:)
-        return false unless level.passable?(grid_x, grid_y)
-
-        !world.entity_ids.any? do |other_id|
+      def clear_entities?(world:, entity_id:, x:, z:, radius:)
+        world.entity_ids.none? do |other_id|
           next false if other_id == entity_id
 
           collision = world.component(other_id, :collision)
           next false unless collision&.blocks_movement
 
-          position = world.component(other_id, :position)
-          position && position.x == grid_x && position.y == grid_y
+          other_radius = @ground_space.radius(world: world, entity_id: other_id)
+          unless other_radius.positive?
+            raise ArgumentError,
+              "blocking ground entity has no positive GroundBody radius"
+          end
+
+          @ground_space.overlaps_entity?(
+            world: world,
+            x: x,
+            z: z,
+            radius: radius,
+            other_id: other_id
+          )
         end
       end
 
-      def circle_overlaps_cell?(x, z, grid_x, grid_y)
+      def circle_overlaps_cell?(x, z, radius, grid_x, grid_y)
         nearest_x = [[x, grid_x.to_f].max, grid_x + 1.0].min
         nearest_z = [[z, grid_y.to_f].max, grid_y + 1.0].min
         delta_x = x - nearest_x
         delta_z = z - nearest_z
 
-        (delta_x * delta_x) + (delta_z * delta_z) < (RADIUS * RADIUS)
+        (delta_x * delta_x) + (delta_z * delta_z) < (radius * radius)
       end
     end
   end

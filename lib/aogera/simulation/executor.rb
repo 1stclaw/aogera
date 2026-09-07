@@ -9,10 +9,12 @@ module Aogera
 
       def initialize(
         movement: Movement.new,
-        ground_movement: GroundMovement.new
+        ground_movement: GroundMovement.new,
+        ground_space: GroundSpace.new
       )
         @movement = movement
         @ground_movement = ground_movement
+        @ground_space = ground_space
       end
 
       def execute(level:, world:, commands:, bindings:)
@@ -146,11 +148,30 @@ module Aogera
 
         attacker_health = world.component(command.attacker_id, :health)
         return false if attacker_health&.current&.zero?
-        attacker = world.component(command.attacker_id, :position)
-        target = world.component(command.target_id, :position)
-        return false unless attacker && target
+        if world.component(command.attacker_id, :ground_position)
+          profile = world.component(command.attacker_id, :melee_attack)
+          return false unless profile
 
-        (attacker.x - target.x).abs + (attacker.y - target.y).abs == 1
+          separation = @ground_space.separation(
+            world: world,
+            source_id: command.attacker_id,
+            target_id: command.target_id
+          )
+          return false unless separation
+
+          return separation <= Float(profile.reach)
+        end
+
+        grid_adjacent?(world, command.attacker_id, command.target_id)
+      end
+
+
+      def grid_adjacent?(world, source_id, target_id)
+        source = world.component(source_id, :position)
+        target = world.component(target_id, :position)
+        return false unless source && target
+
+        (source.x - target.x).abs + (source.y - target.y).abs == 1
       end
 
       def execute_defeat(world, command)

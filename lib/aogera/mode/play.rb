@@ -11,13 +11,15 @@ module Aogera
         player_key:,
         dialogues:,
         controller: RealtimeController.new,
-        view: nil
+        view: nil,
+        ground_space: GroundSpace.new
       )
         @simulation = simulation
         @session = session
         @player_key = player_key.to_sym
         @dialogues = dialogues
         @controller = controller
+        @ground_space = ground_space
 
         validate_player!
         @view = view || FirstPersonView.for_direction(player_facing.direction)
@@ -79,12 +81,14 @@ module Aogera
       end
 
       def player_attack_commands
-        target_id = adjacent_target_id
-        return [] unless target_id
+        profile = world_view.component(controlled_entity_id, :melee_attack)
+        return [] unless profile
 
-        health = world_view.component(target_id, :health)
-        combatant = world_view.component(target_id, :combatant)
-        return [] unless health && combatant
+        target_id = ground_target_id(profile) do |entity_id|
+          health = world_view.component(entity_id, :health)
+          health&.current&.positive?
+        end
+        return [] unless target_id
 
         [
           Simulation::Commands::Attack.new(
@@ -96,12 +100,15 @@ module Aogera
       end
 
       def interaction_transition
-        target_id = adjacent_target_id
+        profile = world_view.component(controlled_entity_id, :interactor)
+        return unless profile
+
+        target_id = ground_target_id(profile) do |entity_id|
+          world_view.component(entity_id, :interactable)
+        end
         return unless target_id
 
         interactable = world_view.component(target_id, :interactable)
-        return unless interactable
-
         Push.new(
           mode: Dialogue.new(
             simulation: simulation,
@@ -111,19 +118,26 @@ module Aogera
         )
       end
 
-      def adjacent_target_id
-        origin = world_view.component(controlled_entity_id, :position)
-        return unless origin
-
-        offset = Direction.delta(view.cardinal_direction)
-        target_x = origin.x + offset[0]
-        target_y = origin.y + offset[1]
-
-        world_view.entity_ids.find do |entity_id|
-          next if entity_id == controlled_entity_id
-          position = world_view.component(entity_id, :position)
-          position && position.x == target_x && position.y == target_y
+      def ground_target_id(profile, &eligible)
+        forward_x, _forward_y, forward_z = view.forward_vector
+        target_ids = world_view.entity_ids.select do |entity_id|
+          entity_id != controlled_entity_id && eligible.call(entity_id)
         end
+
+        hits = @ground_space.arc_hits(
+          world: world_view,
+          source_id: controlled_entity_id,
+          target_ids: target_ids,
+          forward_x: forward_x,
+          forward_z: forward_z,
+          reach: profile.reach,
+          arc_degrees: profile.arc_degrees
+        )
+
+        best = hits.max_by do |hit|
+          [hit.alignment, -hit.separation]
+        end
+        best&.entity_id
       end
 
       def player_facing

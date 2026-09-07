@@ -10,9 +10,9 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 Aogera now has continuous first-person movement on the ground plane. The controlled character owns a runtime `GroundPosition(x, z)` in Aogera world space, while mouse yaw/pitch remains in `FirstPersonView`. raylib `Camera3D` is derived from those Aogera-owned values rather than acting as canonical gameplay state.
 
-The player moves continuously at the 30 Hz simulation cadence. W/S move forward/back relative to the exact current yaw and A/D strafe; diagonal input is normalized. A small temporary ground-collision resolver keeps the player out of impassable terrain and cells occupied by blocking entities, with axis-separated resolution so movement can slide along walls.
+The player moves continuously at the 30 Hz simulation cadence. W/S move forward/back relative to the exact current yaw and A/D strafe; diagonal input is normalized. `GroundBody(radius)` gives ground actors authored horizontal extent. `Simulation::GroundMovement` resolves the controlled actor as a circle against impassable terrain cells and other blocking ground bodies, with axis-separated resolution so movement can slide along walls.
 
-NPC movement, pathfinding, melee adjacency and interaction still use the established integer grid. The player's old `Position(x, y)` is therefore retained as a synchronized coarse cell while `GroundPosition` is authoritative for player location and camera placement. This is an explicit migration bridge, not a generic transform or physics system.
+`GroundSpace` now provides shared X/Z spatial facts for collision, melee and interaction. Player melee and interaction use authored reach/arc profiles against continuous view direction rather than snapping to a cardinal adjacent cell. NPC movement, pathfinding and autonomous attack decisions remain on the established integer grid. The player's old `Position(x, y)` remains a synchronized coarse cell while `GroundPosition` is authoritative for player location and camera placement.
 
 ## Running
 
@@ -72,6 +72,6 @@ Aogera still has no generic scene/projector/transform layer, no general physics 
 
 ## Direction
 
-The next 0.3 work can now evaluate BSP29 against a real continuous player coordinate model. The current ground collision is deliberately small and disposable: BSP geometry/collision should replace it where appropriate rather than being forced through a generic physics interface designed in advance.
+The next 0.3 work can now evaluate BSP29 against a continuous player coordinate model and an explicit ground-space query boundary. The present terrain-cell collision representation can later be replaced by BSP geometry where appropriate without changing action code into a generic physics framework.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

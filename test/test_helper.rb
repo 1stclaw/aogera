@@ -21,6 +21,15 @@ module AogeraTestSupport
       components: {
         collision: Aogera::Component::Collision.new(
           blocks_movement: true
+        ),
+        ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+        melee_attack: Aogera::Component::MeleeAttack.new(
+          reach: 0.65,
+          arc_degrees: 110.0
+        ),
+        interactor: Aogera::Component::Interactor.new(
+          reach: 0.65,
+          arc_degrees: 110.0
         )
       }.freeze
     )
@@ -38,6 +47,7 @@ module AogeraTestSupport
         collision: Aogera::Component::Collision.new(
           blocks_movement: true
         ),
+        ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
         combatant: Aogera::Component::Combatant.new(
           attack: 1
         )
@@ -50,6 +60,7 @@ module AogeraTestSupport
         collision: Aogera::Component::Collision.new(
           blocks_movement: true
         ),
+        ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
         interactable: Aogera::Component::Interactable.new(
           dialogue_key: :village_greeting
         )

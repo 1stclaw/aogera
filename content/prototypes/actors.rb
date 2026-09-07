@@ -10,7 +10,14 @@ module Aogera
             renderable: Component::Renderable.new(
               render_key: :player, glyph: "P", layer: 10
             ),
-            collision: Component::Collision.new(blocks_movement: true)
+            collision: Component::Collision.new(blocks_movement: true),
+            ground_body: Component::GroundBody.new(radius: 0.22),
+            melee_attack: Component::MeleeAttack.new(
+              reach: 0.65, arc_degrees: 110.0
+            ),
+            interactor: Component::Interactor.new(
+              reach: 0.65, arc_degrees: 110.0
+            )
           }.freeze
         ),
         Prototype.new(
@@ -22,6 +29,7 @@ module Aogera
             ),
             behavior: Component::Behavior.new(kind: :chase),
             collision: Component::Collision.new(blocks_movement: true),
+            ground_body: Component::GroundBody.new(radius: 0.28),
             combatant: Component::Combatant.new(attack: 1)
           }.freeze
         ),
@@ -32,6 +40,7 @@ module Aogera
               render_key: :villager, glyph: "V", layer: 10
             ),
             collision: Component::Collision.new(blocks_movement: true),
+            ground_body: Component::GroundBody.new(radius: 0.28),
             interactable: Component::Interactable.new(
               dialogue_key: :village_greeting
             )

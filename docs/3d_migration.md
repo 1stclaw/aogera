@@ -105,7 +105,6 @@ It owns:
 It can derive:
 
 - a normalized 3D forward vector;
-- a nearest cardinal heading for gameplay systems that are still grid-adjacent;
 - a yaw-relative ground movement vector for forward/back/strafe input.
 
 Pitch is clamped and yaw wraps continuously.
@@ -243,7 +242,7 @@ Translation remains simulation-owned and therefore changes only through the fixe
 
 `Simulation::GroundMovement` resolves `GroundMove` commands against the current authored grid.
 
-The controlled player is represented as a small circle on the X/Z plane. Current constants are:
+Ground actors can carry an authored `Component::GroundBody(radius)`. The controlled player's current prototype uses:
 
 ```text
 radius       = 0.22 world units
@@ -252,8 +251,8 @@ max substep  = 0.22 world units
 
 Collision treats these as solid:
 
-- impassable authored terrain cells;
-- cells occupied by entities whose `Collision#blocks_movement` is true.
+- impassable authored terrain cells, tested as cell geometry;
+- entities whose `Collision#blocks_movement` is true and whose authored `GroundBody` supplies a circle radius.
 
 Resolution is axis-separated:
 
@@ -264,7 +263,7 @@ then resolve Z
 
 This permits wall sliding when one axis is blocked and the other remains clear.
 
-Large displacement commands are internally subdivided before collision resolution so they cannot simply tunnel through a one-cell obstacle.
+Large displacement commands are internally subdivided according to the moving body's radius so they cannot simply tunnel through a one-cell obstacle.
 
 This is deliberately a narrow ground-movement collision resolver, **not** a general physics system. It should not accumulate speculative rigid-body or arbitrary geometry responsibilities before BSP establishes the next collision requirements.
 
@@ -295,8 +294,7 @@ This retained `Position` is not the player's precise physical location. It exist
 - NPC movement;
 - NPC pathfinding;
 - NPC chase behavior;
-- melee adjacency validation;
-- interaction adjacency;
+- NPC melee adjacency decisions;
 - authored level spawns and entries;
 - current terrain passability representation.
 
@@ -322,15 +320,22 @@ NPC decisions     2 Hz
 
 The introduction of continuous player motion therefore did not force NPC navigation into a premature continuous or navmesh-based design.
 
-## 11. Combat and interaction use the current view direction
+## 11. Ground-space collision, melee and interaction share spatial facts
 
-Melee attack and interaction still operate on adjacent grid cells, but their direction is derived from `FirstPersonView` rather than from the controlled player's legacy movement-facing state.
+`GroundSpace` is a small X/Z geometry service shared by the systems that need continuous ground relationships. It resolves `GroundPosition` directly, projects grid-only `Position` to cell center, reads `GroundBody` radii, computes center distance/separation, tests circle overlap, and returns entities inside a parameterized forward arc.
 
-`FirstPersonView#cardinal_direction` converts the current yaw to the nearest cardinal direction. `Mode::Play` then checks the adjacent coarse cell in that direction for an attack or interaction target.
+The service does not decide what an attack or interaction means. Player prototypes provide action geometry explicitly:
 
-The executor still validates melee attacks through grid adjacency.
+```text
+MeleeAttack(reach, arc_degrees)
+Interactor(reach, arc_degrees)
+```
 
-This preserves existing combat/dialogue behavior while the player's translation and camera are already continuous. Continuous raycast or volume-based targeting has not yet been introduced.
+`Mode::Play` supplies the current `FirstPersonView` direction and filters spatial hits by gameplay role. Melee currently chooses a living local-health target; interaction chooses an `Interactable`. The current single-target preference favors the target closest to the view center, then the nearer target on a tie. Reach and arc are authored data rather than constants inside targeting code.
+
+`Simulation::Executor` independently validates attacks from continuous attackers against their authored melee reach using ground-body separation. Grid-only NPC attackers retain the established adjacency validation until NPC locomotion is migrated away from the grid.
+
+This removes the old four-cardinal player attack/interaction artifact without introducing raycasts, generic colliders, or a physics system.
 
 ## 12. Existing runtime boundaries preserved from v0.2.3
 
@@ -426,7 +431,7 @@ The current 0.3.0 architecture does **not** contain:
 - generic rigid-body physics;
 - a generic `Transform` or `Spatial` abstraction;
 - continuous NPC navigation;
-- continuous melee/raycast targeting;
+- raycast or full 3D volume targeting;
 - projectile simulation;
 - ranged-attack delivery systems;
 - 3D models or skeletal animation;

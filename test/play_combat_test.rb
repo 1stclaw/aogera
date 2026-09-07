@@ -16,6 +16,26 @@ class PlayCombatTest < Minitest::Test
     assert_equal 10, session.character(:hero).hp
   end
 
+  def test_melee_uses_continuous_view_arc_instead_of_cardinal_facing
+    yaw = 40.0 * Math::PI / 180.0
+    view = Aogera::FirstPersonView.new(yaw: yaw)
+    mode, simulation, _session, goblin_id = build_play(view: view)
+
+    mode.advance(input: action_input(:attack))
+
+    assert_equal 2, simulation.world_view.component(goblin_id, :health).current
+  end
+
+  def test_melee_does_not_hit_target_outside_authored_arc
+    yaw = 20.0 * Math::PI / 180.0
+    view = Aogera::FirstPersonView.new(yaw: yaw)
+    mode, simulation, _session, goblin_id = build_play(view: view)
+
+    mode.advance(input: action_input(:attack))
+
+    assert_equal 4, simulation.world_view.component(goblin_id, :health).current
+  end
+
   def test_second_attack_defeats_goblin
     mode, simulation, session, goblin_id = build_play
 
@@ -103,7 +123,11 @@ class PlayCombatTest < Minitest::Test
 
   private
 
-  def build_play(controller: Aogera::RealtimeController.new, player_attack: 2)
+  def build_play(
+    controller: Aogera::RealtimeController.new,
+    player_attack: 2,
+    view: nil
+  )
     level = level_with(
       spawns: [
         Aogera::Level::Spawn.new(
@@ -145,7 +169,8 @@ class PlayCombatTest < Minitest::Test
       session: session,
       player_key: :hero,
       dialogues: dialogue_catalog,
-      controller: controller
+      controller: controller,
+      view: view
     )
 
     [mode, simulation, session, goblin_id]
