@@ -39,7 +39,7 @@ The controlled character's continuous physical location now lives in `World` as 
 
 `World::View` is a cached read-only facade over `World`; callers receive the same view object rather than allocating wrappers repeatedly. `World#entity_ids` similarly caches its immutable active-ID snapshot and invalidates it only on spawn/despawn.
 
-## Position models during the transition
+## Position models during the migration
 
 Aogera currently has two explicit position representations with different jobs.
 

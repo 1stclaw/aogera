@@ -1,4 +1,4 @@
-# Aogera 3D Transition: v0.2.3 to v0.3.2
+# Aogera 3D Migration: v0.2.3 to v0.3.2
 
 This document summarizes the **current architectural changes** between the final 2D baseline, Aogera v0.2.3, and the present v0.3.2 runtime.
 
@@ -35,7 +35,7 @@ RaylibAPI
 raylib Camera3D / 3D primitives
 ```
 
-The transition did **not** generalize the old 2D renderer into a universal scene system. The obsolete 2D presentation path was removed, while the existing simulation, world, session, mode, fixed-step, and authored-content systems were kept where they remained useful.
+The migration did **not** generalize the old 2D renderer into a universal scene system. The obsolete 2D presentation path was removed, while the existing simulation, world, session, mode, fixed-step, and authored-content systems were kept where they remained useful.
 
 ## 1. Active presentation is now 3D
 
@@ -334,7 +334,7 @@ This preserves existing combat/dialogue behavior while the player's translation 
 
 ## 12. Existing runtime boundaries preserved from v0.2.3
 
-The 3D transition retained the major runtime boundaries that were already useful:
+The 3D migration retained the major runtime boundaries that were already useful:
 
 - `Session` remains persistent character state;
 - `Level` remains immutable authored structure;
@@ -372,7 +372,7 @@ Enter        interact / advance dialogue
 Q / Esc      quit
 ```
 
-## 15. New active files introduced by the 3D transition
+## 15. New active files introduced by the 3D migration
 
 The current 0.3.2 tree adds these principal runtime files relative to v0.2.3:
 
@@ -397,7 +397,7 @@ Existing frontend, input, simulation, collision, combat, dialogue, and controlle
 
 ## 16. Current test baseline
 
-The reconstructed v0.3.2 tree used for this transition work passes:
+The reconstructed v0.3.2 tree used for this migration work passes:
 
 ```text
 121 runs, 325 assertions, 0 failures, 0 errors, 0 skips
@@ -438,7 +438,7 @@ The current 0.3.2 architecture does **not** contain:
 
 These omissions are deliberate. The current runtime establishes only the 3D concepts already required by first-person movement and rendering, leaving BSP and later gameplay work to introduce further abstractions from concrete requirements.
 
-## 18. Current transition boundary
+## 18. Current migration boundary
 
 The current v0.3.2 state can be summarized as:
 

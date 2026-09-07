@@ -12,7 +12,7 @@ Aogera now has continuous first-person movement on the ground plane. The control
 
 The player moves continuously at the 30 Hz simulation cadence. W/S move forward/back relative to the exact current yaw and A/D strafe; diagonal input is normalized. A small temporary ground-collision resolver keeps the player out of impassable terrain and cells occupied by blocking entities, with axis-separated resolution so movement can slide along walls.
 
-NPC movement, pathfinding, melee adjacency and interaction still use the established integer grid. The player's old `Position(x, y)` is therefore retained as a synchronized coarse cell while `GroundPosition` is authoritative for player location and camera placement. This is an explicit transition bridge, not a generic transform or physics system.
+NPC movement, pathfinding, melee adjacency and interaction still use the established integer grid. The player's old `Position(x, y)` is therefore retained as a synchronized coarse cell while `GroundPosition` is authoritative for player location and camera placement. This is an explicit migration bridge, not a generic transform or physics system.
 
 ## Running
 
