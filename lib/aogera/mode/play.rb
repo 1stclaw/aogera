@@ -3,14 +3,15 @@
 module Aogera
   module Mode
     class Play
-      attr_reader :simulation, :session, :player_key, :dialogues, :controller
+      attr_reader :simulation, :session, :player_key, :dialogues, :controller, :view
 
       def initialize(
         simulation:,
         session:,
         player_key:,
         dialogues:,
-        controller: RealtimeController.new
+        controller: RealtimeController.new,
+        view: nil
       )
         @simulation = simulation
         @session = session
@@ -19,7 +20,9 @@ module Aogera
         @controller = controller
 
         validate_player!
+        @view = view || FirstPersonView.for_direction(player_facing.direction)
       end
+
       def advance(input:)
         return :quit if input.pressed?(:quit)
         return :quit if input.pressed?(:cancel)
@@ -37,30 +40,35 @@ module Aogera
 
         :advanced
       end
+
       def level = simulation.level
       def world_view = simulation.world_view
       def step_number = simulation.step_number
+      def camera_entity_id = controlled_entity_id
 
       def controlled_entity_id
         simulation.entity_id_for_character(player_key)
       end
+
       def status_text
         player = player_character
         "#{player_key.to_s.capitalize} " \
           "HP #{player.hp}/#{player.max_hp} " \
           "MP #{player.mp}/#{player.max_mp} | " \
-          "WASD/arrows move. Space attack. Enter interact. " \
+          "Mouse look. WASD/arrows move. Space attack. Enter interact. " \
           "Q or Esc quit. Tick #{step_number}"
       end
 
       private
+
       def commands_for(input)
         planned = controller.build(
           input: input,
           level: level,
           world: world_view,
           controlled_id: controlled_entity_id,
-          tick_number: simulation.step_number + 1
+          tick_number: simulation.step_number + 1,
+          view: view
         )
 
         return planned unless input.pressed?(:attack)
@@ -69,6 +77,7 @@ module Aogera
           player_attack_commands + planned.to_a
         )
       end
+
       def player_attack_commands
         target_id = adjacent_target_id
         return [] unless target_id
@@ -85,6 +94,7 @@ module Aogera
           )
         ]
       end
+
       def interaction_transition
         target_id = adjacent_target_id
         return unless target_id
@@ -95,18 +105,17 @@ module Aogera
         Push.new(
           mode: Dialogue.new(
             simulation: simulation,
-            lines: dialogues.fetch(interactable.dialogue_key)
+            lines: dialogues.fetch(interactable.dialogue_key),
+            camera_entity_id: controlled_entity_id
           )
         )
       end
+
       def adjacent_target_id
         origin = world_view.component(controlled_entity_id, :position)
-        facing = world_view.component(controlled_entity_id, :facing)
-        return unless origin && facing
+        return unless origin
 
-        offset = Direction.delta(facing.direction)
-        return unless offset
-
+        offset = Direction.delta(view.cardinal_direction)
         target_x = origin.x + offset[0]
         target_y = origin.y + offset[1]
 
@@ -117,6 +126,11 @@ module Aogera
         end
       end
 
+      def player_facing
+        world_view.component(controlled_entity_id, :facing) ||
+          Component::Facing.new(direction: :south)
+      end
+
       def player_character
         session.character(player_key)
       end
@@ -124,6 +138,7 @@ module Aogera
       def player_defeated?
         player_character.hp.zero?
       end
+
       def validate_player!
         player_character
         controlled_entity_id

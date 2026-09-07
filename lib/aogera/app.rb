@@ -33,13 +33,20 @@ module Aogera
         prototype: :player,
         entry: level.default_entry
       )
+      facing = simulation.world_view.component(
+        simulation.entity_id_for_character(PLAYER_KEY),
+        :facing
+      )
+      @view = FirstPersonView.for_direction(facing.direction)
+
       @modes = ModeStack.new
       @modes.push(
         Mode::Play.new(
           simulation: simulation,
           session: @session,
           player_key: PLAYER_KEY,
-          dialogues: dialogues
+          dialogues: dialogues,
+          view: @view
         )
       )
       @mapper = Input::Mapper.new
@@ -74,8 +81,15 @@ module Aogera
 
     def poll_input
       @host.poll_events.each do |physical_event|
-        action = @mapper.map(physical_event)
-        @handoff.push(action) if action
+        input = @mapper.map(physical_event)
+        next unless input
+
+        case input
+        when Input::LookDelta
+          @view.rotate(dx: input.dx, dy: input.dy)
+        when Input::Action
+          @handoff.push(input)
+        end
       end
     end
 
@@ -112,7 +126,9 @@ module Aogera
       @renderer.draw(
         level: mode.level,
         world: mode.world_view,
-        status: status_text(mode)
+        status: status_text(mode),
+        view: @view,
+        camera_entity_id: mode.camera_entity_id
       )
     end
 

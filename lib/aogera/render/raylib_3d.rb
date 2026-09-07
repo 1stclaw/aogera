@@ -8,7 +8,6 @@ module Aogera
       WALL_HEIGHT = 1.0
       ENTITY_WIDTH = 0.55
       ENTITY_HEIGHT = 0.8
-      CAMERA_FOVY = 45.0
 
       BACKGROUND = [24, 28, 34, 255].freeze
       STATUS_BACKGROUND = [11, 12, 15, 230].freeze
@@ -38,13 +37,19 @@ module Aogera
         @api = api
       end
 
-      def draw(level:, world:, status:)
+      def draw(level:, world:, status:, view:, camera_entity_id:)
         @api.begin_drawing
         @api.clear(BACKGROUND)
-        @api.begin_mode_3d(**camera_for(level))
+        @api.begin_mode_3d(
+          **camera_for(
+            world: world,
+            view: view,
+            camera_entity_id: camera_entity_id
+          )
+        )
 
         draw_level(level)
-        draw_entities(level, world)
+        draw_entities(level, world, hidden_entity_id: camera_entity_id)
 
         @api.end_mode_3d
         draw_status(status)
@@ -90,8 +95,10 @@ module Aogera
         end
       end
 
-      def draw_entities(level, world)
+      def draw_entities(level, world, hidden_entity_id:)
         world.entity_ids.each do |entity_id|
+          next if entity_id == hidden_entity_id
+
           position = world.component(entity_id, :position)
           renderable = world.component(entity_id, :renderable)
           next unless position && renderable
@@ -117,16 +124,23 @@ module Aogera
         ]
       end
 
-      def camera_for(level)
-        span = [level.width, level.height].max * TILE_SIZE
-        center_x = level.width * TILE_SIZE / 2.0
-        center_z = level.height * TILE_SIZE / 2.0
+      def camera_for(world:, view:, camera_entity_id:)
+        position = world.component(camera_entity_id, :position)
+        raise ArgumentError, "camera entity has no position" unless position
+
+        x, z = grid_center(position.x, position.y)
+        eye = [x, view.eye_height, z]
+        forward_x, forward_y, forward_z = view.forward_vector
 
         {
-          position: [center_x, span * 0.72, center_z + (span * 0.72)],
-          target: [center_x, 0.0, center_z],
+          position: eye,
+          target: [
+            x + forward_x,
+            view.eye_height + forward_y,
+            z + forward_z
+          ],
           up: [0.0, 1.0, 0.0],
-          fovy: CAMERA_FOVY
+          fovy: view.fovy
         }
       end
 

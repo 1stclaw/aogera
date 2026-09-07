@@ -17,7 +17,7 @@ class RealtimeControllerTest < Minitest::Test
     tracker = Aogera::Input::Tracker.new
 
     first = tracker.snapshot([
-      Aogera::Input::Action.new(kind: :move_east, state: :pressed)
+      Aogera::Input::Action.new(kind: :move_forward, state: :pressed)
     ])
     commands = controller.build(
       input: first,
@@ -46,6 +46,43 @@ class RealtimeControllerTest < Minitest::Test
       tick_number: 4
     )
     assert_equal 1, commands.size
+  end
+
+  def test_player_forward_and_strafe_are_resolved_from_view_heading
+    world = Aogera::World.new
+    hero_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 2, y: 2)
+    )
+    controller = Aogera::RealtimeController.new(
+      player_move_interval: 1,
+      npc_interval: 100
+    )
+    view = Aogera::FirstPersonView.for_direction(:east)
+
+    forward = controller.build(
+      input: move_input(:move_forward),
+      level: level_with(spawns: []),
+      world: world.view,
+      controlled_id: hero_id,
+      tick_number: 1,
+      view: view
+    ).to_a.fetch(0)
+
+    controller = Aogera::RealtimeController.new(
+      player_move_interval: 1,
+      npc_interval: 100
+    )
+    strafe = controller.build(
+      input: move_input(:strafe_right),
+      level: level_with(spawns: []),
+      world: world.view,
+      controlled_id: hero_id,
+      tick_number: 1,
+      view: view
+    ).to_a.fetch(0)
+
+    assert_equal [1, 0], [forward.dx, forward.dy]
+    assert_equal [0, 1], [strafe.dx, strafe.dy]
   end
 
   def test_npc_behaviors_run_only_on_npc_cadence
@@ -111,7 +148,7 @@ class RealtimeControllerTest < Minitest::Test
       npc_interval: 1
     )
     commands = controller.build(
-      input: move_input(:move_east),
+      input: move_input(:move_forward),
       level: level_with(spawns: []),
       world: world.view,
       controlled_id: hero_id,

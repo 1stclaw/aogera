@@ -19,11 +19,30 @@ class InputMapperTest < Minitest::Test
     assert_equal :attack, @mapper.map(key_event(:space)).kind
   end
 
+  def test_wasd_and_arrows_map_to_first_person_movement_actions
+    assert_equal :move_forward, @mapper.map(key_event(:w)).kind
+    assert_equal :move_backward, @mapper.map(key_event(:s)).kind
+    assert_equal :strafe_left, @mapper.map(key_event(:a)).kind
+    assert_equal :strafe_right, @mapper.map(key_event(:d)).kind
+    assert_equal :move_forward, @mapper.map(key_event(:up)).kind
+    assert_equal :strafe_right, @mapper.map(key_event(:right)).kind
+  end
+
   def test_mapper_preserves_key_event_state
     action = @mapper.map(key_event(:w, state: :released))
 
-    assert_equal :move_north, action.kind
+    assert_equal :move_forward, action.kind
     assert_equal :released, action.state
+  end
+
+  def test_mouse_motion_maps_to_value_bearing_look_delta
+    look = @mapper.map(
+      Aogera::Host::MouseMotion.new(dx: 4.5, dy: -2.0)
+    )
+
+    assert_instance_of Aogera::Input::LookDelta, look
+    assert_in_delta 4.5, look.dx
+    assert_in_delta(-2.0, look.dy)
   end
 
   def test_q_maps_to_quit

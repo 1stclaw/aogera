@@ -1,76 +1,106 @@
-# Aogera 0.3.0: first raylib 3D path
+# Aogera 0.3.1: first-person raylib 3D path
 
-Aogera 0.3.0 replaces the transitional 2D presentation path with the first true 3D renderer while deliberately leaving gameplay simulation unchanged.
+Aogera 0.3.1 turns the 0.3.0 fixed overview into the first playable first-person 3D frontend while deliberately retaining the existing grid simulation underneath it.
 
-## Scope
-
-The active path is:
+## Active path
 
 ```text
-Level + World::View
-        |
-        v
-Render::Raylib3D
-        |
-        v
-RaylibAPI
-        |
-        v
-raylib
+raylib frame
+    |
+    +-- Host::Raylib polls keys + mouse delta
+    |
+    +-- Input::Mapper
+    |       |
+    |       +-- Action ------> Handoff / Tracker --> fixed simulation ticks
+    |       |
+    |       +-- LookDelta ---> FirstPersonView ----> current rendered frame
+    |
+    +-- Level + World::View + FirstPersonView
+            |
+            v
+        Render::Raylib3D
+            |
+            v
+        RaylibAPI
+            |
+            v
+          raylib
 ```
 
-`Raylib3D` consumes the authored level and read-only runtime world directly. This milestone does not introduce a `Scene3D` or `Projector3D`; a BSP-backed static world may eventually want a substantially different render path.
+Mouse look is intentionally updated at frontend/render cadence rather than at the 30 Hz simulation cadence. The logical view is still an Aogera object; raylib `Camera3D` and `Vector3` values remain confined to `RaylibAPI`.
 
-## Temporary grid extrusion
+## FirstPersonView
 
-The existing level is rendered in world units with one grid cell equal to one unit on X/Z.
+`FirstPersonView` owns only the concrete state now required by first-person control:
+
+- yaw;
+- pitch;
+- eye height;
+- vertical field of view;
+- mouse sensitivity.
+
+It also provides a forward vector and a temporary cardinal heading for the existing grid gameplay bridge. It is not a generic transform, physics body, scene camera, or world-space entity component.
+
+Pitch is clamped so the camera cannot flip over. The initial yaw is derived from the player's authored cardinal `Facing` at the level entry.
+
+## Temporary grid movement bridge
+
+The canonical axes remain:
 
 ```text
-grid x -> world +X
-grid y -> world +Z
-world +Y -> up
++X = east/right
++Y = up
++Z = south / old grid +Y
 ```
 
-Non-wall terrain becomes a thin floor cube below Y=0. Wall tiles become one-unit-high cubes. Runtime entities that possess both `position` and `renderable` components become smaller vertical cubes centered in their grid cells.
+Player position is still `Component::Position(x, y)`. The camera eye is placed at the center of that grid cell:
 
-Requiring `renderable` preserves the existing defeat behavior: defeated entities may retain a position but stop being presented after their renderable component is removed.
+```text
+world X = grid x + 0.5
+world Y = eye height
+world Z = grid y + 0.5
+```
 
-## Camera
+W/S now mean forward/back and A/D mean strafe left/right. Arrow keys mirror those four actions. At each simulation tick, the current view yaw is reduced to the nearest cardinal direction and translated back into the existing integer `Move(dx, dy)` command.
 
-The first camera is a fixed perspective overview chosen from level dimensions. Its purpose is to prove the coordinate convention and real 3D drawing path, not to become the permanent player camera.
+This is intentionally transitional. It gives the current game correct first-person control semantics without pretending that grid position is a permanent 3D movement model.
 
-`RaylibAPI#begin_mode_3d` receives plain Ruby arrays and constructs the actual raylib `Camera3D`. This keeps FFI values out of the rest of Aogera.
+## Combat and interaction
 
-## Preserved gameplay
+Adjacent melee attack and interaction targeting now use the current view heading. This matters because first-person looking can rotate independently of movement.
 
-The following remain unchanged in 0.3.0:
+The old `Facing` component still exists and is still updated by successful or blocked grid movement through the existing simulation executor, but it no longer determines player attack/interaction direction.
 
-- 30 Hz fixed-step simulation;
-- 60 FPS target frontend cadence;
-- keyboard event mapping and held-state tracking;
-- grid `Position(x, y)`;
-- cardinal movement/facing;
-- terrain passability and occupancy;
-- BFS pathfinding/chase behavior;
-- melee adjacency;
-- dialogue/mode transitions;
-- session persistence.
+## Renderer
 
-Existing keyboard movement is therefore visible as entities moving from 3D cell to 3D cell.
+`Render::Raylib3D` now derives its camera from:
 
-## Deliberately deferred
+```text
+World::View player Position
+        +
+FirstPersonView orientation
+```
 
-This patch does not add:
+The controlled player entity is hidden from the first-person render pass. Other renderable entities remain primitive cubes for now.
 
-- first-person camera control;
-- mouse input;
-- continuous 3D position;
-- 3D collision or physics;
-- projectiles;
-- BSP;
-- models or textures;
-- lights/shaders;
-- an asset manager;
-- generic renderer/scene/transform abstractions.
+The renderer still consumes `Level + World::View` directly. There is still no `Scene3D`, `Projector3D`, generic renderer, or transform hierarchy.
 
-The next milestone should introduce first-person control and let that implementation determine the first real continuous spatial state.
+## Cursor ownership
+
+`Host::Raylib` captures/disables the cursor once after opening and focusing the raylib window, and releases it before closing. `RaylibAPI` owns the direct `DisableCursor`, `EnableCursor`, and `GetMouseDelta` calls.
+
+## Still deferred
+
+0.3.1 does **not** introduce:
+
+- continuous player world position;
+- velocity or acceleration;
+- 3D collision/physics;
+- jumping or vertical movement;
+- projectile simulation;
+- BSP loading;
+- models/textures/materials;
+- generic spatial/transform abstractions;
+- a general asset manager.
+
+The next movement/collision milestone should replace the temporary grid bridge only when a concrete continuous 3D requirement is ready to become authoritative.

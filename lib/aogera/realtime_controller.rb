@@ -25,13 +25,14 @@ module Aogera
       @next_player_move_tick = nil
     end
 
-    def build(input:, level:, world:, controlled_id:, tick_number:)
+    def build(input:, level:, world:, controlled_id:, tick_number:, view: nil)
       commands = []
 
       controlled_command = controlled_move(
         input,
         controlled_id,
-        tick_number
+        tick_number,
+        view || default_view(world, controlled_id)
       )
       commands << controlled_command if controlled_command
 
@@ -49,7 +50,7 @@ module Aogera
 
     private
 
-    def controlled_move(input, entity_id, tick_number)
+    def controlled_move(input, entity_id, tick_number, view)
       movement_pressed = movement_kinds.any? { |kind| input.pressed?(kind) }
       movement_held = movement_kinds.any? { |kind| input.held?(kind) }
 
@@ -63,12 +64,18 @@ module Aogera
         tick_number >= @next_player_move_tick
       return unless due
 
-      dx = 0
-      dy = 0
-      dx -= 1 if input.held?(:move_west)
-      dx += 1 if input.held?(:move_east)
-      dy -= 1 if input.held?(:move_north)
-      dy += 1 if input.held?(:move_south)
+      forward = 0
+      strafe = 0
+      forward += 1 if input.held?(:move_forward)
+      forward -= 1 if input.held?(:move_backward)
+      strafe -= 1 if input.held?(:strafe_left)
+      strafe += 1 if input.held?(:strafe_right)
+      return if forward.zero? && strafe.zero?
+
+      dx, dy = view.grid_movement_delta(
+        forward: forward,
+        strafe: strafe
+      )
       return if dx.zero? && dy.zero?
 
       @next_player_move_tick = tick_number + @player_move_interval
@@ -80,12 +87,19 @@ module Aogera
       )
     end
 
+
+    def default_view(world, entity_id)
+      facing = world.component(entity_id, :facing)
+      direction = facing&.direction || :north
+      FirstPersonView.for_direction(direction)
+    end
+
     def movement_kinds
       @movement_kinds ||= %i[
-        move_north
-        move_south
-        move_west
-        move_east
+        move_forward
+        move_backward
+        strafe_left
+        strafe_right
       ].freeze
     end
 

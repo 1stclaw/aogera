@@ -39,12 +39,14 @@ module Aogera
           target_fps: @target_fps
         )
         @api.focus_window
+        @api.disable_cursor
         @open = true
       end
 
       def close
         return unless @open
 
+        @api.enable_cursor
         @api.close_window
         @open = false
       end
@@ -54,13 +56,20 @@ module Aogera
       end
 
       def poll_events
+        events = key_events
+        dx, dy = @api.mouse_delta
+        events << Host::MouseMotion.new(dx: dx, dy: dy) unless dx.zero? && dy.zero?
+        events
+      end
+
+      private
+
+      def key_events
         KEYS.each_with_object([]) do |key, events|
           events << build_key_event(key, :pressed) if @api.key_pressed?(key)
           events << build_key_event(key, :released) if @api.key_released?(key)
         end
       end
-
-      private
 
       def build_key_event(key, state)
         Host::KeyEvent.new(key: key, state: state)

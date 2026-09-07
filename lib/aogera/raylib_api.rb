@@ -35,6 +35,19 @@ module Aogera
       ::Raylib.IsKeyReleased(key_code(key))
     end
 
+    def disable_cursor
+      ::Raylib.DisableCursor
+    end
+
+    def enable_cursor
+      ::Raylib.EnableCursor
+    end
+
+    def mouse_delta
+      delta = ::Raylib.GetMouseDelta
+      [delta.x, delta.y]
+    end
+
     def begin_drawing
       ::Raylib.BeginDrawing
     end

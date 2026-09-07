@@ -36,7 +36,7 @@ class PlayModeTest < Minitest::Test
   end
 
   def test_play_mode_decides_when_simulation_advances
-    result = @mode.advance(input: move_input(:move_south))
+    result = @mode.advance(input: move_input(:move_forward))
 
     assert_equal :advanced, result
     assert_equal 1, @mode.step_number
@@ -71,8 +71,8 @@ class PlayModeTest < Minitest::Test
     assert_match "Enter interact", @mode.status_text
   end
 
-  def test_blocked_move_still_changes_facing
-    @mode.advance(input: move_input(:move_east))
+  def test_blocked_strafe_still_changes_legacy_facing
+    @mode.advance(input: move_input(:strafe_left))
 
     hero_id = @mode.controlled_entity_id
     position = @mode.world_view.component(hero_id, :position)
@@ -83,16 +83,23 @@ class PlayModeTest < Minitest::Test
     assert_equal 1, @mode.step_number
   end
 
-  def test_interaction_pushes_dialogue_without_advancing_simulation
-    @mode.advance(input: move_input(:move_east))
-    before = @mode.step_number
+  def test_interaction_uses_current_view_heading_without_advancing_simulation
+    mode = Aogera::Mode::Play.new(
+      simulation: @simulation,
+      session: @session,
+      player_key: :hero,
+      dialogues: dialogue_catalog,
+      view: Aogera::FirstPersonView.for_direction(:east)
+    )
+    before = mode.step_number
 
-    result = @mode.advance(input: action_input(:interact))
+    result = mode.advance(input: action_input(:interact))
 
     assert_instance_of Aogera::Mode::Push, result
     assert_instance_of Aogera::Mode::Dialogue, result.mode
     assert_equal "First line.", result.mode.current_line
-    assert_equal before, @mode.step_number
+    assert_equal mode.controlled_entity_id, result.mode.camera_entity_id
+    assert_equal before, mode.step_number
   end
 
   def test_interact_without_interactable_target_does_not_pause_world

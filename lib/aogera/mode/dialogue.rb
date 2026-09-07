@@ -3,13 +3,14 @@
 module Aogera
   module Mode
     class Dialogue
-      attr_reader :simulation, :lines, :index
+      attr_reader :simulation, :lines, :index, :camera_entity_id
 
-      def initialize(simulation:, lines:)
+      def initialize(simulation:, lines:, camera_entity_id: nil)
         raise ArgumentError, "dialogue mode requires at least one line" if lines.empty?
 
         @simulation = simulation
         @lines = lines.dup.freeze
+        @camera_entity_id = camera_entity_id
         @index = 0
       end
 

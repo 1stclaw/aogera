@@ -26,7 +26,7 @@ class CollisionTest < Minitest::Test
       npc_interval: 100
     )
     commands = controller.build(
-      input: move_input(:move_east),
+      input: move_input(:move_forward),
       level: level,
       world: simulation.world_view,
       controlled_id: hero_id,

@@ -6,11 +6,13 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.3.0**
+**Version: 0.3.1**
 
-Aogera now has a true 3D raylib presentation path. The first 0.3 milestone deliberately keeps the existing grid gameplay model unchanged while rendering the authored level as simple 3D floor/wall geometry and runtime entities as 3D primitives.
+Aogera now has its first playable first-person 3D control loop. raylib supplies the native window, mouse capture and drawing, while Aogera owns logical yaw/pitch in `FirstPersonView` and derives the raylib `Camera3D` from the controlled player's runtime position.
 
-The simulation remains fixed-step and independent from rendering. Current gameplay still uses the established grid movement, pathfinding, combat and interaction rules; continuous first-person movement, mouse look, 3D collision and BSP are later 0.3 work.
+The underlying gameplay world is still deliberately grid-based. W/S move forward/back relative to the current view; A/D strafe; those controls are reduced to the existing integer grid movement commands at simulation ticks. Mouse look updates at frontend/render cadence rather than being quantized to the 30 Hz simulation rate.
+
+Combat, interaction, NPC pathfinding and collision otherwise continue to use the established gameplay systems. Continuous 3D player position, 3D collision and BSP are later 0.3 work.
 
 ## Running
 
@@ -19,7 +21,20 @@ bundle install
 bundle exec ruby bin/aogera
 ```
 
-The raylib window is the active input target. If your window manager leaves focus on the launching terminal, click the Aogera window once.
+The raylib window captures the mouse for first-person look. `Q` or `Esc` exits and the host releases the cursor during shutdown.
+
+## Controls
+
+```text
+Mouse        look
+W / Up       forward
+S / Down     backward
+A / Left     strafe left
+D / Right    strafe right
+Space        melee attack
+Enter        interact / advance dialogue
+Q / Esc      quit
+```
 
 ## Testing
 
@@ -36,14 +51,14 @@ This is the preferred project test command.
 Simulation timing is independent from rendering. The simulation runs at a fixed **30 Hz**, while the raylib frontend targets **60 FPS**.
 
 ```text
-Host::Raylib -> Input -> Mode -> Simulation
+keyboard -> Host::Raylib -> Input::Action -> fixed-step gameplay
+mouse    -> Host::Raylib -> Input::LookDelta -> FirstPersonView
 
-Level + World::View -> Render::Raylib3D -> RaylibAPI -> raylib
+Level + World::View + FirstPersonView
+        -> Render::Raylib3D -> RaylibAPI -> raylib
 ```
 
-`World::View` is a persistent read-only view of canonical runtime state. `Render::Raylib3D` currently performs the temporary grid-to-3D bridge directly; no generic scene/projector abstraction has been introduced.
-
-The initial 3D coordinate convention is raylib-style **Y-up**:
+The 3D coordinate convention is Y-up:
 
 ```text
 grid x -> world +X
@@ -51,12 +66,10 @@ grid y -> world +Z
 world +Y -> up
 ```
 
-Authored Ruby content lives under `content/` and is resolved through `Content::Paths`. Aogera still has no general asset manager because this first 3D milestone uses only raylib primitives.
+Aogera still has no generic scene/projector/transform layer and no general asset manager. The current renderer directly extrudes the authored grid because that remains the smallest useful bridge to the coming BSP work.
 
 ## Direction
 
-The next 0.3 work is first-person control: continuous player/view position, orientation and mouse input should be introduced from actual gameplay requirements rather than by generalizing the old grid components.
-
-Quake 1 BSP remains the planned first serious compiled 3D map experiment after the basic 3D camera/control loop is established. BSP support is not implemented yet.
+The next 0.3 work should replace the temporary grid bridge incrementally: continuous first-person position/collision is the next obvious pressure point, followed by the planned Quake 1 BSP29 experiment once the basic movement model is trustworthy.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

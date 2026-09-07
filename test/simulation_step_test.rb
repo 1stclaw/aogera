@@ -65,7 +65,7 @@ class SimulationStepTest < Minitest::Test
       npc_interval: 1
     )
     commands = controller.build(
-      input: move_input(:move_east),
+      input: move_input(:move_forward),
       level: @simulation.level,
       world: @simulation.world_view,
       controlled_id: @hero_id,

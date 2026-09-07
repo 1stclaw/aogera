@@ -6,5 +6,10 @@ module Aogera
       :key,
       :state
     )
+
+    MouseMotion = Data.define(
+      :dx,
+      :dy
+    )
   end
 end

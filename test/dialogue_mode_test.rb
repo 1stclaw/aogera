@@ -36,7 +36,7 @@ class DialogueModeTest < Minitest::Test
   end
 
   def test_unrelated_input_does_not_advance
-    result = @mode.advance(input: action_input(:move_north))
+    result = @mode.advance(input: action_input(:move_forward))
 
     assert_equal :waiting, result
     assert_equal "First.", @mode.current_line

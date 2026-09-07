@@ -5,17 +5,17 @@ require_relative "test_helper"
 class InputHandoffTest < Minitest::Test
   def test_events_after_handoff_belong_to_next_batch
     handoff = Aogera::Input::Handoff.new
-    east = Aogera::Input::Action.new(kind: :move_east, state: :pressed)
-    north = Aogera::Input::Action.new(kind: :move_north, state: :pressed)
+    forward = Aogera::Input::Action.new(kind: :move_forward, state: :pressed)
+    strafe = Aogera::Input::Action.new(kind: :strafe_right, state: :pressed)
 
-    handoff.push(east)
+    handoff.push(forward)
     handoff.flip!
-    handoff.push(north)
+    handoff.push(strafe)
 
-    assert_equal [east], handoff.take_completed
+    assert_equal [forward], handoff.take_completed
 
     handoff.flip!
 
-    assert_equal [north], handoff.take_completed
+    assert_equal [strafe], handoff.take_completed
   end
 end

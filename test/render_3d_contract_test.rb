@@ -40,10 +40,10 @@ class Render3DContractTest < Minitest::Test
     def screen_height = 768
   end
 
-  def test_renderer_uses_y_up_camera_and_maps_grid_y_to_world_z
+  def test_first_person_camera_uses_player_grid_center_and_y_up
     api = FakeAPI.new
     world = Aogera::World.new
-    world.spawn(
+    camera_id = world.spawn(
       position: Aogera::Component::Position.new(x: 1, y: 2),
       renderable: Aogera::Component::Renderable.new(
         render_key: :player,
@@ -51,24 +51,44 @@ class Render3DContractTest < Minitest::Test
         layer: 10
       )
     )
+    view = Aogera::FirstPersonView.for_direction(:north)
 
     Aogera::Render::Raylib3D.new(api: api).draw(
       level: FakeLevel.new(width: 4, height: 4),
       world: world.view,
-      status: "test"
+      status: "test",
+      view: view,
+      camera_entity_id: camera_id
     )
 
     camera = api.calls.find { |call| call.first == :begin_mode_3d }.last
     assert_equal [0.0, 1.0, 0.0], camera[:up]
+    assert_equal [1.5, view.eye_height, 2.5], camera[:position]
+    assert_in_delta 1.5, camera[:target][0]
+    assert_in_delta view.eye_height, camera[:target][1]
+    assert_in_delta 1.5, camera[:target][2]
+  end
 
-    entity = api.calls
-      .select { |call| call.first == :draw_cube }
-      .map(&:last)
-      .find { |cube| cube[:height] == Aogera::Render::Raylib3D::ENTITY_HEIGHT }
+  def test_first_person_view_rotates_camera_target_without_raylib_state
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 1, y: 1)
+    )
+    view = Aogera::FirstPersonView.for_direction(:east)
 
-    assert_in_delta 1.5, entity[:x]
-    assert_in_delta 0.4, entity[:y]
-    assert_in_delta 2.5, entity[:z]
+    Aogera::Render::Raylib3D.new(api: api).draw(
+      level: FakeLevel.new(width: 3, height: 3),
+      world: world.view,
+      status: "test",
+      view: view,
+      camera_entity_id: camera_id
+    )
+
+    camera = api.calls.find { |call| call.first == :begin_mode_3d }.last
+    assert_in_delta 2.5, camera[:target][0]
+    assert_in_delta view.eye_height, camera[:target][1]
+    assert_in_delta 1.5, camera[:target][2]
   end
 
   def test_wall_tiles_are_vertical_cubes_and_ground_is_a_thin_floor
@@ -78,11 +98,17 @@ class Render3DContractTest < Minitest::Test
       height: 1,
       tiles: { [1, 0] => :wall }
     )
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 0, y: 0)
+    )
 
     Aogera::Render::Raylib3D.new(api: api).draw(
       level: level,
-      world: Aogera::World.new.view,
-      status: "test"
+      world: world.view,
+      status: "test",
+      view: Aogera::FirstPersonView.for_direction(:east),
+      camera_entity_id: camera_id
     )
 
     cubes = api.calls.select { |call| call.first == :draw_cube }.map(&:last)
@@ -95,15 +121,57 @@ class Render3DContractTest < Minitest::Test
     assert_in_delta(1.0, wall[:height])
   end
 
+  def test_camera_entity_is_hidden_but_other_renderable_entities_are_drawn
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 0, y: 0),
+      renderable: Aogera::Component::Renderable.new(
+        render_key: :player,
+        glyph: "P",
+        layer: 10
+      )
+    )
+    world.spawn(
+      position: Aogera::Component::Position.new(x: 1, y: 0),
+      renderable: Aogera::Component::Renderable.new(
+        render_key: :goblin,
+        glyph: "G",
+        layer: 10
+      )
+    )
+
+    Aogera::Render::Raylib3D.new(api: api).draw(
+      level: FakeLevel.new(width: 2, height: 1),
+      world: world.view,
+      status: "test",
+      view: Aogera::FirstPersonView.for_direction(:east),
+      camera_entity_id: camera_id
+    )
+
+    entity_cubes = api.calls
+      .select { |call| call.first == :draw_cube }
+      .map(&:last)
+      .select { |cube| cube[:height] == Aogera::Render::Raylib3D::ENTITY_HEIGHT }
+
+    assert_equal 1, entity_cubes.length
+    assert_in_delta 1.5, entity_cubes.first[:x]
+  end
+
   def test_entities_without_renderable_component_are_not_drawn
     api = FakeAPI.new
     world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 0, y: 0)
+    )
     world.spawn(position: Aogera::Component::Position.new(x: 0, y: 0))
 
     Aogera::Render::Raylib3D.new(api: api).draw(
       level: FakeLevel.new(width: 1, height: 1),
       world: world.view,
-      status: "test"
+      status: "test",
+      view: Aogera::FirstPersonView.for_direction(:north),
+      camera_entity_id: camera_id
     )
 
     cubes = api.calls.select { |call| call.first == :draw_cube }.map(&:last)
