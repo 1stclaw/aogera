@@ -1,21 +1,10 @@
 # frozen_string_literal: true
 
+require_relative "scene_2d"
+
 module Aogera
   module Render
-    class Scene
-      Tile = Data.define(:x, :y, :render_key, :fallback_glyph)
-      Entity = Data.define(
-        :entity_id, :x, :y, :render_key, :fallback_glyph, :layer
-      )
-
-      attr_reader :width, :height, :tiles, :entities
-
-      def initialize(width:, height:, tiles:, entities:)
-        @width = width
-        @height = height
-        @tiles = tiles.dup.freeze
-        @entities = entities.dup.freeze
-      end
-    end
+    # Compatibility name for the 0.2 series. New code should use Scene2D.
+    Scene = Scene2D unless const_defined?(:Scene, false)
   end
 end

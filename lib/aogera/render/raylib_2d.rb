@@ -14,6 +14,8 @@ module Aogera
       STATUS_BACKGROUND = [11, 12, 15, 255].freeze
       STATUS_TEXT = [224, 226, 230, 255].freeze
       GLYPH = [240, 240, 236, 255].freeze
+      DEFAULT_TERRAIN = [72, 70, 68, 255].freeze
+      DEFAULT_ENTITY = [166, 105, 92, 255].freeze
 
       TERRAIN = {
         grass: [54, 84, 54, 255],
@@ -49,8 +51,7 @@ module Aogera
 
       def draw_tile(tile, origin_x, origin_y)
         x, y = screen_position(tile, origin_x, origin_y)
-        key = render_key(tile)
-        color = TERRAIN.fetch(key, fallback_terrain_color(key))
+        color = TERRAIN.fetch(tile.render_key, DEFAULT_TERRAIN)
 
         @api.draw_rectangle(
           x: x,
@@ -72,7 +73,7 @@ module Aogera
       def draw_entity(entity, origin_x, origin_y)
         x, y = screen_position(entity, origin_x, origin_y)
         inset = [(@cell_size * 0.12).round, 2].max
-        color = ENTITIES.fetch(render_key(entity), [166, 105, 92, 255])
+        color = ENTITIES.fetch(entity.render_key, DEFAULT_ENTITY)
 
         @api.draw_rectangle(
           x: x + inset,
@@ -140,23 +141,10 @@ module Aogera
         ]
       end
 
-      def render_key(item)
-        item.render_key.to_sym
-      end
-
       def glyph_for(item)
         value = item.fallback_glyph
-        value = render_key(item).to_s[0] if value.nil? || value.to_s.empty?
+        value = item.render_key.to_s[0] if value.nil? || value.to_s.empty?
         value.to_s[0]
-      end
-
-      def fallback_terrain_color(key)
-        name = key.to_s
-        return [43, 78, 102, 255] if name.include?("water")
-        return [58, 82, 55, 255] if name.include?("grass")
-        return [92, 92, 98, 255] if name.include?("wall") || name.include?("stone")
-
-        [72, 70, 68, 255]
       end
     end
   end

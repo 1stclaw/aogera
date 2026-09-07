@@ -54,7 +54,7 @@ module Aogera
       @mapper = Input::Mapper.new
       @handoff = Input::Handoff.new
       @input_tracker = Input::Tracker.new
-      @projector = Render::Projector.new
+      @projector = Render::Projector2D.new
 
       api = raylib_api || RaylibAPI.new
       @host = Host::Raylib.new(api: api)

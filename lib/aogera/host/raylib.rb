@@ -64,8 +64,6 @@ module Aogera
 
       def build_key_event(key, state)
         Host::KeyEvent.new(key: key, state: state)
-      rescue ArgumentError
-        Host::KeyEvent.new(key, state)
       end
     end
   end
