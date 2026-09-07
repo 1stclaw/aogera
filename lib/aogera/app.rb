@@ -45,11 +45,10 @@ module Aogera
       @mapper = Input::Mapper.new
       @handoff = Input::Handoff.new
       @input_tracker = Input::Tracker.new
-      @projector = Render::Projector2D.new
 
       api = raylib_api || RaylibAPI.new
       @host = Host::Raylib.new(api: api)
-      @renderer = Render::Raylib2D.new(api: api)
+      @renderer = Render::Raylib3D.new(api: api)
       @clock = clock
       @fixed_step = FixedStep.new(hz: TICK_HZ)
     end
@@ -110,12 +109,9 @@ module Aogera
 
     def draw
       mode = @modes.current
-      scene = @projector.project(
-        level: mode.level,
-        world: mode.world_view
-      )
       @renderer.draw(
-        scene,
+        level: mode.level,
+        world: mode.world_view,
         status: status_text(mode)
       )
     end

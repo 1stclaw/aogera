@@ -43,6 +43,21 @@ module Aogera
       ::Raylib.EndDrawing
     end
 
+    def begin_mode_3d(position:, target:, up:, fovy:)
+      camera = ::Raylib::Camera3D.new
+        .with_position(*position)
+        .with_target(*target)
+        .with_up(*up)
+        .with_fovy(fovy)
+        .with_projection(::Raylib::CAMERA_PERSPECTIVE)
+
+      ::Raylib.BeginMode3D(camera)
+    end
+
+    def end_mode_3d
+      ::Raylib.EndMode3D
+    end
+
     def clear(rgba)
       ::Raylib.ClearBackground(color(rgba))
     end
@@ -57,6 +72,16 @@ module Aogera
 
     def draw_text(text:, x:, y:, size:, rgba:)
       ::Raylib.DrawText(text.to_s, x, y, size, color(rgba))
+    end
+
+    def draw_cube(x:, y:, z:, width:, height:, length:, rgba:)
+      ::Raylib.DrawCube(
+        ::Raylib::Vector3.create(x, y, z),
+        width,
+        height,
+        length,
+        color(rgba)
+      )
     end
 
     def screen_width

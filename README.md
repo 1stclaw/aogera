@@ -6,13 +6,11 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.2.3**
+**Version: 0.3.0**
 
-Aogera uses **raylib** for its graphical frontend. The 0.2 series established a native windowed 2D baseline while keeping simulation and authored content independent from rendering. Version 0.2.3 is the final cleanup/polish release planned before true 3D work begins.
+Aogera now has a true 3D raylib presentation path. The first 0.3 milestone deliberately keeps the existing grid gameplay model unchanged while rendering the authored level as simple 3D floor/wall geometry and runtime entities as 3D primitives.
 
-Current features include fixed-step simulation, prototypes and runtime entities, movement/collision, pathfinding and NPC behavior, combat, dialogue/modes, and persistent session state.
-
-The current 2D renderer is intentionally transitional.
+The simulation remains fixed-step and independent from rendering. Current gameplay still uses the established grid movement, pathfinding, combat and interaction rules; continuous first-person movement, mouse look, 3D collision and BSP are later 0.3 work.
 
 ## Running
 
@@ -40,15 +38,25 @@ Simulation timing is independent from rendering. The simulation runs at a fixed 
 ```text
 Host::Raylib -> Input -> Mode -> Simulation
 
-Level + World::View -> Render::Projector2D -> Render::Scene2D -> Render::Raylib2D
+Level + World::View -> Render::Raylib3D -> RaylibAPI -> raylib
 ```
 
-`World::View` is a persistent read-only view of canonical runtime state. Render projection remains downstream of the simulation, and raylib types do not enter gameplay state.
+`World::View` is a persistent read-only view of canonical runtime state. `Render::Raylib3D` currently performs the temporary grid-to-3D bridge directly; no generic scene/projector abstraction has been introduced.
 
-Authored Ruby content lives under `content/` and is resolved through `Content::Paths`. Aogera does not yet have a general asset manager; that will be designed from concrete 3D requirements rather than from the temporary 2D frontend.
+The initial 3D coordinate convention is raylib-style **Y-up**:
+
+```text
+grid x -> world +X
+grid y -> world +Z
+world +Y -> up
+```
+
+Authored Ruby content lives under `content/` and is resolved through `Content::Paths`. Aogera still has no general asset manager because this first 3D milestone uses only raylib primitives.
 
 ## Direction
 
-The next major technical direction is **true 3D with raylib**. TrenchBroom and Quake 1 BSP are being considered as the first practical 3D level-authoring and compiled-map path. BSP support is not implemented yet.
+The next 0.3 work is first-person control: continuous player/view position, orientation and mouse input should be introduced from actual gameplay requirements rather than by generalizing the old grid components.
+
+Quake 1 BSP remains the planned first serious compiled 3D map experiment after the basic 3D camera/control loop is established. BSP support is not implemented yet.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

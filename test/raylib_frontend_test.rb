@@ -4,9 +4,6 @@ require "minitest/autorun"
 require_relative "../lib/aogera"
 
 class RaylibFrontendTest < Minitest::Test
-  Item = Data.define(:x, :y, :render_key, :fallback_glyph)
-  Scene = Data.define(:width, :height, :tiles, :entities)
-
   class FakeAPI
     attr_reader :calls
 
@@ -33,8 +30,10 @@ class RaylibFrontendTest < Minitest::Test
     def begin_drawing = @calls << [:begin_drawing]
     def end_drawing = @calls << [:end_drawing]
     def clear(rgba) = @calls << [:clear, rgba]
+    def begin_mode_3d(**options) = @calls << [:begin_mode_3d, options]
+    def end_mode_3d = @calls << [:end_mode_3d]
+    def draw_cube(**options) = @calls << [:draw_cube, options]
     def draw_rectangle(**options) = @calls << [:draw_rectangle, options]
-    def draw_rectangle_lines(**options) = @calls << [:draw_rectangle_lines, options]
     def draw_text(**options) = @calls << [:draw_text, options]
     def screen_width = 1024
     def screen_height = 768
@@ -71,26 +70,28 @@ class RaylibFrontendTest < Minitest::Test
     assert(events.any? { |event| event.key == :space && event.state == :released })
   end
 
-  def test_raylib_renderer_draws_existing_scene_shape
+  def test_raylib_3d_renderer_wraps_world_drawing_in_3d_mode
     api = FakeAPI.new
-    renderer = Aogera::Render::Raylib2D.new(api: api)
-    scene = Scene.new(
-      width: 2,
-      height: 1,
-      tiles: [
-        Item.new(x: 0, y: 0, render_key: :grass, fallback_glyph: "."),
-        Item.new(x: 1, y: 0, render_key: :wall, fallback_glyph: "#")
-      ],
-      entities: [
-        Item.new(x: 0, y: 0, render_key: :player, fallback_glyph: "@")
-      ]
+    renderer = Aogera::Render::Raylib3D.new(api: api)
+    level = Aogera::Level::Terrain.new(width: 1, height: 1)
+    level = Aogera::Level.new(
+      name: :test,
+      terrain: level,
+      spawns: [],
+      relations: []
     )
 
-    renderer.draw(scene, status: "test")
+    renderer.draw(
+      level: level,
+      world: Aogera::World.new.view,
+      status: "test"
+    )
 
     assert_equal(:begin_drawing, api.calls.first.first)
     assert_equal(:end_drawing, api.calls.last.first)
-    assert_operator(api.calls.count { |call| call.first == :draw_rectangle }, :>=, 4)
+    assert(api.calls.any? { |call| call.first == :begin_mode_3d })
+    assert(api.calls.any? { |call| call.first == :end_mode_3d })
+    assert(api.calls.any? { |call| call.first == :draw_cube })
     assert(api.calls.any? { |call| call.first == :draw_text && call.last[:text] == "test" })
   end
 end

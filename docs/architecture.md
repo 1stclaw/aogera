@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.2.3 runtime and its present boundaries.
+This document describes the current Aogera 0.3.0 runtime and its present boundaries.
 
 ## Design goals
 
@@ -37,6 +37,8 @@ Prototype -> World EntityId
 ```
 
 `Prototype::Catalog` and `Prototype::Loader` own authored prototype lookup/loading.
+
+The existing `Component::Position(x, y)`, cardinal `Facing`, grid movement commands and pathfinding remain explicitly 2D gameplay concepts in this first 3D milestone. They have not been renamed or padded with a dummy Z coordinate.
 
 ## Simulation
 
@@ -75,23 +77,51 @@ Mode::Play -> RealtimeController -> Commands::Buffer -> Simulation#step
 
 Dialogue remains modal and currently pauses world advancement.
 
-## Rendering
+Mouse motion is not part of this contract yet. It will be introduced when first-person view rotation creates a concrete non-boolean input requirement.
 
-The current presentation path is explicitly 2D and transitional:
+## 3D rendering
+
+The active presentation path is now:
 
 ```text
 Level + World::View
         |
-Render::Projector2D
+Render::Raylib3D
         |
-Render::Scene2D
-        |
-Render::Raylib2D
+RaylibAPI
         |
 raylib
 ```
 
-`Scene2D` is immutable presentation data. Pixel conversion and current grid layout live in `Raylib2D`; logical simulation coordinates are not screen coordinates. The 2D types are deliberately not generalized in advance for 3D.
+`Render::Raylib3D` is intentionally specific. It directly extrudes the existing grid level into raylib primitives:
+
+```text
+passable/non-wall tile -> thin floor cube
+wall tile              -> vertical wall cube
+renderable entity      -> smaller vertical cube
+```
+
+There is no `Scene3D`, `Projector3D`, generic `Scene`, generic `Renderer`, or generic transform hierarchy. The direct path is sufficient for the temporary bridge and leaves BSP free to use a different representation later.
+
+`RaylibAPI` owns conversion from plain Ruby camera/geometry values into `raylib-bindings` FFI types. `Camera3D` and `Vector3` do not enter simulation or authored gameplay state.
+
+### Coordinate convention
+
+The initial Aogera/raylib 3D convention is:
+
+```text
++X = east/right
++Y = up
++Z = south (the old grid +Y direction)
+```
+
+The old grid therefore maps as:
+
+```text
+grid (x, y) -> world (x, 0, y)
+```
+
+Tiles/entities are drawn at cell centers, so rendered primitive centers add half a tile on X and Z. This convention is covered by renderer contract tests and can later form the boundary for Quake Z-up conversion.
 
 ## Authored content and assets
 
@@ -103,8 +133,10 @@ content/levels/
 content/dialogue/
 ```
 
-`Content::Paths` centralizes the content root and paths used by the current Ruby loaders. There is intentionally no general asset manager yet. Models, textures, shaders, BSP data, and their lifetime rules will be introduced from concrete 3D requirements.
+`Content::Paths` centralizes the content root and paths used by the current Ruby loaders. There is intentionally no general asset manager yet. The first 3D path uses only raylib primitives; models, textures, shaders, BSP data, and their lifetime rules will be introduced from concrete requirements.
 
 ## Near-term boundary
 
-Aogera 0.2.3 intentionally does not define continuous 3D positions, physics, projectile motion, BSP loading, a generic renderer hierarchy, or a permanent asset format. Those belong to the upcoming 3D work rather than to the transitional 2D runtime.
+Aogera 0.3.0 establishes real 3D rendering but intentionally does not yet define continuous 3D gameplay positions, mouse look, 3D collision/physics, projectile motion, BSP loading, or a permanent asset format.
+
+The next implementation milestone is first-person control. That work should determine the smallest logical position/orientation state needed by gameplay while keeping raylib camera structs presentation-local.
