@@ -2,7 +2,13 @@ GEM
   remote: https://rubygems.org/
   specs:
     base64 (0.3.0)
+    ffi (1.17.4)
+    ffi (1.17.4-x86_64-linux-gnu)
     minitest (5.27.0)
+    raylib-bindings (0.8.3)
+      ffi (~> 1.16)
+    raylib-bindings (0.8.3-x86_64-linux)
+      ffi (~> 1.16)
 
 PLATFORMS
   ruby
@@ -11,11 +17,16 @@ PLATFORMS
 DEPENDENCIES
   base64
   minitest (~> 5.0)
+  raylib-bindings (= 0.8.3)
 
 CHECKSUMS
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   bundler (4.0.19) sha256=b48056e4c77fb3853cc47775b5447ede44aaa4f53c32f168014ab4fe86587d47
+  ffi (1.17.4) sha256=bcd1642e06f0d16fc9e09ac6d49c3a7298b9789bcb58127302f934e437d60acf
+  ffi (1.17.4-x86_64-linux-gnu) sha256=9d3db14c2eae074b382fa9c083fe95aec6e0a1451da249eab096c34002bc752d
   minitest (5.27.0) sha256=2d3b17f8a36fe7801c1adcffdbc38233b938eb0b4966e97a6739055a45fa77d5
+  raylib-bindings (0.8.3) sha256=4efc102248bed4abe461dd2ab155febed400c2aadf8fbe907a372bfd094d73c8
+  raylib-bindings (0.8.3-x86_64-linux) sha256=1926a31c0128d6397530ccdd170d0851859b70b77dc8c5ce14e0bb416c207335
 
 BUNDLED WITH
   4.0.19

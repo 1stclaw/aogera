@@ -19,12 +19,12 @@ module Aogera
 
     def initialize(
       env: ENV,
-      clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) }
+      clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
+      raylib_api: nil
     )
       prototypes = Prototype::Loader.load(PROTOTYPE_PATH)
       level = Level::Loader.load(LEVEL_PATH, prototypes: prototypes)
       dialogues = Dialogue::Loader.load(DIALOGUE_PATH)
-
       @session = Session.new(
         characters: {
           PLAYER_KEY => Character.new(
@@ -43,7 +43,6 @@ module Aogera
         prototype: :player,
         entry: level.default_entry
       )
-
       @modes = ModeStack.new
       @modes.push(
         Mode::Play.new(
@@ -57,51 +56,32 @@ module Aogera
       @handoff = Input::Handoff.new
       @input_tracker = Input::Tracker.new
       @projector = Render::Projector.new
-      @host = Host::Terminal.new(env: env)
-      @renderer = Render::Selector.build(
-        capabilities: @host.capabilities
-      )
+
+      # Keep +env+ in the initializer for 0.1.x call-site compatibility while
+      # the terminal backend remains in-tree. It is no longer used by App.
+      env
+      api = raylib_api || RaylibAPI.new
+      @host = Host::Raylib.new(api: api)
+      @renderer = Render::Raylib2D.new(api: api)
       @clock = clock
       @fixed_step = FixedStep.new(hz: TICK_HZ)
     end
 
     def run
-      @host.enter_application
+      @host.open
       @fixed_step.start(@clock.call)
-      draw
 
-      loop do
+      until @host.window_should_close?
         poll_input
         now = @clock.call
         due = @fixed_step.due_steps(now)
-
-        if due.zero?
-          @host.wait_for_input(
-            timeout: @fixed_step.wait_time(now)
-          )
-          next
-        end
-
-        should_quit = false
-
-        due.times do
-          snapshot = take_input_snapshot
-          result = @modes.current.advance(input: snapshot)
-
-          if result == :quit
-            should_quit = true
-            break
-          end
-
-          apply_mode_result(result)
-        end
-
+        should_quit = advance_simulation(due)
         break if should_quit
+
         draw
       end
     ensure
-      finish_renderer
-      @host.leave_application
+      @host.close
     end
 
     private
@@ -120,6 +100,18 @@ module Aogera
       )
     end
 
+    def advance_simulation(due)
+      due.times do
+        snapshot = take_input_snapshot
+        result = @modes.current.advance(input: snapshot)
+        return true if result == :quit
+
+        apply_mode_result(result)
+      end
+
+      false
+    end
+
     def apply_mode_result(result)
       case result
       when Mode::Push
@@ -135,29 +127,16 @@ module Aogera
         level: mode.level,
         world: mode.world_view
       )
-      synchronized = @renderer.synchronized_updates?
-      @host.begin_synchronized_update if synchronized
-      begin
-        @host.clear if @renderer.clear_before_render?
-        @host.write(@renderer.render(scene))
-        @host.write_status(
-          row: @renderer.status_row(scene),
-          text: status_text(mode)
-        )
-      ensure
-        @host.end_synchronized_update if synchronized
-      end
+      @renderer.draw(
+        scene,
+        status: status_text(mode)
+      )
     end
 
     def status_text(mode)
       return mode.status_text if mode.respond_to?(:status_text)
-      "Q or Esc to quit. Tick #{mode.step_number}"
-    end
 
-    def finish_renderer
-      return unless @renderer.respond_to?(:finish)
-      output = @renderer.finish
-      @host.write(output) unless output.empty?
+      "Q or Esc to quit. Tick #{mode.step_number}"
     end
   end
 end
