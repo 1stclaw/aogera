@@ -7,8 +7,12 @@ module Aogera
         behavior collision renderable combatant interactable
       ].freeze
 
-      def initialize(movement: Movement.new)
+      def initialize(
+        movement: Movement.new,
+        ground_movement: GroundMovement.new
+      )
         @movement = movement
+        @ground_movement = ground_movement
       end
 
       def execute(level:, world:, commands:, bindings:)
@@ -17,6 +21,8 @@ module Aogera
           effect = case command
           in Commands::Move
             execute_move(world, level, command)
+          in Commands::GroundMove
+            execute_ground_move(world, level, command)
           in Commands::Attack
             execute_attack(world, command, bindings)
           in Commands::Defeat
@@ -57,6 +63,39 @@ module Aogera
           Component::Position.new(x: next_x, y: next_y)
         )
         nil
+      end
+
+      def execute_ground_move(world, level, command)
+        return unless world.entity?(command.entity_id)
+
+        ground_position = world.component(command.entity_id, :ground_position)
+        return unless ground_position
+
+        resolved = @ground_movement.resolve(
+          level: level,
+          world: world,
+          entity_id: command.entity_id,
+          position: ground_position,
+          dx: command.dx,
+          dz: command.dz
+        )
+
+        world.set_component(command.entity_id, :ground_position, resolved)
+        sync_grid_position(world, command.entity_id, resolved)
+        nil
+      end
+
+      def sync_grid_position(world, entity_id, ground_position)
+        grid_x = ground_position.x.floor
+        grid_y = ground_position.z.floor
+        current = world.component(entity_id, :position)
+        return if current && current.x == grid_x && current.y == grid_y
+
+        world.set_component(
+          entity_id,
+          :position,
+          Component::Position.new(x: grid_x, y: grid_y)
+        )
       end
 
       def update_facing(world, command)
@@ -141,7 +180,6 @@ module Aogera
         world.despawn(command.entity_id)
         nil
       end
-
     end
   end
 end

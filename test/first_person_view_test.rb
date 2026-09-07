@@ -30,11 +30,30 @@ class FirstPersonViewTest < Minitest::Test
     assert_in_delta(-Aogera::FirstPersonView::MAX_PITCH, view.pitch)
   end
 
-  def test_grid_movement_is_relative_to_current_view_heading
-    east = Aogera::FirstPersonView.for_direction(:east)
+  def test_ground_movement_uses_continuous_yaw
+    view = Aogera::FirstPersonView.new(yaw: Math::PI / 4.0)
 
-    assert_equal [1, 0], east.grid_movement_delta(forward: 1, strafe: 0)
-    assert_equal [0, 1], east.grid_movement_delta(forward: 0, strafe: 1)
-    assert_equal [1, 1], east.grid_movement_delta(forward: 1, strafe: 1)
+    dx, dz = view.ground_movement_delta(
+      forward: 1,
+      strafe: 0,
+      distance: 0.3
+    )
+
+    assert_in_delta 0.3, Math.hypot(dx, dz)
+    assert_operator dx, :>, 0.0
+    assert_operator dz, :<, 0.0
+    assert_in_delta dx.abs, dz.abs
+  end
+
+  def test_diagonal_ground_input_is_normalized_to_player_speed
+    view = Aogera::FirstPersonView.for_direction(:east)
+
+    dx, dz = view.ground_movement_delta(
+      forward: 1,
+      strafe: 1,
+      distance: 0.2
+    )
+
+    assert_in_delta 0.2, Math.hypot(dx, dz)
   end
 end

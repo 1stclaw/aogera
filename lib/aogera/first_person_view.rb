@@ -62,17 +62,14 @@ module Aogera
       Direction::ORDER.fetch(index)
     end
 
-    def grid_movement_delta(forward:, strafe:)
-      forward_dx, forward_dy = Direction.delta(cardinal_direction)
-      right_direction = Direction::ORDER.fetch(
-        (Direction::ORDER.index(cardinal_direction) + 1) % Direction::ORDER.length
-      )
-      right_dx, right_dy = Direction.delta(right_direction)
+    def ground_movement_delta(forward:, strafe:, distance:)
+      x = (Math.sin(yaw) * forward) + (Math.cos(yaw) * strafe)
+      z = (-Math.cos(yaw) * forward) + (Math.sin(yaw) * strafe)
+      length = Math.hypot(x, z)
+      return [0.0, 0.0].freeze if length.zero?
 
-      [
-        (forward_dx * forward) + (right_dx * strafe),
-        (forward_dy * forward) + (right_dy * strafe)
-      ].freeze
+      scale = Float(distance) / length
+      [(x * scale), (z * scale)].freeze
     end
 
     private

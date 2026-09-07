@@ -1,6 +1,6 @@
-# Aogera 0.3.1: first-person raylib 3D path
+# Aogera 0.3.2: continuous first-person ground movement
 
-Aogera 0.3.1 turns the 0.3.0 fixed overview into the first playable first-person 3D frontend while deliberately retaining the existing grid simulation underneath it.
+Aogera 0.3.2 replaces the temporary player grid-stepping bridge with continuous X/Z movement while keeping the existing grid systems alive for NPC gameplay.
 
 ## Active path
 
@@ -12,10 +12,19 @@ raylib frame
     +-- Input::Mapper
     |       |
     |       +-- Action ------> Handoff / Tracker --> fixed simulation ticks
+    |       |                                      |
+    |       |                                      v
+    |       |                              RealtimeController
+    |       |                                      |
+    |       |                                      v
+    |       |                                  GroundMove
+    |       |                                      |
+    |       |                                      v
+    |       |                              GroundMovement
     |       |
-    |       +-- LookDelta ---> FirstPersonView ----> current rendered frame
+    |       +-- LookDelta ---> FirstPersonView
     |
-    +-- Level + World::View + FirstPersonView
+    +-- GroundPosition + FirstPersonView
             |
             v
         Render::Raylib3D
@@ -27,25 +36,19 @@ raylib frame
           raylib
 ```
 
-Mouse look is intentionally updated at frontend/render cadence rather than at the 30 Hz simulation cadence. The logical view is still an Aogera object; raylib `Camera3D` and `Vector3` values remain confined to `RaylibAPI`.
+Mouse look remains frontend/render-frame state. Player translation remains canonical simulation state and changes only through the fixed-step command/executor boundary.
 
-## FirstPersonView
+## GroundPosition
 
-`FirstPersonView` owns only the concrete state now required by first-person control:
+The controlled persistent character receives:
 
-- yaw;
-- pitch;
-- eye height;
-- vertical field of view;
-- mouse sensitivity.
+```text
+Component::GroundPosition(x, z)
+```
 
-It also provides a forward vector and a temporary cardinal heading for the existing grid gameplay bridge. It is not a generic transform, physics body, scene camera, or world-space entity component.
+This is deliberately a ground-plane coordinate rather than a padded `Position3D` or generic transform. Aogera does not yet have vertical player motion, velocity, acceleration or a general 3D body model.
 
-Pitch is clamped so the camera cannot flip over. The initial yaw is derived from the player's authored cardinal `Facing` at the level entry.
-
-## Temporary grid movement bridge
-
-The canonical axes remain:
+The coordinate convention is:
 
 ```text
 +X = east/right
@@ -53,54 +56,71 @@ The canonical axes remain:
 +Z = south / old grid +Y
 ```
 
-Player position is still `Component::Position(x, y)`. The camera eye is placed at the center of that grid cell:
+Authored grid entries initialize continuous position at the cell center:
 
 ```text
-world X = grid x + 0.5
-world Y = eye height
-world Z = grid y + 0.5
+grid (x, y) -> ground (x + 0.5, z = y + 0.5)
 ```
 
-W/S now mean forward/back and A/D mean strafe left/right. Arrow keys mirror those four actions. At each simulation tick, the current view yaw is reduced to the nearest cardinal direction and translated back into the existing integer `Move(dx, dy)` command.
+`Render::Raylib3D` now places the first-person camera directly at the controlled entity's `GroundPosition`, plus `FirstPersonView#eye_height` on Y.
 
-This is intentionally transitional. It gives the current game correct first-person control semantics without pretending that grid position is a permanent 3D movement model.
+## GroundMove
 
-## Combat and interaction
-
-Adjacent melee attack and interaction targeting now use the current view heading. This matters because first-person looking can rotate independently of movement.
-
-The old `Facing` component still exists and is still updated by successful or blocked grid movement through the existing simulation executor, but it no longer determines player attack/interaction direction.
-
-## Renderer
-
-`Render::Raylib3D` now derives its camera from:
+Player movement now enters simulation as:
 
 ```text
-World::View player Position
-        +
-FirstPersonView orientation
+Simulation::Commands::GroundMove(entity_id, dx, dz)
 ```
 
-The controlled player entity is hidden from the first-person render pass. Other renderable entities remain primitive cubes for now.
+`RealtimeController` emits one ground-motion command for every simulation tick while movement input is held. The default speed is expressed in world units per second and converted to a 30 Hz per-tick displacement.
 
-The renderer still consumes `Level + World::View` directly. There is still no `Scene3D`, `Projector3D`, generic renderer, or transform hierarchy.
+Movement uses exact view yaw rather than reducing yaw to a cardinal direction. Forward and strafe vectors are combined and normalized, so diagonal input does not move faster.
 
-## Cursor ownership
+The old integer `Simulation::Commands::Move(dx, dy)` remains active for NPC wandering/pathfinding.
 
-`Host::Raylib` captures/disables the cursor once after opening and focusing the raylib window, and releases it before closing. `RaylibAPI` owns the direct `DisableCursor`, `EnableCursor`, and `GetMouseDelta` calls.
+## Temporary collision
+
+`Simulation::GroundMovement` is intentionally small and specific to the current bridge.
+
+The player is treated as a circle on the X/Z plane. Impassable authored cells and cells occupied by entities with `Collision(blocks_movement: true)` are treated as solid unit cells. X and Z are resolved independently, allowing the player to slide along a blocked axis rather than stopping all movement.
+
+Large displacement commands are split into small substeps before collision resolution so a command cannot tunnel directly across a one-cell wall.
+
+This is not a generic physics system. There are no velocities, forces, rigid bodies, collision layers, arbitrary shapes or vertical collision rules.
+
+## Coarse grid synchronization
+
+Several established systems still consume `Component::Position(x, y)`:
+
+- NPC pathfinding;
+- NPC targeting/adjoining checks;
+- melee validation;
+- interaction targeting;
+- authored grid occupancy.
+
+For the controlled character, `GroundPosition` is now authoritative for physical location. After ground movement, the executor synchronizes `Position` to the cell containing the continuous player center:
+
+```text
+grid x = floor(ground x)
+grid y = floor(ground z)
+```
+
+Blocking entity cells remain solid to the continuous player, preserving the current grid occupancy invariant while the two models coexist.
+
+Player `Facing` is no longer updated by continuous translation. The first-person view already owns actual look direction, and player melee/interaction direction continues to use the view's nearest cardinal heading while those mechanics remain grid-adjacent.
 
 ## Still deferred
 
-0.3.1 does **not** introduce:
+0.3.2 does **not** introduce:
 
-- continuous player world position;
-- velocity or acceleration;
-- 3D collision/physics;
-- jumping or vertical movement;
+- vertical player motion or jumping;
+- velocity/acceleration;
+- generic physics or transforms;
+- continuous NPC navigation;
+- continuous melee/raycast targeting;
 - projectile simulation;
-- BSP loading;
+- BSP loading/collision;
 - models/textures/materials;
-- generic spatial/transform abstractions;
 - a general asset manager.
 
-The next movement/collision milestone should replace the temporary grid bridge only when a concrete continuous 3D requirement is ready to become authoritative.
+The purpose of this milestone is to give BSP work a real continuous Aogera player coordinate and movement boundary to integrate with, without pre-designing the eventual BSP collision representation.

@@ -40,11 +40,12 @@ class Render3DContractTest < Minitest::Test
     def screen_height = 768
   end
 
-  def test_first_person_camera_uses_player_grid_center_and_y_up
+  def test_first_person_camera_uses_continuous_ground_position_and_y_up
     api = FakeAPI.new
     world = Aogera::World.new
     camera_id = world.spawn(
       position: Aogera::Component::Position.new(x: 1, y: 2),
+      ground_position: Aogera::Component::GroundPosition.new(x: 1.25, z: 2.75),
       renderable: Aogera::Component::Renderable.new(
         render_key: :player,
         glyph: "P",
@@ -63,17 +64,18 @@ class Render3DContractTest < Minitest::Test
 
     camera = api.calls.find { |call| call.first == :begin_mode_3d }.last
     assert_equal [0.0, 1.0, 0.0], camera[:up]
-    assert_equal [1.5, view.eye_height, 2.5], camera[:position]
-    assert_in_delta 1.5, camera[:target][0]
+    assert_equal [1.25, view.eye_height, 2.75], camera[:position]
+    assert_in_delta 1.25, camera[:target][0]
     assert_in_delta view.eye_height, camera[:target][1]
-    assert_in_delta 1.5, camera[:target][2]
+    assert_in_delta 1.75, camera[:target][2]
   end
 
   def test_first_person_view_rotates_camera_target_without_raylib_state
     api = FakeAPI.new
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 1, y: 1)
+      position: Aogera::Component::Position.new(x: 1, y: 1),
+      ground_position: Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5)
     )
     view = Aogera::FirstPersonView.for_direction(:east)
 
@@ -100,7 +102,8 @@ class Render3DContractTest < Minitest::Test
     )
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 0, y: 0)
+      position: Aogera::Component::Position.new(x: 0, y: 0),
+      ground_position: Aogera::Component::GroundPosition.new(x: 0.5, z: 0.5)
     )
 
     Aogera::Render::Raylib3D.new(api: api).draw(
@@ -126,6 +129,7 @@ class Render3DContractTest < Minitest::Test
     world = Aogera::World.new
     camera_id = world.spawn(
       position: Aogera::Component::Position.new(x: 0, y: 0),
+      ground_position: Aogera::Component::GroundPosition.new(x: 0.5, z: 0.5),
       renderable: Aogera::Component::Renderable.new(
         render_key: :player,
         glyph: "P",
@@ -162,7 +166,8 @@ class Render3DContractTest < Minitest::Test
     api = FakeAPI.new
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 0, y: 0)
+      position: Aogera::Component::Position.new(x: 0, y: 0),
+      ground_position: Aogera::Component::GroundPosition.new(x: 0.5, z: 0.5)
     )
     world.spawn(position: Aogera::Component::Position.new(x: 0, y: 0))
 

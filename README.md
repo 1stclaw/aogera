@@ -6,13 +6,13 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.3.1**
+**Version: 0.3.2**
 
-Aogera now has its first playable first-person 3D control loop. raylib supplies the native window, mouse capture and drawing, while Aogera owns logical yaw/pitch in `FirstPersonView` and derives the raylib `Camera3D` from the controlled player's runtime position.
+Aogera now has continuous first-person movement on the ground plane. The controlled character owns a runtime `GroundPosition(x, z)` in Aogera world space, while mouse yaw/pitch remains in `FirstPersonView`. raylib `Camera3D` is derived from those Aogera-owned values rather than acting as canonical gameplay state.
 
-The underlying gameplay world is still deliberately grid-based. W/S move forward/back relative to the current view; A/D strafe; those controls are reduced to the existing integer grid movement commands at simulation ticks. Mouse look updates at frontend/render cadence rather than being quantized to the 30 Hz simulation rate.
+The player moves continuously at the 30 Hz simulation cadence. W/S move forward/back relative to the exact current yaw and A/D strafe; diagonal input is normalized. A small temporary ground-collision resolver keeps the player out of impassable terrain and cells occupied by blocking entities, with axis-separated resolution so movement can slide along walls.
 
-Combat, interaction, NPC pathfinding and collision otherwise continue to use the established gameplay systems. Continuous 3D player position, 3D collision and BSP are later 0.3 work.
+NPC movement, pathfinding, melee adjacency and interaction still use the established integer grid. The player's old `Position(x, y)` is therefore retained as a synchronized coarse cell while `GroundPosition` is authoritative for player location and camera placement. This is an explicit transition bridge, not a generic transform or physics system.
 
 ## Running
 
@@ -54,22 +54,24 @@ Simulation timing is independent from rendering. The simulation runs at a fixed 
 keyboard -> Host::Raylib -> Input::Action -> fixed-step gameplay
 mouse    -> Host::Raylib -> Input::LookDelta -> FirstPersonView
 
-Level + World::View + FirstPersonView
+GroundPosition + FirstPersonView
         -> Render::Raylib3D -> RaylibAPI -> raylib
 ```
 
 The 3D coordinate convention is Y-up:
 
 ```text
-grid x -> world +X
-grid y -> world +Z
+world +X -> east/right
 world +Y -> up
+world +Z -> south / old grid +Y
 ```
 
-Aogera still has no generic scene/projector/transform layer and no general asset manager. The current renderer directly extrudes the authored grid because that remains the smallest useful bridge to the coming BSP work.
+The temporary grid bridge uses one world unit per authored cell. A grid cell `(x, y)` has center `(x + 0.5, z = y + 0.5)`.
+
+Aogera still has no generic scene/projector/transform layer, no general physics system and no general asset manager. The current renderer directly extrudes the authored grid because it remains the smallest useful bridge to the coming BSP work.
 
 ## Direction
 
-The next 0.3 work should replace the temporary grid bridge incrementally: continuous first-person position/collision is the next obvious pressure point, followed by the planned Quake 1 BSP29 experiment once the basic movement model is trustworthy.
+The next 0.3 work can now evaluate BSP29 against a real continuous player coordinate model. The current ground collision is deliberately small and disposable: BSP geometry/collision should replace it where appropriate rather than being forced through a generic physics interface designed in advance.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

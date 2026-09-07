@@ -153,7 +153,6 @@ module AogeraTestSupport
     input,
     controlled_id:,
     controller: Aogera::RealtimeController.new(
-      player_move_interval: 1,
       npc_interval: 1
     ),
     tick_number: simulation.step_number + 1

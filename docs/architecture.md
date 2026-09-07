@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.1 runtime and its present boundaries.
+This document describes the current Aogera 0.3.2 runtime and its present boundaries.
 
 ## Design goals
 
@@ -33,23 +33,31 @@ FirstPersonView
 
 `Session` owns persistent character state. `Level` is immutable authored structure. `World` is the canonical mutable runtime container and owns entity IDs, component tables, and runtime relations. Runtime entity IDs never serve as persistent identity.
 
-`FirstPersonView` is current player control/view state, deliberately separate from `World`. It exists because first-person orientation must update at render cadence while the current gameplay world still advances at a fixed 30 Hz. It is not raylib camera state and does not introduce a generic transform model.
+`FirstPersonView` owns logical first-person orientation and updates at render cadence. It is not raylib camera state and it is not the player's physical position.
+
+The controlled character's continuous physical location now lives in `World` as `Component::GroundPosition(x, z)`, because player translation affects collision and gameplay and therefore belongs on the fixed-step simulation side of the boundary.
 
 `World::View` is a cached read-only facade over `World`; callers receive the same view object rather than allocating wrappers repeatedly. `World#entity_ids` similarly caches its immutable active-ID snapshot and invalidates it only on spawn/despawn.
 
-## Components and prototypes
+## Position models during the transition
 
-Component values live under `Component`. `Prototype` is an authored reusable component recipe. Instantiating a prototype creates a runtime entity identified by an integer `EntityId`.
+Aogera currently has two explicit position representations with different jobs.
 
 ```text
-Prototype -> World EntityId
+GroundPosition(x, z)
+    continuous player ground-plane position
+    authoritative for player translation and camera location
+
+Position(x, y)
+    integer authored/runtime grid cell
+    authoritative for current NPC/grid systems
 ```
 
-`Prototype::Catalog` and `Prototype::Loader` own authored prototype lookup/loading.
+A persistent controlled character is spawned at the center of its authored entry cell. Whenever its `GroundPosition` crosses into another passable cell, the executor synchronizes its coarse `Position` with `floor(x), floor(z)`.
 
-The current `Component::Position(x, y)`, cardinal `Facing`, grid movement commands and pathfinding remain explicitly grid gameplay concepts. They have not been renamed or padded with a dummy Z coordinate.
+This coexistence is temporary but intentional. It lets the player acquire a real continuous coordinate without forcing NPC pathfinding, melee adjacency, authored spawns, or terrain representation through a speculative 3D rewrite.
 
-Player first-person yaw/pitch does not currently replace `Facing`. `Facing` remains useful to the legacy grid executor and authored entries, while player attack/interaction direction now comes from `FirstPersonView`.
+There is still no generic `Transform`, `Spatial`, `Position3D`, or physics-body abstraction.
 
 ## Simulation
 
@@ -66,19 +74,33 @@ Simulation
 
 Its mutation boundary is `Simulation#step(commands:)`. Command producers build `Simulation::Commands::Buffer` values; `Simulation::Executor` validates and applies them. Persistent effects are emitted separately and applied by `Session`.
 
-The 0.3.1 first-person bridge still emits the existing integer `Move(dx, dy)` command. Continuous 3D movement has not entered simulation yet.
+Two movement commands now coexist deliberately:
+
+```text
+Move(entity_id, dx, dy)
+    integer grid movement used by NPCs
+
+GroundMove(entity_id, dx, dz)
+    continuous ground-plane movement used by the controlled player
+```
+
+`GroundMovement` resolves the latter against the current authored grid. It treats the player as a small circle and impassable/blocking cells as solid unit squares. Axis-separated resolution permits wall sliding, and large commands are subdivided to avoid tunneling through a cell.
+
+This is collision logic, not a general physics engine.
 
 ## Fixed-step scheduling
 
-`App` owns the host loop and a monotonic `FixedStep`. The engine currently advances simulation at 30 Hz while raylib targets 60 rendered frames per second. A rendered frame may therefore contain zero or more simulation steps.
+`App` owns the host loop and a monotonic `FixedStep`. The engine advances simulation at 30 Hz while raylib targets 60 rendered frames per second. A rendered frame may therefore contain zero or more simulation steps.
 
-`RealtimeController` owns gameplay scheduling policy such as held movement and NPC decision cadence. W/S and A/D now represent local first-person forward/back and strafe input. At command-building time the controller asks `FirstPersonView` for the corresponding temporary grid delta.
+`RealtimeController` emits controlled-player ground motion every fixed simulation tick while movement is held. Player speed is expressed in world units per second. NPC behavior continues to run at its separate lower decision cadence.
+
+Mouse yaw/pitch remains render-frame control state; translational movement remains fixed-step world state.
 
 ## Input
 
-There are now two deliberately different input paths because boolean gameplay actions and continuous mouse look have different timing requirements.
+Boolean gameplay actions and continuous mouse look still use different timing paths.
 
-Keyboard/gameplay actions remain fixed-step input:
+Keyboard/gameplay actions:
 
 ```text
 Host::Raylib
@@ -92,7 +114,7 @@ Input::Handoff -> Input::Tracker
 Mode::Play -> RealtimeController -> Commands::Buffer -> Simulation#step
 ```
 
-Mouse look is a value-bearing render-frame input:
+Mouse look:
 
 ```text
 Host::Raylib
@@ -106,11 +128,9 @@ FirstPersonView#rotate
 Render::Raylib3D
 ```
 
-This split is intentional. Mouse rotation should not become visibly quantized to the 30 Hz simulation tick, and it does not mutate canonical world state.
-
 `Host::Raylib` captures the cursor once after opening/focusing the window and releases it before close.
 
-Dialogue remains modal and currently pauses world advancement, while the shared first-person view can still be rendered from the controlled character position.
+Dialogue remains modal and currently pauses world advancement, while the shared first-person view renders from the controlled character's current `GroundPosition`.
 
 ## 3D rendering
 
@@ -126,23 +146,17 @@ RaylibAPI
 raylib
 ```
 
-`Render::Raylib3D` directly extrudes the existing grid level into raylib primitives:
+`Render::Raylib3D` still directly extrudes the current grid level into primitive floors/walls and draws renderable entities as primitive cubes. The controlled player is omitted from the first-person entity pass.
 
-```text
-passable/non-wall tile -> thin floor cube
-wall tile              -> vertical wall cube
-renderable entity      -> smaller vertical cube
-```
-
-The camera eye is derived from the controlled player's grid-cell center plus `FirstPersonView#eye_height`; its target comes from the logical forward vector. The controlled player entity is omitted from the first-person entity draw pass.
+The camera eye uses the controlled entity's continuous `GroundPosition` plus logical eye height. Its target comes from the `FirstPersonView` forward vector.
 
 There is no `Scene3D`, `Projector3D`, generic `Scene`, generic `Renderer`, or generic transform hierarchy. The direct path remains sufficient for this bridge and leaves BSP free to use a different representation later.
 
-`RaylibAPI` owns conversion from plain Ruby camera/geometry values into `raylib-bindings` FFI types. `Camera3D`, `Vector2`, and `Vector3` do not enter simulation or authored gameplay state.
+`RaylibAPI` owns conversion from plain Ruby camera/geometry values into `raylib-bindings` FFI types. raylib `Camera3D`/vector structs do not enter simulation or authored gameplay data.
 
 ### Coordinate convention
 
-Aogera's current 3D convention remains:
+Aogera's current 3D convention is:
 
 ```text
 +X = east/right
@@ -150,13 +164,13 @@ Aogera's current 3D convention remains:
 +Z = south (the old grid +Y direction)
 ```
 
-The old grid maps as:
+One authored grid cell is currently one world unit. Grid cell centers map as:
 
 ```text
-grid (x, y) -> world (x, 0, y)
+(x, y) -> (x + 0.5, 0, y + 0.5)
 ```
 
-Tiles/entities use cell centers, so rendered primitive/camera X/Z coordinates add half a tile. This convention can later form the boundary for Quake Z-up conversion.
+This convention can later form the explicit boundary for Quake Z-up conversion.
 
 ## Authored content and assets
 
@@ -168,10 +182,10 @@ content/levels/
 content/dialogue/
 ```
 
-`Content::Paths` centralizes the content root and paths used by the current Ruby loaders. There is intentionally no general asset manager yet. Models, textures, shaders, BSP data, and their lifetime rules will be introduced from concrete requirements.
+`Content::Paths` centralizes paths used by the current Ruby loaders. There is intentionally no general asset manager yet. Models, textures, shaders, BSP data, and their lifetime rules will be introduced from concrete requirements.
 
 ## Near-term boundary
 
-Aogera 0.3.1 establishes a real first-person camera/control loop but intentionally leaves player location and collision grid-based. Continuous 3D position, 3D collision/physics, projectile motion, BSP loading, and a permanent asset format remain undesigned.
+Aogera 0.3.2 now has a real continuous player coordinate, view-relative ground movement and a minimal collision boundary. NPC navigation and combat targeting remain intentionally grid-based.
 
-The next implementation should make one of those concepts real only when it can replace part of the temporary grid bridge rather than coexist as speculative infrastructure.
+The temporary cell collision resolver should not grow into a general physics framework before BSP. The next BSP29 experiment can use the continuous player coordinate to determine what world geometry, collision representation and map-space conversion Aogera actually needs.

@@ -22,19 +22,26 @@ class CollisionTest < Minitest::Test
     hero_id = simulation.spawn_character(character_key: :hero, prototype: :player)
 
     controller = Aogera::RealtimeController.new(
-      player_move_interval: 1,
       npc_interval: 100
     )
-    commands = controller.build(
-      input: move_input(:move_forward),
-      level: level,
-      world: simulation.world_view,
-      controlled_id: hero_id,
-      tick_number: 1
-    )
-    simulation.step(commands: commands)
+
+    10.times do |index|
+      commands = controller.build(
+        input: move_input(:move_forward),
+        level: level,
+        world: simulation.world_view,
+        controlled_id: hero_id,
+        tick_number: index + 1,
+        view: Aogera::FirstPersonView.for_direction(:east)
+      )
+      simulation.step(commands: commands)
+    end
 
     position = simulation.world_view.component(hero_id, :position)
+    ground = simulation.world_view.component(hero_id, :ground_position)
     assert_equal [2, 2], [position.x, position.y]
+    assert_operator ground.x, :>, 2.5
+    assert_operator ground.x, :<, 3.0
+    assert_in_delta 2.5, ground.z
   end
 end

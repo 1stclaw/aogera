@@ -5,56 +5,50 @@ require_relative "test_helper"
 class RealtimeControllerTest < Minitest::Test
   include AogeraTestSupport
 
-  def test_pressed_movement_executes_immediately_then_repeats_on_cadence
+  def test_held_player_movement_produces_ground_motion_every_simulation_tick
     world = Aogera::World.new
     hero_id = world.spawn(
       position: Aogera::Component::Position.new(x: 2, y: 2)
     )
     controller = Aogera::RealtimeController.new(
-      player_move_interval: 3,
-      npc_interval: 10
+      player_speed: 3.0,
+      npc_interval: 100
     )
     tracker = Aogera::Input::Tracker.new
 
     first = tracker.snapshot([
       Aogera::Input::Action.new(kind: :move_forward, state: :pressed)
     ])
-    commands = controller.build(
+    first_command = controller.build(
       input: first,
       level: level_with(spawns: []),
       world: world.view,
       controlled_id: hero_id,
       tick_number: 1
-    )
-    assert_equal 1, commands.size
+    ).to_a.fetch(0)
 
     held = tracker.snapshot
-    commands = controller.build(
+    second_command = controller.build(
       input: held,
       level: level_with(spawns: []),
       world: world.view,
       controlled_id: hero_id,
       tick_number: 2
-    )
-    assert_empty commands
+    ).to_a.fetch(0)
 
-    commands = controller.build(
-      input: held,
-      level: level_with(spawns: []),
-      world: world.view,
-      controlled_id: hero_id,
-      tick_number: 4
-    )
-    assert_equal 1, commands.size
+    assert_instance_of Aogera::Simulation::Commands::GroundMove, first_command
+    assert_instance_of Aogera::Simulation::Commands::GroundMove, second_command
+    assert_in_delta 0.1, Math.hypot(first_command.dx, first_command.dz)
+    assert_in_delta 0.1, Math.hypot(second_command.dx, second_command.dz)
   end
 
-  def test_player_forward_and_strafe_are_resolved_from_view_heading
+  def test_player_forward_and_strafe_follow_continuous_view_heading
     world = Aogera::World.new
     hero_id = world.spawn(
       position: Aogera::Component::Position.new(x: 2, y: 2)
     )
     controller = Aogera::RealtimeController.new(
-      player_move_interval: 1,
+      player_speed: 3.0,
       npc_interval: 100
     )
     view = Aogera::FirstPersonView.for_direction(:east)
@@ -68,21 +62,19 @@ class RealtimeControllerTest < Minitest::Test
       view: view
     ).to_a.fetch(0)
 
-    controller = Aogera::RealtimeController.new(
-      player_move_interval: 1,
-      npc_interval: 100
-    )
     strafe = controller.build(
       input: move_input(:strafe_right),
       level: level_with(spawns: []),
       world: world.view,
       controlled_id: hero_id,
-      tick_number: 1,
+      tick_number: 2,
       view: view
     ).to_a.fetch(0)
 
-    assert_equal [1, 0], [forward.dx, forward.dy]
-    assert_equal [0, 1], [strafe.dx, strafe.dy]
+    assert_in_delta 0.1, forward.dx
+    assert_in_delta 0.0, forward.dz
+    assert_in_delta 0.0, strafe.dx
+    assert_in_delta 0.1, strafe.dz
   end
 
   def test_npc_behaviors_run_only_on_npc_cadence
@@ -101,10 +93,7 @@ class RealtimeControllerTest < Minitest::Test
       target_id: hero_id
     )
 
-    controller = Aogera::RealtimeController.new(
-      player_move_interval: 2,
-      npc_interval: 4
-    )
+    controller = Aogera::RealtimeController.new(npc_interval: 4)
     level = level_with(spawns: [])
 
     early = controller.build(
@@ -143,10 +132,7 @@ class RealtimeControllerTest < Minitest::Test
       target_id: hero_id
     )
 
-    controller = Aogera::RealtimeController.new(
-      player_move_interval: 1,
-      npc_interval: 1
-    )
+    controller = Aogera::RealtimeController.new(npc_interval: 1)
     commands = controller.build(
       input: move_input(:move_forward),
       level: level_with(spawns: []),
@@ -155,7 +141,7 @@ class RealtimeControllerTest < Minitest::Test
       tick_number: 1
     ).to_a
 
-    assert_instance_of Aogera::Simulation::Commands::Move, commands.fetch(0)
+    assert_instance_of Aogera::Simulation::Commands::GroundMove, commands.fetch(0)
     assert_equal hero_id, commands.fetch(0).entity_id
     assert_instance_of Aogera::Simulation::Commands::Attack, commands.fetch(1)
     assert_equal goblin_id, commands.fetch(1).attacker_id

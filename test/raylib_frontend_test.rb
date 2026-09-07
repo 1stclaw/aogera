@@ -126,7 +126,8 @@ class RaylibFrontendTest < Minitest::Test
     )
     world = Aogera::World.new
     camera_id = world.spawn(
-      position: Aogera::Component::Position.new(x: 0, y: 0)
+      position: Aogera::Component::Position.new(x: 0, y: 0),
+      ground_position: Aogera::Component::GroundPosition.new(x: 0.5, z: 0.5)
     )
 
     renderer.draw(

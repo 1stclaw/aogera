@@ -50,7 +50,12 @@ module Aogera
           "level entry already occupied: #{entry_definition.key.inspect}"
       end
 
-      extra = {}
+      extra = {
+        ground_position: Component::GroundPosition.new(
+          x: entry_definition.x + 0.5,
+          z: entry_definition.y + 0.5
+        )
+      }
       if entry_definition.facing
         extra[:facing] = Component::Facing.new(direction: entry_definition.facing)
       end

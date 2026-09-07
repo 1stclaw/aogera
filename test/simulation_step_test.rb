@@ -39,6 +39,24 @@ class SimulationStepTest < Minitest::Test
     assert_equal [3, 2], [position.x, position.y]
   end
 
+  def test_ground_move_updates_continuous_position_and_coarse_grid_cell
+    commands = Aogera::Simulation::Commands::Buffer.new([
+      Aogera::Simulation::Commands::GroundMove.new(
+        entity_id: @hero_id,
+        dx: 0.7,
+        dz: 0.0
+      )
+    ])
+
+    @simulation.step(commands: commands)
+    ground = @simulation.world_view.component(@hero_id, :ground_position)
+    position = @simulation.world_view.component(@hero_id, :position)
+
+    assert_in_delta 3.2, ground.x
+    assert_in_delta 2.5, ground.z
+    assert_equal [3, 2], [position.x, position.y]
+  end
+
   def test_step_returns_persistent_effects
     enemy_id = world.spawn(
       position: Aogera::Component::Position.new(x: 3, y: 2)
@@ -61,7 +79,6 @@ class SimulationStepTest < Minitest::Test
 
   def test_planning_is_outside_simulation_and_does_not_advance_world
     controller = Aogera::RealtimeController.new(
-      player_move_interval: 1,
       npc_interval: 1
     )
     commands = controller.build(

@@ -34,7 +34,6 @@ class PlayCombatTest < Minitest::Test
 
   def test_adjacent_enemy_attacks_autonomously_when_npc_cadence_is_due
     controller = Aogera::RealtimeController.new(
-      player_move_interval: 6,
       npc_interval: 3
     )
     mode, _simulation, session, _goblin_id = build_play(
@@ -54,7 +53,6 @@ class PlayCombatTest < Minitest::Test
 
   def test_lethal_player_attack_invalidates_due_enemy_attack_same_tick
     controller = Aogera::RealtimeController.new(
-      player_move_interval: 1,
       npc_interval: 1
     )
     mode, simulation, session, goblin_id = build_play(

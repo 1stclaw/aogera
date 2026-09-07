@@ -8,21 +8,18 @@ module Aogera
       chase: :chase
     }.freeze
 
-    DEFAULT_PLAYER_MOVE_INTERVAL = Realtime::PLAYER_MOVE_INTERVAL
+    DEFAULT_PLAYER_SPEED = Realtime::PLAYER_SPEED
     DEFAULT_NPC_INTERVAL = Realtime::NPC_ACTION_INTERVAL
 
     def initialize(
       pathfinder: Simulation::Pathfinder.new,
-      player_move_interval: DEFAULT_PLAYER_MOVE_INTERVAL,
+      player_speed: DEFAULT_PLAYER_SPEED,
       npc_interval: DEFAULT_NPC_INTERVAL
     )
       @pathfinder = pathfinder
-      @player_move_interval = validate_interval(
-        player_move_interval,
-        :player_move_interval
-      )
+      @player_step = validate_positive_number(player_speed, :player_speed) /
+        Realtime::TICK_HZ
       @npc_interval = validate_interval(npc_interval, :npc_interval)
-      @next_player_move_tick = nil
     end
 
     def build(input:, level:, world:, controlled_id:, tick_number:, view: nil)
@@ -31,7 +28,6 @@ module Aogera
       controlled_command = controlled_move(
         input,
         controlled_id,
-        tick_number,
         view || default_view(world, controlled_id)
       )
       commands << controlled_command if controlled_command
@@ -50,20 +46,7 @@ module Aogera
 
     private
 
-    def controlled_move(input, entity_id, tick_number, view)
-      movement_pressed = movement_kinds.any? { |kind| input.pressed?(kind) }
-      movement_held = movement_kinds.any? { |kind| input.held?(kind) }
-
-      unless movement_held
-        @next_player_move_tick = nil
-        return
-      end
-
-      due = movement_pressed ||
-        @next_player_move_tick.nil? ||
-        tick_number >= @next_player_move_tick
-      return unless due
-
+    def controlled_move(input, entity_id, view)
       forward = 0
       strafe = 0
       forward += 1 if input.held?(:move_forward)
@@ -72,35 +55,23 @@ module Aogera
       strafe += 1 if input.held?(:strafe_right)
       return if forward.zero? && strafe.zero?
 
-      dx, dy = view.grid_movement_delta(
+      dx, dz = view.ground_movement_delta(
         forward: forward,
-        strafe: strafe
+        strafe: strafe,
+        distance: @player_step
       )
-      return if dx.zero? && dy.zero?
 
-      @next_player_move_tick = tick_number + @player_move_interval
-
-      Simulation::Commands::Move.new(
+      Simulation::Commands::GroundMove.new(
         entity_id: entity_id,
         dx: dx,
-        dy: dy
+        dz: dz
       )
     end
-
 
     def default_view(world, entity_id)
       facing = world.component(entity_id, :facing)
       direction = facing&.direction || :north
       FirstPersonView.for_direction(direction)
-    end
-
-    def movement_kinds
-      @movement_kinds ||= %i[
-        move_forward
-        move_backward
-        strafe_left
-        strafe_right
-      ].freeze
     end
 
     def cadence_due?(tick_number, interval)
@@ -180,6 +151,15 @@ module Aogera
 
       raise ArgumentError,
         "#{name} must be a positive Integer"
+    end
+
+    def validate_positive_number(value, name)
+      number = Float(value)
+      return number if number.positive?
+
+      raise ArgumentError, "#{name} must be positive"
+    rescue ArgumentError, TypeError
+      raise ArgumentError, "#{name} must be positive"
     end
   end
 end

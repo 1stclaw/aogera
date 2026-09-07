@@ -104,7 +104,12 @@ module Aogera
           next unless position && renderable
           next unless level.inside?(position.x, position.y)
 
-          x, z = grid_center(position.x, position.y)
+          ground_position = world.component(entity_id, :ground_position)
+          x, z = if ground_position
+            [ground_position.x, ground_position.z]
+          else
+            grid_center(position.x, position.y)
+          end
           @api.draw_cube(
             x: x,
             y: ENTITY_HEIGHT / 2.0,
@@ -125,10 +130,11 @@ module Aogera
       end
 
       def camera_for(world:, view:, camera_entity_id:)
-        position = world.component(camera_entity_id, :position)
-        raise ArgumentError, "camera entity has no position" unless position
+        position = world.component(camera_entity_id, :ground_position)
+        raise ArgumentError, "camera entity has no ground position" unless position
 
-        x, z = grid_center(position.x, position.y)
+        x = position.x
+        z = position.z
         eye = [x, view.eye_height, z]
         forward_x, forward_y, forward_z = view.forward_vector
 

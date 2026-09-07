@@ -71,15 +71,18 @@ class PlayModeTest < Minitest::Test
     assert_match "Enter interact", @mode.status_text
   end
 
-  def test_blocked_strafe_still_changes_legacy_facing
+  def test_continuous_player_motion_can_move_within_current_grid_cell
     @mode.advance(input: move_input(:strafe_left))
 
     hero_id = @mode.controlled_entity_id
     position = @mode.world_view.component(hero_id, :position)
+    ground = @mode.world_view.component(hero_id, :ground_position)
     facing = @mode.world_view.component(hero_id, :facing)
 
     assert_equal [2, 2], [position.x, position.y]
-    assert_equal :east, facing.direction
+    assert_operator ground.x, :>, 2.5
+    assert_in_delta 2.5, ground.z
+    assert_equal :south, facing.direction
     assert_equal 1, @mode.step_number
   end
 
