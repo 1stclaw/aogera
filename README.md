@@ -1,163 +1,32 @@
 # Aogera
 
-Aogera is an experimental Ruby game runtime for a single-character, real-time action-RPG direction inspired by games such as *Heretic* and *Hexen*.
+Aogera is an experimental Ruby game engine and runtime for a small fantasy action game.
 
-The current prototype deliberately keeps the world simple: integer-grid geometry, direct map combat, and a Kitty-terminal presentation backend. The architecture is not intended to depend on terminal rendering. Its purpose is to make simulation, scheduling, input, persistent state, and authored content explicit enough to evolve or be reimplemented independently.
+It began as a branch of Sunbird and is now developed independently. The project is intentionally focused rather than general-purpose, with a design direction inspired by late-1990s and early-2000s PC games, especially the Heretic / Hexen lineage.
 
-Aogera begins its own version line at **0.1.1**.
+## Current status
 
-## Core model
+**Version: 0.2.1**
 
-Aogera separates four lifetimes:
+Aogera currently uses **raylib** for its graphical frontend.
 
-```text
-Session
-  persistent game state
-  └── Characters
+The 0.2 series moved the project from Kitty/ASCII terminal rendering to a native window while keeping the existing gameplay model and authored content. Version 0.2.1 is a cleanup release built on 0.2.0: the old terminal frontend and related compatibility code have been removed, and the raylib path is now the only active frontend.
 
-Level
-  immutable authored area
-  ├── Terrain
-  ├── Spawns
-  ├── Entries
-  └── authored Relations
+Current features include:
 
-Simulation
-  one running Level
-  ├── World
-  ├── persistent-character bindings
-  ├── Executor
-  └── step number
+- raylib window, rendering, and keyboard input
+- grid-based 2D terrain and entities
+- fixed-step simulation independent of rendering cadence
+- prototypes and runtime entities
+- movement and collision
+- pathfinding and NPC behavior
+- combat
+- dialogue and mode transitions
+- persistent session state
 
-World
-  mutable runtime entities, components, and relations
-```
+The current 2D renderer is intentionally simple and serves as a stepping stone toward true 3D.
 
-Important terms:
-
-- **Prototype** — authored reusable component recipe.
-- **EntityId** — integer runtime identity.
-- **Component** — runtime component value types stored by `World`.
-- **Character** — persistent RPG state such as HP, MP, and attack.
-- **Simulation::Commands::Buffer** — explicit batch boundary between command production and execution.
-- **Simulation::Executor** — validates/applies commands to the runtime world and emits persistent effects.
-- **Simulation::StepResult** — the completed simulation step number and emitted effects.
-- **RealtimeController** — produces movement and NPC commands according to fixed-tick gameplay cadence.
-- **Input::Tracker** — converts key press/repeat/release events into held and edge-triggered input state.
-
-## Real-time loop
-
-The engine currently advances at **30 fixed ticks per second**. Simulation itself does not read wall-clock time or keyboard state.
-
-```text
-Kitty key events
-      |
-      v
-Input::Tracker
-      |
-      v
-Mode::Play
-      |
-      +--> RealtimeController --> Commands::Buffer
-      |
-      +--> edge-triggered direct actions
-      |
-      v
-Simulation#step
-```
-
-Movement is held-state driven. Attack, interact, cancel, and quit are edge-triggered. Empty-command ticks still advance the simulation, so autonomous actors continue to act while the player is idle.
-
-Current provisional grid-action rates are:
-
-- engine clock: 30 ticks/second;
-- held player movement: 5 moves/second;
-- NPC behavior: 2 actions/second.
-
-These are tuning values for the current prototype rather than permanent physics constants.
-
-## Persistent and runtime identity
-
-A persistent character and its runtime entity are intentionally different identities:
-
-```text
-Session Character :player
-        |
-        | Simulation binding
-        v
-World EntityId 7
-```
-
-`Session` never stores an `EntityId` as persistent character identity. A `Level` provides an entry point; `Simulation` instantiates the player prototype and owns the binding between the stable character key and the local runtime entity.
-
-## Commands and effects
-
-Runtime mutation remains explicit:
-
-```text
-RealtimeController / Mode
-        |
-        v
-Simulation::Commands::Buffer
-        |
-        v
-Simulation::Executor
-        |
-        +--> World mutation
-        |
-        `--> persistent Effect values
-                 |
-                 v
-              Session
-```
-
-For example, damage to a local world entity mutates its runtime health component; if that health reaches zero, the executor immediately retires the entity's gameplay components. Damage to a bound persistent player character can be emitted as a persistent effect for `Session` to apply.
-
-## Authored content
-
-Ruby-authored content currently lives under:
-
-```text
-content/prototypes/
-content/levels/
-content/dialogue/
-content/sprites/
-```
-
-A level spawn references a prototype. Persistent characters enter through a `Level::Entry` rather than being authored as ordinary player spawns.
-
-## Rendering
-
-Rendering is downstream of simulation state:
-
-```text
-Level + World::View
-        |
-        v
-Render::Projector
-        |
-        v
-Render::Scene
-        |
-        v
-Render::Kitty
-```
-
-Kitty is the active backend. The ASCII renderer remains reference/test infrastructure for now; future graphical backends are expected to consume the same projected scene rather than redefine the runtime model.
-
-## Controls
-
-```text
-WASD / arrows  move
-Space          attack the adjacent entity you are facing
-Enter          interact / advance dialogue
-Esc / Q        quit or cancel the active dialogue
-```
-
-## Requirements
-
-- Ruby 3.2+
-- Kitty graphics protocol support for the active runtime path
+## Running
 
 Install dependencies:
 
@@ -165,35 +34,86 @@ Install dependencies:
 bundle install
 ```
 
-Run:
+Run Aogera:
 
 ```bash
 bundle exec ruby bin/aogera
 ```
 
-Run the tests:
+The raylib window is the active input target. If your window manager leaves focus on the launching terminal, click the Aogera window once.
+
+## Testing
+
+Aogera uses Minitest directly.
+
+Run the full test suite with:
 
 ```bash
-bundle exec ruby -Itest -e \
-  'Dir["test/*_test.rb"].sort.each { |file| require_relative file }'
+bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-## Current scope
+This is the preferred project test command.
 
-The current prototype intentionally does not yet define a final solution for:
+## Runtime structure
 
-- continuous movement or continuous collision geometry;
-- attack windup/active/recovery phases;
-- projectiles and richer spell systems;
-- inventory and equipment;
-- persistent per-level world changes;
-- save serialization;
-- a general Intent -> Rules -> Effects architecture;
-- a generic ECS `System` layer;
-- a permanent graphics backend.
+Aogera keeps simulation timing separate from rendering.
 
-The near-term direction is richer real-time combat timing while keeping the current runtime boundaries explicit and testable.
+```text
+raylib frame
+    |
+    +-- poll input
+    +-- FixedStep -> zero or more simulation ticks
+    +-- project world state
+    +-- draw Render::Scene
+```
 
-## Origins
+The simulation runs at a fixed **30 Hz**, while the raylib frontend targets **60 FPS**.
 
-Aogera was extracted from the experimental `v0.4-solo` branch of the Sunbird Ruby RPG-engine project after that branch diverged into a fixed-step, single-character action-RPG runtime. Aogera starts with fresh repository history and evolves independently from Sunbird.
+Input and rendering stay behind narrow boundaries:
+
+```text
+Host::Raylib -> Input -> Mode -> Simulation
+
+Level + World::View -> Render::Projector -> Render::Scene -> Render::Raylib2D
+```
+
+The 2D scene model is kept deliberately specific to the current renderer rather than generalized in advance for future 3D requirements.
+
+## Content
+
+Authored Ruby content lives under `content/` and currently covers actor prototypes, levels, and dialogue.
+
+The 0.2 series did not introduce a new level or asset format.
+
+## Project layout
+
+Core runtime code lives under `lib/aogera/`.
+
+```text
+lib/aogera/
+├── app.rb
+├── fixed_step.rb
+├── realtime.rb
+├── session.rb
+├── simulation.rb
+├── world.rb
+├── host/
+├── input/
+├── level/
+├── mode/
+├── prototype/
+├── render/
+└── simulation/
+```
+
+`RaylibAPI` provides a small boundary around `raylib-bindings` so raylib/FFI details do not spread through the engine.
+
+## Direction
+
+The next major technical direction is **true 3D with raylib**.
+
+Aogera is not intended to compete with large general-purpose engines. The goal is a compact, understandable engine that can combine classic level-design ideas with modern rendering where useful.
+
+TrenchBroom and Quake 1 BSP are being considered as the first practical 3D level-authoring and compiled-map path. BSP support is not implemented yet.
+
+Future work may include 3D rendering, BSP loading, richer assets and materials, and eventually a native Aogera level format if the project outgrows the imported formats.

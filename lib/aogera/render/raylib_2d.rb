@@ -38,8 +38,8 @@ module Aogera
         @api.clear(BACKGROUND)
 
         origin_x, origin_y = map_origin(scene)
-        each_item(scene, :tiles) { |tile| draw_tile(tile, origin_x, origin_y) }
-        each_item(scene, :entities) { |entity| draw_entity(entity, origin_x, origin_y) }
+        scene.tiles.each { |tile| draw_tile(tile, origin_x, origin_y) }
+        scene.entities.each { |entity| draw_entity(entity, origin_x, origin_y) }
         draw_status(status)
       ensure
         @api.end_drawing
@@ -49,7 +49,8 @@ module Aogera
 
       def draw_tile(tile, origin_x, origin_y)
         x, y = screen_position(tile, origin_x, origin_y)
-        color = TERRAIN.fetch(render_key(tile), fallback_terrain_color(render_key(tile)))
+        key = render_key(tile)
+        color = TERRAIN.fetch(key, fallback_terrain_color(key))
 
         @api.draw_rectangle(
           x: x,
@@ -122,8 +123,8 @@ module Aogera
       end
 
       def map_origin(scene)
-        width = scene_dimension(scene, :width) * @cell_size
-        height = scene_dimension(scene, :height) * @cell_size
+        width = scene.width * @cell_size
+        height = scene.height * @cell_size
         usable_height = @api.screen_height - STATUS_HEIGHT
 
         [
@@ -132,47 +133,19 @@ module Aogera
         ]
       end
 
-      def scene_dimension(scene, name)
-        return scene.public_send(name).to_i if scene.respond_to?(name)
-
-        collection = each_item_array(scene, :tiles)
-        coordinate = name == :width ? :x : :y
-        maximum = collection.filter_map do |item|
-          item.public_send(coordinate) if item.respond_to?(coordinate)
-        end.max
-        maximum ? maximum + 1 : 0
-      end
-
-      def each_item(scene, name, &block)
-        each_item_array(scene, name).each(&block)
-      end
-
-      def each_item_array(scene, name)
-        return [] unless scene.respond_to?(name)
-
-        Array(scene.public_send(name)).flatten.compact
-      end
-
       def screen_position(item, origin_x, origin_y)
         [
-          origin_x + (item.x.to_i * @cell_size),
-          origin_y + (item.y.to_i * @cell_size)
+          origin_x + (item.x * @cell_size),
+          origin_y + (item.y * @cell_size)
         ]
       end
 
       def render_key(item)
-        item.respond_to?(:render_key) ? item.render_key.to_sym : :unknown
+        item.render_key.to_sym
       end
 
       def glyph_for(item)
-        value = if item.respond_to?(:glyph)
-                  item.glyph
-                elsif item.respond_to?(:fallback_glyph)
-                  item.fallback_glyph
-                elsif item.respond_to?(:fallback)
-                  item.fallback
-                end
-
+        value = item.fallback_glyph
         value = render_key(item).to_s[0] if value.nil? || value.to_s.empty?
         value.to_s[0]
       end
