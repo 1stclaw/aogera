@@ -6,7 +6,7 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.3.2**
+**Version: 0.3.0**
 
 Aogera now has continuous first-person movement on the ground plane. The controlled character owns a runtime `GroundPosition(x, z)` in Aogera world space, while mouse yaw/pitch remains in `FirstPersonView`. raylib `Camera3D` is derived from those Aogera-owned values rather than acting as canonical gameplay state.
 

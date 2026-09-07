@@ -1,8 +1,8 @@
-# Aogera 3D Migration: v0.2.3 to v0.3.2
+# Aogera 3D Migration: v0.2.3 to v0.3.0
 
-This document summarizes the **current architectural changes** between the final 2D baseline, Aogera v0.2.3, and the present v0.3.2 runtime.
+This document summarizes the **current architectural changes** between the final 2D baseline, Aogera v0.2.3, and the present v0.3.0 runtime.
 
-It is intentionally a state comparison rather than a chronological changelog. Superseded intermediate solutions are omitted. Only systems and boundaries that still exist in v0.3.2 are described here.
+It is intentionally a state comparison rather than a chronological changelog. Superseded intermediate solutions are omitted. Only systems and boundaries that still exist in v0.3.0 are described here.
 
 ## Overview
 
@@ -20,7 +20,7 @@ Render::Raylib2D
 raylib
 ```
 
-Aogera v0.3.2 is now a true 3D first-person runtime with a continuous controlled-player coordinate on the ground plane:
+Aogera v0.3.0 is now a true 3D first-person runtime with a continuous controlled-player coordinate on the ground plane:
 
 ```text
 keyboard -> Host::Raylib -> Input::Action -> fixed-step gameplay
@@ -374,7 +374,7 @@ Q / Esc      quit
 
 ## 15. New active files introduced by the 3D migration
 
-The current 0.3.2 tree adds these principal runtime files relative to v0.2.3:
+The current 0.3.0 tree adds these principal runtime files relative to v0.2.3:
 
 ```text
 lib/aogera/first_person_view.rb
@@ -397,7 +397,7 @@ Existing frontend, input, simulation, collision, combat, dialogue, and controlle
 
 ## 16. Current test baseline
 
-The reconstructed v0.3.2 tree used for this migration work passes:
+The reconstructed v0.3.0 tree used for this migration work passes:
 
 ```text
 121 runs, 325 assertions, 0 failures, 0 errors, 0 skips
@@ -417,7 +417,7 @@ bundle exec ruby bin/aogera
 
 ## 17. Systems intentionally not present
 
-The current 0.3.2 architecture does **not** contain:
+The current 0.3.0 architecture does **not** contain:
 
 - BSP loading or BSP collision;
 - a custom native level format;
@@ -440,7 +440,7 @@ These omissions are deliberate. The current runtime establishes only the 3D conc
 
 ## 18. Current migration boundary
 
-The current v0.3.2 state can be summarized as:
+The current v0.3.0 state can be summarized as:
 
 ```text
 Aogera v0.2.3
@@ -454,7 +454,7 @@ Aogera v0.2.3
     |  minimal continuous ground collision established
     |  old grid retained only where current gameplay still needs it
     v
-Aogera v0.3.2
+Aogera v0.3.0
     |
     |  continuous first-person player + temporary grid world bridge
     |  grid NPC/pathfinding/combat/interaction still active

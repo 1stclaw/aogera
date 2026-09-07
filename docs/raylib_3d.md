@@ -1,6 +1,6 @@
-# Aogera 0.3.2: continuous first-person ground movement
+# Aogera 0.3.0: continuous first-person ground movement
 
-Aogera 0.3.2 replaces the temporary player grid-stepping bridge with continuous X/Z movement while keeping the existing grid systems alive for NPC gameplay.
+Aogera 0.3.0 replaces the temporary player grid-stepping bridge with continuous X/Z movement while keeping the existing grid systems alive for NPC gameplay.
 
 ## Active path
 
@@ -111,7 +111,7 @@ Player `Facing` is no longer updated by continuous translation. The first-person
 
 ## Still deferred
 
-0.3.2 does **not** introduce:
+0.3.0 does **not** introduce:
 
 - vertical player motion or jumping;
 - velocity/acceleration;

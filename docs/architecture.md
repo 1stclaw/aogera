@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.2 runtime and its present boundaries.
+This document describes the current Aogera 0.3.0 runtime and its present boundaries.
 
 ## Design goals
 
@@ -186,6 +186,6 @@ content/dialogue/
 
 ## Near-term boundary
 
-Aogera 0.3.2 now has a real continuous player coordinate, view-relative ground movement and a minimal collision boundary. NPC navigation and combat targeting remain intentionally grid-based.
+Aogera 0.3.0 now has a real continuous player coordinate, view-relative ground movement and a minimal collision boundary. NPC navigation and combat targeting remain intentionally grid-based.
 
 The temporary cell collision resolver should not grow into a general physics framework before BSP. The next BSP29 experiment can use the continuous player coordinate to determine what world geometry, collision representation and map-space conversion Aogera actually needs.
