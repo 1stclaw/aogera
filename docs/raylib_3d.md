@@ -1,8 +1,8 @@
-# Aogera 0.3.0: unified continuous 3D runtime positions
+# Aogera 0.3.1 Raylib 3D Frontend
 
-Aogera's active 3D frontend now consumes the same canonical runtime position used by simulation and collision.
+Aogera's active 3D frontend consumes the same canonical runtime position used by simulation and collision.
 
-## Active path
+## Active frame path
 
 ```text
 raylib frame
@@ -36,11 +36,11 @@ raylib frame
           raylib
 ```
 
-Mouse look remains frontend/render-frame state. Translation remains canonical simulation state and changes only through the fixed-step command/executor boundary.
+Mouse look is render-frame control state. Translation is canonical simulation state and changes only through the fixed-step command/executor boundary.
 
-## Position
+## Canonical position
 
-Every runtime spatial entity uses:
+Every current spatial runtime entity uses:
 
 ```text
 Component::Position(x, y, z)
@@ -60,11 +60,33 @@ Current grid-authored actors begin at cell centers:
 cell (x, y) -> Position(x + 0.5, 0.0, y + 0.5)
 ```
 
-The renderer draws entities directly from these coordinates. The first-person camera uses the controlled entity's `Position`, adding `FirstPersonView#eye_height` to Y.
+The renderer draws entities directly from these coordinates. There is no renderer-owned entity position and no player-only spatial component.
 
-There is no separate renderer position and no player-only ground-position component.
+## FirstPersonView and Camera3D
 
-## GroundMove
+`FirstPersonView` owns logical:
+
+- yaw;
+- pitch;
+- eye height;
+- field of view;
+- mouse sensitivity.
+
+It is plain Aogera state, not a raylib FFI object.
+
+`Render::Raylib3D` combines the controlled entity's `Position` with `FirstPersonView` to derive the camera eye and target. `RaylibAPI` performs conversion into raylib `Camera3D`/`Vector3` structures near the native boundary.
+
+The controlled player is omitted from the ordinary entity drawing pass because the current presentation is first person.
+
+## Input cadence
+
+Keyboard actions follow the gameplay/fixed-step path. Mouse deltas are applied to `FirstPersonView` once per rendered frame, including frames in which zero simulation ticks are due.
+
+This keeps looking smooth at frontend cadence without making rendering FPS define gameplay speed.
+
+`Host::Raylib` captures the cursor once after opening/focusing the window and releases it during shutdown.
+
+## Ground movement
 
 All current actor locomotion enters simulation as:
 
@@ -72,45 +94,63 @@ All current actor locomotion enters simulation as:
 Simulation::Commands::GroundMove(entity_id, dx, dz)
 ```
 
-Player movement is generated from exact view yaw every 30 Hz simulation tick while input is held. NPC behavior also emits `GroundMove`; its route selection currently runs at a lower decision cadence.
+Player movement is generated from exact view yaw every 30 Hz simulation tick while movement input is held. NPC behavior also emits `GroundMove`; its path/behavior decisions currently occur at a lower cadence.
 
-Both are resolved by `Simulation::GroundMovement` and the same continuous collision path.
+Both are resolved by the same `Simulation::GroundMovement` and continuous X/Z collision path.
 
-## Ground collision
+## Ground collision visible through the frontend
 
-Actors can carry `Component::GroundBody(radius)`. `GroundSpace#sweep_circle` sweeps that body across the requested X/Z displacement against impassable authored terrain cells and active blocking ground bodies, returning the earliest `GroundTrace`.
+Actors can carry `GroundBody(radius)`. `GroundSpace#sweep_circle` sweeps that body across requested X/Z displacement against impassable authored terrain cells and active blocking ground bodies.
 
-`GroundMovement` moves to exact contact, accumulates distinct contact normals, and constrains remaining displacement against the active contact set. This supports wall sliding and stable wall/actor compound contacts without X-first/Z-second resolution or anti-tunneling substeps.
+`GroundMovement` moves to exact contact, accumulates distinct contact normals, and constrains remaining displacement against the full active contact set. This supports wall sliding and stable compound wall/actor contacts without axis-separated movement or anti-tunneling substeps.
 
-This is not a generic physics system. Vertical actor collision, gravity, velocities, forces and arbitrary 3D shapes remain deferred.
+Vertical actor collision, gravity, jumping, and arbitrary 3D collision shapes are not part of the current frontend/runtime contract.
 
-## Navigation is separate from position
+## Current world drawing
 
-The current `Simulation::Pathfinder` still uses the authored terrain grid for BFS. It derives temporary navigation cells from canonical positions:
+`Render::Raylib3D` still uses the authored grid directly for temporary static-world presentation:
+
+```text
+passable tile -> floor primitive
+blocked tile  -> wall primitive
+```
+
+Dynamic renderable entities are drawn at canonical `Position` values.
+
+This is intentionally a simple bridge. There is no `Scene3D`, `Projector3D`, model/material framework, or generic transform hierarchy.
+
+## Navigation is separate
+
+`Simulation::Pathfinder` still uses the authored grid as temporary BFS navigation data. It derives cells with:
 
 ```text
 cell_x = floor(position.x)
 cell_z = floor(position.z)
 ```
 
-Those cells are planning data only. NPC entities themselves remain continuously positioned and execute movement through the same sweep solver as the player.
+Those cells are not renderer state and are not stored as entity positions. NPC movement returns to continuous world-space displacement before entering `GroundMove`.
 
 ## Combat and interaction
 
-`GroundSpace` combines canonical continuous positions, `GroundBody` radii and action-specific authored profiles. `MeleeAttack(reach, arc_degrees)` and `Interactor(reach, arc_degrees)` remain gameplay data rather than collision constants.
+The renderer does not define combat geometry.
 
-Player and NPC melee validation use continuous body separation and segment obstruction traces. Interaction uses the same spatial foundation with separate eligibility semantics.
+`MeleeAttack(reach, arc_degrees)` and `Interactor(reach, arc_degrees)` remain authored gameplay data. Player and NPC melee validation use continuous body separation and segment obstruction traces; interaction uses the same spatial foundation with separate eligibility semantics.
+
+## Raylib boundary
+
+Raylib-specific FFI structures remain near `RaylibAPI` and the frontend. Core simulation and world components use Ruby data rather than raylib types.
+
+This preserves the useful platform boundary established before the 3D renderer and keeps future BSP/static-world work independent from raylib's native structures.
 
 ## Still deferred
 
-The current runtime does **not** introduce:
+Aogera 0.3.1 does not introduce:
 
-- vertical actor movement, gravity or jumping;
-- generic physics or transforms;
-- BSP loading/collision;
-- BSP/navigation integration;
-- projectile simulation;
-- models/textures/materials;
-- a general asset manager.
+- BSP loading/rendering/collision;
+- vertical actor physics;
+- projectile or hitscan rendering/simulation;
+- model or texture asset pipelines;
+- a general material framework;
+- generic scene/transform/physics abstractions.
 
-The important normalization is already complete: BSP will not need to reconcile a player-only continuous coordinate with grid-positioned NPCs before replacing static world collision.
+The important frontend state is already normalized: rendering, camera placement, movement, collision, and NPC/player positions consume the same continuous runtime world coordinates.
