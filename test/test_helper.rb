@@ -15,7 +15,11 @@ module AogeraTestPaths
 end
 
 module AogeraTestSupport
-  def prototype_catalog(goblin_behavior: :chase)
+  def prototype_catalog(
+    goblin_behavior: :chase,
+    melee_reach: 0.65,
+    interaction_reach: 0.65
+  )
     player = Aogera::Prototype.new(
       name: :player,
       components: {
@@ -24,11 +28,11 @@ module AogeraTestSupport
         ),
         ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
         melee_attack: Aogera::Component::MeleeAttack.new(
-          reach: 0.65,
+          reach: melee_reach,
           arc_degrees: 110.0
         ),
         interactor: Aogera::Component::Interactor.new(
-          reach: 0.65,
+          reach: interaction_reach,
           arc_degrees: 110.0
         )
       }.freeze

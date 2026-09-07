@@ -134,10 +134,48 @@ module Aogera
           arc_degrees: profile.arc_degrees
         )
 
-        best = hits.max_by do |hit|
+        visible_hits = hits.select do |hit|
+          unobstructed_ground_target?(hit.entity_id)
+        end
+
+        best = visible_hits.max_by do |hit|
           [hit.alignment, -hit.separation]
         end
         best&.entity_id
+      end
+
+      def unobstructed_ground_target?(target_id)
+        source = @ground_space.position(
+          world: world_view,
+          entity_id: controlled_entity_id
+        )
+        target = @ground_space.position(
+          world: world_view,
+          entity_id: target_id
+        )
+        return false unless source && target
+
+        trace = @ground_space.trace_segment(
+          level: level,
+          world: world_view,
+          start_x: source.x,
+          start_z: source.z,
+          end_x: target.x,
+          end_z: target.z,
+          ignore_entity_id: controlled_entity_id,
+          entity_filter: action_obstacle_filter(target_id)
+        )
+
+        trace.clear? || trace.entity_id == target_id
+      end
+
+      def action_obstacle_filter(target_id)
+        lambda do |entity_id|
+          next true if entity_id == target_id
+
+          collision = world_view.component(entity_id, :collision)
+          collision&.blocks_movement || false
+        end
       end
 
       def player_facing

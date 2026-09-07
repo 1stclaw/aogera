@@ -138,6 +138,48 @@ class AttackTest < Minitest::Test
     assert_equal 9, world.component(target, :health).current
   end
 
+  def test_continuous_attack_is_rejected_when_static_wall_blocks_path
+    tiles = {
+      " " => Aogera::Level::Tile.new(render_key: :ground, glyph: " ", passable: true),
+      "|" => Aogera::Level::Tile.new(render_key: :wall, glyph: "|", passable: false)
+    }.freeze
+    level = Aogera::Level.new(
+      name: :test,
+      terrain: Aogera::Level::Terrain.new(
+        rows: ["     ", "  |  ", "     "],
+        tiles: tiles
+      ),
+      spawns: [],
+      relations: []
+    )
+    world = Aogera::World.new
+    attacker = world.spawn(
+      ground_position: Aogera::Component::GroundPosition.new(x: 1.5, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      melee_attack: Aogera::Component::MeleeAttack.new(
+        reach: 2.0,
+        arc_degrees: 110.0
+      )
+    )
+    target = world.spawn(
+      ground_position: Aogera::Component::GroundPosition.new(x: 3.5, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      health: Aogera::Component::Health.new(current: 10, max: 10)
+    )
+
+    execute(
+      world,
+      Aogera::Simulation::Commands::Attack.new(
+        attacker_id: attacker,
+        target_id: target,
+        damage: 1
+      ),
+      level: level
+    )
+
+    assert_equal 10, world.component(target, :health).current
+  end
+
   def test_attack_is_rejected_when_target_is_not_adjacent
     world = Aogera::World.new
     attacker = world.spawn(
@@ -160,10 +202,10 @@ class AttackTest < Minitest::Test
 
   private
 
-  def execute(world, command)
+  def execute(world, command, level: @level)
     @executor.execute(
       world: world,
-      level: @level,
+      level: level,
       bindings: @bindings,
       commands: Aogera::Simulation::Commands::Buffer.new([command])
     )

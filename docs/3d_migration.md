@@ -238,34 +238,34 @@ Combined forward/strafe input is normalized, so diagonal movement does not incre
 
 Translation remains simulation-owned and therefore changes only through the fixed-step command/executor boundary, while yaw/pitch can update at render cadence.
 
-## 8. Minimal continuous ground collision
+## 8. Continuous ground trace and sweep collision
 
-`Simulation::GroundMovement` resolves `GroundMove` commands against the current authored grid.
-
-Ground actors can carry an authored `Component::GroundBody(radius)`. The controlled player's current prototype uses:
+`GroundSpace` is now the collision-query boundary for current X/Z ground geometry. `GroundTrace` is an immutable result that records:
 
 ```text
-radius       = 0.22 world units
-max substep  = 0.22 world units
+fraction
+end_x / end_z
+normal_x / normal_z
+entity_id
+world_hit
+start_blocked
 ```
 
-Collision treats these as solid:
-
-- impassable authored terrain cells, tested as cell geometry;
-- entities whose `Collision#blocks_movement` is true and whose authored `GroundBody` supplies a circle radius.
-
-Resolution is axis-separated:
+Two query forms are active:
 
 ```text
-resolve X
-then resolve Z
+trace_segment(...)
+    zero-radius obstruction query
+
+sweep_circle(...)
+    continuous circular-body movement query
 ```
 
-This permits wall sliding when one axis is blocked and the other remains clear.
+The current static backend still treats impassable authored terrain as solid grid cells. Dynamic blocking entities use their authored `GroundBody(radius)` and current ground position (or projected grid-cell center). Static and dynamic candidates are combined and the earliest relevant hit is returned.
 
-Large displacement commands are internally subdivided according to the moving body's radius so they cannot simply tunnel through a one-cell obstacle.
+`Simulation::GroundMovement` no longer resolves X and Z separately and no longer subdivides displacement into anti-tunneling substeps. It sweeps the moving actor across the entire requested displacement, moves to the exact returned contact position, accumulates distinct contact normals for that movement command, constrains the remaining displacement against the active contact set, and sweeps the resulting slide motion again. Collision resolution is bounded to a small fixed number of contacts.
 
-This is deliberately a narrow ground-movement collision resolver, **not** a general physics system. It should not accumulate speculative rigid-body or arbitrary geometry responsibilities before BSP establishes the next collision requirements.
+This preserves wall sliding without axis-order bias and establishes the same result shape that a later BSP collision backend can provide. It remains deliberately **ground collision**, not a general rigid-body or arbitrary-shape physics system.
 
 ## 9. Integer grid position remains as an explicit compatibility bridge
 
@@ -322,7 +322,7 @@ The introduction of continuous player motion therefore did not force NPC navigat
 
 ## 11. Ground-space collision, melee and interaction share spatial facts
 
-`GroundSpace` is a small X/Z geometry service shared by the systems that need continuous ground relationships. It resolves `GroundPosition` directly, projects grid-only `Position` to cell center, reads `GroundBody` radii, computes center distance/separation, tests circle overlap, and returns entities inside a parameterized forward arc.
+`GroundSpace` is a small X/Z geometry service shared by the systems that need continuous ground relationships. It resolves `GroundPosition` directly, projects grid-only `Position` to cell center, reads `GroundBody` radii, computes center distance/separation, tests circle overlap, returns entities inside a parameterized forward arc, and supplies the segment/sweep traces described above.
 
 The service does not decide what an attack or interaction means. Player prototypes provide action geometry explicitly:
 
@@ -331,11 +331,11 @@ MeleeAttack(reach, arc_degrees)
 Interactor(reach, arc_degrees)
 ```
 
-`Mode::Play` supplies the current `FirstPersonView` direction and filters spatial hits by gameplay role. Melee currently chooses a living local-health target; interaction chooses an `Interactable`. The current single-target preference favors the target closest to the view center, then the nearer target on a tie. Reach and arc are authored data rather than constants inside targeting code.
+`Mode::Play` supplies the current `FirstPersonView` direction and filters spatial hits by gameplay role. Melee chooses a living local-health target; interaction chooses an `Interactable`. The current single-target preference favors the target closest to the view center, then the nearer target on a tie. Reach and arc are authored data rather than constants inside targeting code. Candidates must also have an unobstructed ground segment: static terrain and blocking ground bodies can prevent melee or interaction from reaching a target.
 
-`Simulation::Executor` independently validates attacks from continuous attackers against their authored melee reach using ground-body separation. Grid-only NPC attackers retain the established adjacency validation until NPC locomotion is migrated away from the grid.
+`Simulation::Executor` independently validates attacks from continuous attackers against authored melee reach and the same obstruction trace, so target selection is not the only protection against attacks through geometry. Grid-only NPC attackers retain established adjacency validation until NPC locomotion is migrated away from the grid.
 
-This removes the old four-cardinal player attack/interaction artifact without introducing raycasts, generic colliders, or a physics system.
+This removes the old four-cardinal player attack/interaction artifact and adds shared obstruction queries without introducing generic colliders or a physics system.
 
 ## 12. Existing runtime boundaries preserved from v0.2.3
 
@@ -431,7 +431,7 @@ The current 0.3.0 architecture does **not** contain:
 - generic rigid-body physics;
 - a generic `Transform` or `Spatial` abstraction;
 - continuous NPC navigation;
-- raycast or full 3D volume targeting;
+- full 3D ray/capsule/volume tracing;
 - projectile simulation;
 - ranged-attack delivery systems;
 - 3D models or skeletal animation;

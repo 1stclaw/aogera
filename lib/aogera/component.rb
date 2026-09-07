@@ -3,6 +3,7 @@
 module Aogera
   module Component
     PrototypeRef = Data.define(:name)
+    Retired = Data.define()
     Position = Data.define(:x, :y)
     GroundPosition = Data.define(:x, :z)
     GroundBody = Data.define(:radius)

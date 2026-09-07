@@ -45,6 +45,11 @@ module Aogera
         @active_entities[entity_id] == true
     end
 
+    def retired?(entity_id)
+      validate_entity!(entity_id)
+      !@component_tables[:retired]&.[](entity_id).nil?
+    end
+
     def entity_ids
       return @entity_ids unless @entity_ids_dirty
 

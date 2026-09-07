@@ -37,7 +37,9 @@ FirstPersonView
 
 The controlled character's continuous physical location now lives in `World` as `Component::GroundPosition(x, z)`, because player translation affects collision and gameplay and therefore belongs on the fixed-step simulation side of the boundary.
 
-`World::View` is a cached read-only facade over `World`; callers receive the same view object rather than allocating wrappers repeatedly. `World#entity_ids` similarly caches its immutable active-ID snapshot and invalidates it only on spawn/despawn.
+`World::View` is a cached read-only facade over `World`; callers receive the same view object rather than allocating wrappers repeatedly. `World#entity_ids` similarly caches its immutable existing-entity snapshot and invalidates it only on spawn/despawn.
+
+Runtime lifetime now distinguishes existence from gameplay activity. `Component::Retired` marks an entity that still exists in `World` but no longer participates as an active actor. Retired entities remain in `entity_ids` and may retain descriptive state such as `Position`, `GroundPosition`, `GroundBody`, health, or prototype identity; retirement does not imply despawn or deletion of spatial history. The executor rejects action/movement commands from retired entities, while despawn remains the operation that removes runtime identity entirely.
 
 ## Position models during the migration
 
@@ -57,7 +59,7 @@ A persistent controlled character is spawned at the center of its authored entry
 
 This coexistence is intentional. It lets the player use a real continuous coordinate without forcing NPC pathfinding, authored spawns, or terrain representation through a speculative all-at-once rewrite.
 
-`GroundSpace` is the current shared ground-plane geometry boundary. It resolves an entity to continuous X/Z coordinates (using `GroundPosition` when present and the center of `Position` otherwise), reads authored `GroundBody` radii, computes separation/overlap, and performs parameterized arc queries. It does not own combat, interaction, pathfinding, or physics policy.
+`GroundSpace` is the current shared ground-plane geometry boundary. It resolves an entity to continuous X/Z coordinates (using `GroundPosition` when present and the center of `Position` otherwise), reads authored `GroundBody` radii, computes separation/overlap, performs parameterized arc queries, and provides structured segment/swept-circle traces. Static terrain cells and active dynamic bodies participate in one earliest-hit result containing the reached fraction, end position, contact normal, dynamic entity/static-world identity, and start-blocked state. Automatic dynamic scans skip retired entities even when retained `GroundBody` data remains; direct position/distance queries can still inspect retained spatial state. It does not own combat, interaction, pathfinding, or physics policy.
 
 There is still no generic `Transform`, `Spatial`, `Position3D`, or physics-body abstraction.
 
@@ -86,9 +88,9 @@ GroundMove(entity_id, dx, dz)
     continuous ground-plane movement used by the controlled player
 ```
 
-`GroundMovement` resolves the latter against the current authored grid and `GroundSpace`. The moving entity's `GroundBody(radius)` is authored data. Impassable terrain remains cell-shaped, while blocking actors with `GroundBody` use circle-vs-circle overlap. Axis-separated resolution permits wall sliding, and large commands are subdivided according to the moving body's radius to avoid tunneling through terrain.
+`GroundMovement` resolves the latter through `GroundSpace#sweep_circle`. The moving entity's `GroundBody(radius)` is authored data. Impassable terrain remains cell-shaped, while blocking actors with `GroundBody` remain circles. The sweep finds the earliest collision across the complete requested displacement, so large commands cannot tunnel through a one-cell obstacle. `GroundMovement` accumulates distinct contact normals across the movement command and constrains the remaining displacement against the full active contact set. This prevents an actor contact from sliding the player through a neighboring wall at a compound contact. Movement is still bounded to a small fixed number of contacts.
 
-This is ground collision logic, not a general physics engine.
+Trace endpoints are exact contact positions rather than epsilon-shifted positions. After a contact-resolved move, `GroundMovement` defensively verifies that the returned body does not begin inside active solid geometry; an invalid numerical result falls back to the command's known-valid start rather than being committed. This is ground collision logic, not a general physics engine. Shape intersection belongs to `GroundSpace`; movement owns only movement/slide policy.
 
 ## Fixed-step scheduling
 
@@ -188,6 +190,6 @@ content/dialogue/
 
 ## Near-term boundary
 
-Aogera 0.3.0 now has a real continuous player coordinate, view-relative ground movement, authored ground-body extents, and shared X/Z queries used by movement, melee and interaction. Player action targeting is continuous; NPC navigation and autonomous attack decisions remain intentionally grid-based.
+Aogera now has a real continuous player coordinate, view-relative ground movement, authored ground-body extents, and a structured ground trace/sweep contract shared by movement, melee and interaction. Player action targeting remains continuous and now rejects obstructed targets; NPC navigation and autonomous attack decisions remain intentionally grid-based.
 
-The terrain-cell collision representation should not grow into a general physics framework before BSP. The next BSP29 experiment can use the continuous player coordinate and `GroundSpace` boundary to determine what world geometry, collision representation and map-space conversion Aogera actually needs.
+The terrain-cell collision representation should not grow into a general physics framework before BSP. The next BSP29 experiment can replace the static ground-trace backend with BSP collision data while preserving the movement and action-query contracts above it.

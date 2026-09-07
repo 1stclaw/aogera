@@ -33,6 +33,9 @@ class DefeatTest < Minitest::Test
     assert_nil world.component(entity_id, :behavior)
     assert_nil world.component(entity_id, :collision)
     assert_nil world.component(entity_id, :combatant)
+    assert world.retired?(entity_id)
+    assert_instance_of Aogera::Component::Retired,
+      world.component(entity_id, :retired)
     assert_equal 0, world.component(entity_id, :health).current
     assert world.component(entity_id, :position)
   end

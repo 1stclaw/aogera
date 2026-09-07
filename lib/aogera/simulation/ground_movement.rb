@@ -3,6 +3,11 @@
 module Aogera
   class Simulation
     class GroundMovement
+      MAX_CONTACTS = 4
+      MOTION_EPSILON = 1e-9
+      NORMAL_EPSILON = 1e-7
+      FRACTION_EPSILON = 1e-9
+
       def initialize(ground_space: GroundSpace.new)
         @ground_space = ground_space
       end
@@ -14,127 +19,158 @@ module Aogera
             "ground-moving entity has no positive GroundBody radius"
         end
 
-        dx = Float(dx)
-        dz = Float(dz)
-        steps = [
-          (dx.abs / radius).ceil,
-          (dz.abs / radius).ceil,
-          1
-        ].max
-        step_x = dx / steps
-        step_z = dz / steps
-        x = position.x
-        z = position.z
+        start_x = Float(position.x)
+        start_z = Float(position.z)
+        x = start_x
+        z = start_z
+        remaining_x = Float(dx)
+        remaining_z = Float(dz)
+        contact_normals = []
+        blocker = movement_blocker(world)
 
-        steps.times do
-          x, z = resolve_step(
+        MAX_CONTACTS.times do
+          break if motion_finished?(remaining_x, remaining_z)
+
+          trace = @ground_space.sweep_circle(
             level: level,
             world: world,
-            entity_id: entity_id,
+            start_x: x,
+            start_z: z,
+            end_x: x + remaining_x,
+            end_z: z + remaining_z,
             radius: radius,
-            x: x,
-            z: z,
-            dx: step_x,
-            dz: step_z
+            ignore_entity_id: entity_id,
+            entity_filter: blocker
           )
+
+          # A movement command should begin from valid state. If a later
+          # internal sweep reports otherwise, do not commit a penetrated
+          # position produced by this command.
+          return Component::GroundPosition.new(x: start_x, z: start_z) if trace.start_blocked
+
+          x = trace.end_x
+          z = trace.end_z
+          break unless trace.hit?
+
+          remaining_fraction = 1.0 - trace.fraction
+          remaining_x *= remaining_fraction
+          remaining_z *= remaining_fraction
+
+          duplicate_contact = add_contact_normal(
+            contact_normals,
+            trace.normal_x,
+            trace.normal_z
+          )
+
+          remaining_x, remaining_z = constrained_motion(
+            remaining_x,
+            remaining_z,
+            contact_normals
+          )
+
+          # Exact-contact traces should not repeatedly report the same
+          # surface when the remaining motion is tangent to or away from it.
+          # If floating-point noise does so anyway, stopping this command is
+          # safer than exhausting contacts while nudging into another surface.
+          if duplicate_contact && trace.fraction <= FRACTION_EPSILON
+            remaining_x = 0.0
+            remaining_z = 0.0
+          end
         end
 
-        Component::GroundPosition.new(x: x, z: z)
+        resolved = Component::GroundPosition.new(x: x, z: z)
+        return resolved if contact_normals.empty?
+        return resolved unless blocked_position?(
+          level: level,
+          world: world,
+          entity_id: entity_id,
+          position: resolved,
+          radius: radius,
+          entity_filter: blocker
+        )
+
+        Component::GroundPosition.new(x: start_x, z: start_z)
       end
 
       private
 
-      def resolve_step(level:, world:, entity_id:, radius:, x:, z:, dx:, dz:)
-        candidate_x = x + dx
-        if clear?(
-          level: level,
-          world: world,
-          entity_id: entity_id,
-          radius: radius,
-          x: candidate_x,
-          z: z
-        )
-          x = candidate_x
-        end
-
-        candidate_z = z + dz
-        if clear?(
-          level: level,
-          world: world,
-          entity_id: entity_id,
-          radius: radius,
-          x: x,
-          z: candidate_z
-        )
-          z = candidate_z
-        end
-
-        [x, z]
+      def motion_finished?(x, z)
+        Math.hypot(x, z) <= MOTION_EPSILON
       end
 
-      def clear?(level:, world:, entity_id:, radius:, x:, z:)
-        clear_terrain?(level: level, x: x, z: z, radius: radius) &&
-          clear_entities?(
-            world: world,
-            entity_id: entity_id,
-            x: x,
-            z: z,
-            radius: radius
+      def add_contact_normal(normals, x, z)
+        normal = [Float(x), Float(z)]
+        duplicate = normals.any? do |existing|
+          ((existing[0] * normal[0]) + (existing[1] * normal[1])) >=
+            (1.0 - NORMAL_EPSILON)
+        end
+        normals << normal unless duplicate
+        duplicate
+      end
+
+      def constrained_motion(x, z, normals)
+        return [x, z] if allowed_by_all_contacts?(x, z, normals)
+
+        normals.each do |normal_x, normal_z|
+          candidate_x, candidate_z = clip_into_surface(
+            x,
+            z,
+            normal_x,
+            normal_z
           )
-      end
-
-      def clear_terrain?(level:, x:, z:, radius:)
-        min_x = (x - radius).floor
-        max_x = (x + radius).floor
-        min_y = (z - radius).floor
-        max_y = (z + radius).floor
-
-        (min_y..max_y).each do |grid_y|
-          (min_x..max_x).each do |grid_x|
-            next unless circle_overlaps_cell?(
-              x,
-              z,
-              radius,
-              grid_x,
-              grid_y
-            )
-            return false unless level.passable?(grid_x, grid_y)
+          if allowed_by_all_contacts?(candidate_x, candidate_z, normals)
+            return [candidate_x, candidate_z]
           end
         end
 
-        true
+        [0.0, 0.0]
       end
 
-      def clear_entities?(world:, entity_id:, x:, z:, radius:)
-        world.entity_ids.none? do |other_id|
-          next false if other_id == entity_id
+      def clip_into_surface(x, z, normal_x, normal_z)
+        into_surface = (x * normal_x) + (z * normal_z)
+        return [x, z] unless into_surface < 0.0
 
-          collision = world.component(other_id, :collision)
+        [
+          x - (normal_x * into_surface),
+          z - (normal_z * into_surface)
+        ]
+      end
+
+      def allowed_by_all_contacts?(x, z, normals)
+        normals.all? do |normal_x, normal_z|
+          ((x * normal_x) + (z * normal_z)) >= -MOTION_EPSILON
+        end
+      end
+
+      def blocked_position?(level:, world:, entity_id:, position:, radius:, entity_filter:)
+        trace = @ground_space.sweep_circle(
+          level: level,
+          world: world,
+          start_x: position.x,
+          start_z: position.z,
+          end_x: position.x,
+          end_z: position.z,
+          radius: radius,
+          ignore_entity_id: entity_id,
+          entity_filter: entity_filter
+        )
+
+        trace.start_blocked
+      end
+
+      def movement_blocker(world)
+        lambda do |entity_id|
+          collision = world.component(entity_id, :collision)
           next false unless collision&.blocks_movement
 
-          other_radius = @ground_space.radius(world: world, entity_id: other_id)
-          unless other_radius.positive?
+          radius = @ground_space.radius(world: world, entity_id: entity_id)
+          unless radius.positive?
             raise ArgumentError,
               "blocking ground entity has no positive GroundBody radius"
           end
 
-          @ground_space.overlaps_entity?(
-            world: world,
-            x: x,
-            z: z,
-            radius: radius,
-            other_id: other_id
-          )
+          true
         end
-      end
-
-      def circle_overlaps_cell?(x, z, radius, grid_x, grid_y)
-        nearest_x = [[x, grid_x.to_f].max, grid_x + 1.0].min
-        nearest_z = [[z, grid_y.to_f].max, grid_y + 1.0].min
-        delta_x = x - nearest_x
-        delta_z = z - nearest_z
-
-        (delta_x * delta_x) + (delta_z * delta_z) < (radius * radius)
       end
     end
   end

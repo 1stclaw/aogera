@@ -121,6 +121,49 @@ class PlayModeTest < Minitest::Test
     assert_instance_of Aogera::Mode::Dialogue, result.mode
   end
 
+  def test_interaction_cannot_reach_target_through_static_wall
+    tiles = {
+      " " => Aogera::Level::Tile.new(render_key: :ground, glyph: " ", passable: true),
+      "|" => Aogera::Level::Tile.new(render_key: :wall, glyph: "|", passable: false)
+    }.freeze
+    level = Aogera::Level.new(
+      name: :test,
+      terrain: Aogera::Level::Terrain.new(
+        rows: ["     ", "  |  ", "     "],
+        tiles: tiles
+      ),
+      spawns: [
+        Aogera::Level::Spawn.new(
+          key: :villager,
+          prototype: :villager,
+          x: 3,
+          y: 1
+        )
+      ],
+      entries: [default_entry(x: 1, y: 1, facing: :east)],
+      default_entry: :start,
+      relations: []
+    )
+    simulation = Aogera::Simulation.new(
+      level: level,
+      prototypes: prototype_catalog(interaction_reach: 2.0)
+    )
+    session = test_session
+    simulation.spawn_character(character_key: :hero, prototype: :player)
+    mode = Aogera::Mode::Play.new(
+      simulation: simulation,
+      session: session,
+      player_key: :hero,
+      dialogues: dialogue_catalog,
+      view: Aogera::FirstPersonView.for_direction(:east)
+    )
+
+    result = mode.advance(input: action_input(:interact))
+
+    assert_equal :advanced, result
+    assert_equal 1, mode.step_number
+  end
+
   def test_interact_without_interactable_target_does_not_pause_world
     result = @mode.advance(input: action_input(:interact))
 

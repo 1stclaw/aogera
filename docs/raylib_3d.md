@@ -82,11 +82,11 @@ The old integer `Simulation::Commands::Move(dx, dy)` remains active for NPC wand
 
 `Simulation::GroundMovement` is intentionally small and specific to ground-plane locomotion.
 
-Actors can carry `Component::GroundBody(radius)`. The moving actor is resolved as a circle on the X/Z plane. Impassable authored terrain remains cell-shaped, while blocking entities that also have a `GroundBody` collide circle-to-circle. X and Z are resolved independently, allowing the player to slide along a blocked axis rather than stopping all movement.
+Actors can carry `Component::GroundBody(radius)`. `GroundSpace#sweep_circle` continuously sweeps that circle across the complete requested X/Z displacement against impassable authored terrain cells and blocking ground bodies, returning the earliest `GroundTrace`. Large commands therefore cannot tunnel through a one-cell wall without relying on movement substeps.
 
-Large displacement commands are split into substeps based on the moving body's authored radius so a command cannot tunnel directly across a one-cell wall.
+`GroundMovement` moves to the exact trace contact position and accumulates distinct contact normals during the movement command. Remaining displacement must satisfy the full active contact set before another sweep, so compound contacts such as an actor beside a wall stop or slide without pushing the player through either surface. Resolution remains bounded to a small fixed number of contacts. Wall sliding is therefore geometric rather than X-first/Z-second.
 
-This is not a generic physics system. There are no velocities, forces, rigid bodies, collision layers, arbitrary shapes or vertical collision rules.
+This is not a generic physics system. There are no velocities, forces, rigid bodies, collision layers, arbitrary 3D shapes or vertical collision rules.
 
 ## Coarse grid synchronization
 
@@ -105,7 +105,7 @@ grid y = floor(ground z)
 
 Dynamic blockers no longer occupy their whole authored cell for continuous collision. `GroundBody` supplies their horizontal radius, while their grid `Position` supplies a temporary center until they gain continuous positions of their own.
 
-Player `Facing` is no longer updated by continuous translation. `FirstPersonView` owns actual look direction. `GroundSpace` combines that continuous heading with action-specific authored profiles: `MeleeAttack(reach, arc_degrees)` for melee and `Interactor(reach, arc_degrees)` for interaction. These queries are no longer cardinal or grid-adjacent.
+Player `Facing` is no longer updated by continuous translation. `FirstPersonView` owns actual look direction. `GroundSpace` combines that continuous heading with action-specific authored profiles: `MeleeAttack(reach, arc_degrees)` for melee and `Interactor(reach, arc_degrees)` for interaction. These queries are no longer cardinal or grid-adjacent. After reach/arc filtering, a zero-radius ground segment trace rejects targets hidden behind static terrain or another blocking ground body.
 
 ## Still deferred
 
@@ -115,10 +115,10 @@ Player `Facing` is no longer updated by continuous translation. `FirstPersonView
 - velocity/acceleration;
 - generic physics or transforms;
 - continuous NPC navigation;
-- raycast or full 3D volume targeting;
+- full 3D ray/capsule/volume tracing;
 - projectile simulation;
 - BSP loading/collision;
 - models/textures/materials;
 - a general asset manager.
 
-The purpose of this milestone is to give BSP work a real continuous Aogera player coordinate and movement boundary to integrate with, without pre-designing the eventual BSP collision representation.
+The current ground trace/sweep contract gives BSP work a stable collision-query boundary: a later BSP backend can replace static terrain-cell intersection while movement and action code keep consuming structured trace results.

@@ -26,7 +26,7 @@ module Aogera
           in Commands::GroundMove
             execute_ground_move(world, level, command)
           in Commands::Attack
-            execute_attack(world, command, bindings)
+            execute_attack(world, level, command, bindings)
           in Commands::Defeat
             execute_defeat(world, command)
           in Commands::Despawn
@@ -43,7 +43,7 @@ module Aogera
       private
 
       def execute_move(world, level, command)
-        return unless world.entity?(command.entity_id)
+        return unless active_entity?(world, command.entity_id)
 
         position = world.component(command.entity_id, :position)
         return unless position
@@ -68,7 +68,7 @@ module Aogera
       end
 
       def execute_ground_move(world, level, command)
-        return unless world.entity?(command.entity_id)
+        return unless active_entity?(world, command.entity_id)
 
         ground_position = world.component(command.entity_id, :ground_position)
         return unless ground_position
@@ -83,15 +83,26 @@ module Aogera
         )
 
         world.set_component(command.entity_id, :ground_position, resolved)
-        sync_grid_position(world, command.entity_id, resolved)
+        sync_grid_position(world, level, command.entity_id, resolved)
         nil
       end
 
-      def sync_grid_position(world, entity_id, ground_position)
+      def sync_grid_position(world, level, entity_id, ground_position)
         grid_x = ground_position.x.floor
         grid_y = ground_position.z.floor
         current = world.component(entity_id, :position)
         return if current && current.x == grid_x && current.y == grid_y
+
+        # GroundPosition is authoritative. Position is only the temporary
+        # grid bridge for NPC/pathfinding-era systems, so never synchronize
+        # it into a cell that the grid model considers occupied or impassable.
+        return unless @movement.traversable?(
+          level: level,
+          world: world,
+          x: grid_x,
+          y: grid_y,
+          except_id: entity_id
+        )
 
         world.set_component(
           entity_id,
@@ -117,8 +128,8 @@ module Aogera
         Direction.for_delta(dx, dy)
       end
 
-      def execute_attack(world, command, bindings)
-        return unless valid_attack?(world, command)
+      def execute_attack(world, level, command, bindings)
+        return unless valid_attack?(world, level, command)
 
         health = world.component(command.target_id, :health)
         if health
@@ -141,10 +152,10 @@ module Aogera
         )
       end
 
-      def valid_attack?(world, command)
+      def valid_attack?(world, level, command)
         return false unless command.damage.positive?
-        return false unless world.entity?(command.attacker_id)
-        return false unless world.entity?(command.target_id)
+        return false unless active_entity?(world, command.attacker_id)
+        return false unless active_entity?(world, command.target_id)
 
         attacker_health = world.component(command.attacker_id, :health)
         return false if attacker_health&.current&.zero?
@@ -158,13 +169,42 @@ module Aogera
             target_id: command.target_id
           )
           return false unless separation
+          return false if separation > Float(profile.reach)
 
-          return separation <= Float(profile.reach)
+          return unobstructed_attack?(
+            level: level,
+            world: world,
+            attacker_id: command.attacker_id,
+            target_id: command.target_id
+          )
         end
 
         grid_adjacent?(world, command.attacker_id, command.target_id)
       end
 
+      def unobstructed_attack?(level:, world:, attacker_id:, target_id:)
+        source = @ground_space.position(world: world, entity_id: attacker_id)
+        target = @ground_space.position(world: world, entity_id: target_id)
+        return false unless source && target
+
+        trace = @ground_space.trace_segment(
+          level: level,
+          world: world,
+          start_x: source.x,
+          start_z: source.z,
+          end_x: target.x,
+          end_z: target.z,
+          ignore_entity_id: attacker_id,
+          entity_filter: lambda do |entity_id|
+            next true if entity_id == target_id
+
+            collision = world.component(entity_id, :collision)
+            collision&.blocks_movement || false
+          end
+        )
+
+        trace.clear? || trace.entity_id == target_id
+      end
 
       def grid_adjacent?(world, source_id, target_id)
         source = world.component(source_id, :position)
@@ -176,6 +216,7 @@ module Aogera
 
       def execute_defeat(world, command)
         return unless world.entity?(command.entity_id)
+        return if world.retired?(command.entity_id)
 
         health = world.component(command.entity_id, :health)
         return unless health&.current&.zero?
@@ -185,9 +226,14 @@ module Aogera
       end
 
       def retire_entity(world, entity_id)
+        world.set_component(entity_id, :retired, Component::Retired.new)
         RETIRED_COMPONENTS.each do |name|
           world.remove_component(entity_id, name)
         end
+      end
+
+      def active_entity?(world, entity_id)
+        world.entity?(entity_id) && !world.retired?(entity_id)
       end
 
       def execute_despawn(world, command, bindings)

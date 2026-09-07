@@ -11,6 +11,10 @@ module Aogera
         @world.entity?(entity_id)
       end
 
+      def retired?(entity_id)
+        @world.retired?(entity_id)
+      end
+
       def entity_ids
         @world.entity_ids
       end

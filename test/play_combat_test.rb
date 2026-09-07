@@ -36,6 +36,90 @@ class PlayCombatTest < Minitest::Test
     assert_equal 4, simulation.world_view.component(goblin_id, :health).current
   end
 
+  def test_melee_cannot_reach_target_through_static_wall
+    tiles = {
+      " " => Aogera::Level::Tile.new(render_key: :ground, glyph: " ", passable: true),
+      "|" => Aogera::Level::Tile.new(render_key: :wall, glyph: "|", passable: false)
+    }.freeze
+    level = Aogera::Level.new(
+      name: :test,
+      terrain: Aogera::Level::Terrain.new(
+        rows: ["     ", "  |  ", "     "],
+        tiles: tiles
+      ),
+      spawns: [
+        Aogera::Level::Spawn.new(
+          key: :goblin,
+          prototype: :goblin,
+          x: 3,
+          y: 1
+        )
+      ],
+      entries: [default_entry(x: 1, y: 1, facing: :east)],
+      default_entry: :start,
+      relations: []
+    )
+    simulation = Aogera::Simulation.new(
+      level: level,
+      prototypes: prototype_catalog(melee_reach: 2.0)
+    )
+    session = test_session
+    simulation.spawn_character(character_key: :hero, prototype: :player)
+    goblin_id = simulation.entity_id_for_spawn(:goblin)
+    mode = Aogera::Mode::Play.new(
+      simulation: simulation,
+      session: session,
+      player_key: :hero,
+      dialogues: dialogue_catalog,
+      view: Aogera::FirstPersonView.for_direction(:east)
+    )
+
+    mode.advance(input: action_input(:attack))
+
+    assert_equal 4, simulation.world_view.component(goblin_id, :health).current
+  end
+
+  def test_blocking_actor_occludes_melee_target
+    level = level_with(
+      width: 6,
+      height: 4,
+      spawns: [
+        Aogera::Level::Spawn.new(
+          key: :villager,
+          prototype: :villager,
+          x: 2,
+          y: 1
+        ),
+        Aogera::Level::Spawn.new(
+          key: :goblin,
+          prototype: :goblin,
+          x: 3,
+          y: 1
+        )
+      ],
+      entries: [default_entry(x: 1, y: 1, facing: :east)],
+      default_entry: :start
+    )
+    simulation = Aogera::Simulation.new(
+      level: level,
+      prototypes: prototype_catalog(melee_reach: 2.0)
+    )
+    session = test_session
+    simulation.spawn_character(character_key: :hero, prototype: :player)
+    goblin_id = simulation.entity_id_for_spawn(:goblin)
+    mode = Aogera::Mode::Play.new(
+      simulation: simulation,
+      session: session,
+      player_key: :hero,
+      dialogues: dialogue_catalog,
+      view: Aogera::FirstPersonView.for_direction(:east)
+    )
+
+    mode.advance(input: action_input(:attack))
+
+    assert_equal 4, simulation.world_view.component(goblin_id, :health).current
+  end
+
   def test_second_attack_defeats_goblin
     mode, simulation, session, goblin_id = build_play
 
