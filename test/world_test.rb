@@ -21,4 +21,29 @@ class WorldTest < Minitest::Test
     refute_respond_to world.view, :set_component
     assert_equal [0], world.view.entity_ids
   end
+  def test_view_is_cached
+    world = Aogera::World.new
+
+    assert_same world.view, world.view
+  end
+
+  def test_entity_ids_are_cached_until_lifecycle_changes
+    world = Aogera::World.new
+    first_id = world.spawn
+
+    first_snapshot = world.entity_ids
+    assert_same first_snapshot, world.entity_ids
+    assert first_snapshot.frozen?
+
+    second_id = world.spawn
+    second_snapshot = world.entity_ids
+    refute_same first_snapshot, second_snapshot
+    assert_equal [first_id, second_id], second_snapshot
+
+    world.despawn(first_id)
+    third_snapshot = world.entity_ids
+    refute_same second_snapshot, third_snapshot
+    assert_equal [second_id], third_snapshot
+  end
+
 end

@@ -1,110 +1,42 @@
 # Aogera Architecture
 
-This document describes the current Aogera runtime as an independent project. It documents present responsibilities and invariants rather than migration history.
+This document describes the current Aogera 0.2.3 runtime and its present boundaries.
 
 ## Design goals
 
 Aogera favors a small, explicit, data-oriented runtime over framework-heavy abstractions.
 
-The main goals are:
-
-- keep persistent state, authored data, and runtime state separate;
-- make runtime mutation pass through explicit command boundaries;
+- keep persistent, authored, runtime, and presentation state separate;
 - keep `Simulation` independent of wall-clock time and host input;
-- make fixed-step scheduling a policy outside the core simulation;
+- schedule simulation with a fixed-step policy outside the core simulation;
 - keep rendering downstream of canonical runtime state;
-- preserve straightforward tests and a plausible path to lower-level reimplementations later.
+- add abstractions only when concrete gameplay or performance requirements need them.
 
 ## Lifetime model
 
-The primary lifetime split is:
-
 ```text
-persistent                    authored                     runtime
-------------------            ------------------           ------------------
-Session                       Level                        Simulation
-└── Characters                ├── Terrain                  ├── World
-    └── Character             ├── Spawns                   ├── Bindings
-                              ├── Entries                  ├── Executor
-                              └── Relations                └── step number
+persistent              authored                 runtime
+----------------        ----------------         ----------------
+Session                 Level                    Simulation
+└── Character           ├── Terrain              ├── World
+                        ├── Spawns               ├── Bindings
+                        ├── Entries              ├── Executor
+                        └── Relations             └── step number
 ```
 
-### Session
+`Session` owns persistent character state. `Level` is immutable authored structure. `World` is the canonical mutable runtime container and owns entity IDs, component tables, and runtime relations. Runtime entity IDs never serve as persistent identity.
 
-`Session` is the persistent game-lifetime root. It owns `Character` values by stable keys.
-
-A character is currently intentionally small and flat: HP, maximum HP, MP, maximum MP, and attack. More structure should be introduced only when real gameplay systems require it.
-
-Persistent identity never depends on runtime `EntityId` values.
-
-### Level
-
-`Level` is immutable authored structure. It contains terrain, spawns, entries, and authored relations.
-
-A spawn identifies a prototype and its placement:
-
-```text
-Spawn
-├── key
-├── prototype
-├── x
-└── y
-```
-
-An entry is an authored reference point used when a persistent character enters a level:
-
-```text
-Entry
-├── key
-├── x
-├── y
-└── facing
-```
-
-Persistent player characters are not ordinary authored spawns. `Simulation` instantiates them at entries and binds their persistent character keys to runtime entities.
-
-### World
-
-`World` is the canonical mutable runtime container.
-
-It owns:
-
-- integer `EntityId` values;
-- component tables;
-- runtime relations;
-- a read-only `World::View`.
-
-It does not own persistent `Character` state.
+`World::View` is a cached read-only facade over `World`; callers receive the same view object rather than allocating wrappers repeatedly. `World#entity_ids` similarly caches its immutable active-ID snapshot and invalidates it only on spawn/despawn.
 
 ## Components and prototypes
 
-Component value types are independent of world storage and live under `Component`.
-
-Current examples include:
+Component values live under `Component`. `Prototype` is an authored reusable component recipe. Instantiating a prototype creates a runtime entity identified by an integer `EntityId`.
 
 ```text
-Component::PrototypeRef
-Component::Position
-Component::Health
-Component::Renderable
-Component::Behavior
-Component::Collision
-Component::Facing
-Component::Interactable
-Component::Combatant
+Prototype -> World EntityId
 ```
 
-`Prototype` is an authored reusable component recipe. Instantiating a prototype creates a runtime entity in `World`; the runtime entity is identified only by its integer `EntityId`.
-
-```text
-Prototype
-   |
-   | instantiate
-   v
-World EntityId
-```
-
-`Prototype::Catalog` and `Prototype::Loader` own authored prototype lookup/loading responsibilities.
+`Prototype::Catalog` and `Prototype::Loader` own authored prototype lookup/loading.
 
 ## Simulation
 
@@ -119,154 +51,60 @@ Simulation
 └── step_number
 ```
 
-Its primary mutation API is:
-
-```text
-Simulation#step(commands:) -> StepResult
-```
-
-`StepResult` contains the completed step number and persistent effects emitted while applying the commands.
-
-Simulation does **not** own the real-time controller, fixed-step clock, host input, or renderer.
-
-## Bindings
-
-`Simulation::Bindings` is the single mapping between stable persistent character keys and runtime entity IDs.
-
-```text
-:player <-> EntityId 7
-```
-
-Bindings live in `Simulation` because runtime entity IDs only have meaning inside a running simulation.
-
-## Commands::Buffer
-
-`Simulation::Commands::Buffer` is the explicit batch boundary between command production and command execution.
-
-Current command types include movement, attack, and defeat-related mutations.
-
-Keeping a real buffer object rather than passing an arbitrary array gives the runtime a stable boundary for later scheduling, inspection, recording, validation, batching, and alternate implementations.
-
-## Executor and persistent effects
-
-`Simulation::Executor` receives a command buffer, validates execution-time legality, mutates `World`, and emits persistent effects when runtime actions affect bound persistent characters.
-
-Conceptually:
-
-```text
-Attack local entity
-  -> mutate runtime Health in World
-
-Attack bound persistent player entity
-  -> emit Effect::DamageCharacter(:player, amount)
-```
-
-When local runtime `Health` reaches zero during an `Attack`, the executor immediately retires that entity's gameplay components. Command producers therefore do not need to predict lethal damage or append a separate `Defeat` command. Explicit `Defeat` remains available as a command for already-zero-health entities.\n\nPersistent effects are applied by `Session`, keeping persistent mutation outside `World`.
+Its mutation boundary is `Simulation#step(commands:)`. Command producers build `Simulation::Commands::Buffer` values; `Simulation::Executor` validates and applies them. Persistent effects are emitted separately and applied by `Session`.
 
 ## Fixed-step scheduling
 
-Aogera currently uses a 30 Hz fixed engine clock.
+`App` owns the host loop and a monotonic `FixedStep`. The engine currently advances simulation at 30 Hz while raylib targets 60 rendered frames per second. A rendered frame may therefore contain zero or more simulation steps.
 
-`App` owns the monotonic fixed-step loop. The simulation itself receives one explicit command buffer per step and has no wall-clock dependency.
-
-`RealtimeController` owns gameplay scheduling policy such as:
-
-- held player movement;
-- player movement-repeat cadence;
-- NPC idle, wander, and chase decisions;
-- NPC action cadence;
-- pathfinding decisions;
-- adjacent NPC attack intent.
-
-Current provisional rates are centralized under `Aogera::Realtime`:
-
-- engine: 30 ticks/second;
-- player held movement: 5 moves/second;
-- NPC behavior: 2 actions/second.
-
-These values are prototype tuning constants, not permanent physics assumptions.
+`RealtimeController` owns gameplay scheduling policy such as held movement and NPC decision cadence. These rates are prototype tuning values rather than permanent physics assumptions.
 
 ## Input
 
-Kitty input is polled non-blockingly between fixed ticks.
-
-`Input::Tracker` converts press/repeat/release events into:
-
-- held state;
-- per-tick pressed edges;
-- per-tick released edges.
-
-Movement reads held state. Attack, interact, cancel, and quit read edge-triggered state, so key-repeat events do not retrigger actions that should fire once.
+`Host::Raylib` polls raylib and emits `Host::KeyEvent` values. `Input::Mapper` converts those physical events into gameplay `Input::Action` values. `Input::Handoff` and `Input::Tracker` carry press/release state safely across render frames and fixed simulation ticks.
 
 ```text
-Kitty key events
-      |
-      v
-Input::Tracker
-      |
-      v
-Mode::Play
-      |
-      +--> RealtimeController
-      |         |
-      |         v
-      |   Commands::Buffer
-      |
-      `--> direct edge-triggered commands
-                |
-                v
-          Simulation#step
+Host::Raylib
+    |
+Host::KeyEvent
+    |
+Input::Mapper -> Input::Handoff -> Input::Tracker
+    |
+Mode::Play -> RealtimeController -> Commands::Buffer -> Simulation#step
 ```
-
-`Mode::Play` advances the simulation on every fixed tick, including empty-command ticks. Autonomous actors therefore continue to act while the player is idle.
 
 Dialogue remains modal and currently pauses world advancement.
 
 ## Rendering
 
-Projection consumes canonical runtime state:
+The current presentation path is explicitly 2D and transitional:
 
 ```text
 Level + World::View
         |
-        v
-Render::Projector
+Render::Projector2D
         |
-        v
-Render::Scene
-        ├── Tile
-        └── Entity(entity_id, ...)
+Render::Scene2D
         |
-        v
-renderer backend
+Render::Raylib2D
+        |
+raylib
 ```
 
-Kitty is the active runtime backend. ASCII remains reference/test infrastructure. Renderer replacement should not require changing world, simulation, or persistence ownership.
+`Scene2D` is immutable presentation data. Pixel conversion and current grid layout live in `Raylib2D`; logical simulation coordinates are not screen coordinates. The 2D types are deliberately not generalized in advance for 3D.
 
-## Authored content
+## Authored content and assets
 
-Authored Ruby content is kept outside runtime implementation code:
+Authored Ruby data currently lives in:
 
 ```text
 content/prototypes/
 content/levels/
 content/dialogue/
-content/sprites/
 ```
 
-Loaders convert authored data into the runtime's explicit level, prototype, and catalogue values.
+`Content::Paths` centralizes the content root and paths used by the current Ruby loaders. There is intentionally no general asset manager yet. Models, textures, shaders, BSP data, and their lifetime rules will be introduced from concrete 3D requirements.
 
-## Current architectural boundary
+## Near-term boundary
 
-Aogera intentionally leaves several systems open while the real-time runtime is still being proven:
-
-- continuous spatial representation and collision;
-- richer action phases and cooldowns;
-- projectiles, spells, weapons, and equipment;
-- persistent map/world changes;
-- save serialization;
-- a generalized gameplay-rules/intent layer;
-- a generic ECS system-manager abstraction;
-- a permanent graphical backend.
-
-New abstractions should be added because a concrete gameplay or performance requirement needs them, not to anticipate a hypothetical general engine.
+Aogera 0.2.3 intentionally does not define continuous 3D positions, physics, projectile motion, BSP loading, a generic renderer hierarchy, or a permanent asset format. Those belong to the upcoming 3D work rather than to the transitional 2D runtime.

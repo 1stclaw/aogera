@@ -30,7 +30,7 @@ module Aogera
         @next_tick += @interval
       end
 
-      # Do not spiral forever after a debugger stop or terminal stall.
+      # Do not spiral forever after a debugger stop or long host stall.
       if count == @max_catch_up_steps && now >= @next_tick
         @next_tick = now + @interval
       end

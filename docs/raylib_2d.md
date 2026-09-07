@@ -10,10 +10,10 @@ The 0.2.0 path remains:
 Level + World::View
         |
         v
-Render::Projector
+Render::Projector2D
         |
         v
-Render::Scene
+Render::Scene2D
         |
         v
 Render::Raylib2D

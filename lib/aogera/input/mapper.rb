@@ -19,24 +19,13 @@ module Aogera
       }.freeze
 
       def map(physical_event)
-        key, state = physical_key_and_state(physical_event)
-        kind = ACTIONS[key]
+        kind = ACTIONS[physical_event.key]
         return unless kind
 
         Action.new(
           kind: kind,
-          state: state
+          state: physical_event.state
         )
-      end
-
-      private
-
-      def physical_key_and_state(event)
-        if event.respond_to?(:key) && event.respond_to?(:state)
-          [event.key, event.state]
-        else
-          [event, :pressed]
-        end
       end
     end
   end

@@ -2,6 +2,7 @@
 
 require_relative "aogera/version"
 require_relative "aogera/content/ruby_source"
+require_relative "aogera/content/paths"
 require_relative "aogera/dialogue/catalog"
 require_relative "aogera/dialogue/loader"
 
@@ -42,9 +43,6 @@ require_relative "aogera/mode/dialogue"
 require_relative "aogera/mode/play"
 require_relative "aogera/render/scene_2d"
 require_relative "aogera/render/projector_2d"
-# Compatibility aliases for code written against Aogera 0.2.0/0.2.1.
-require_relative "aogera/render/scene"
-require_relative "aogera/render/projector"
 require_relative "aogera/raylib_api"
 require_relative "aogera/render/raylib_2d"
 

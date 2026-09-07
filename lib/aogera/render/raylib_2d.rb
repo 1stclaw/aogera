@@ -94,7 +94,7 @@ module Aogera
 
       def draw_glyph(item, x, y)
         glyph = glyph_for(item)
-        return if glyph.empty?
+        return if glyph.strip.empty?
 
         @api.draw_text(
           text: glyph,

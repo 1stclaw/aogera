@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-require "minitest/autorun"
-require_relative "../lib/aogera"
+require_relative "test_helper"
 
 class Render2DContractTest < Minitest::Test
   FakeLevel = Data.define(:width, :height) do
@@ -32,10 +31,5 @@ class Render2DContractTest < Minitest::Test
     assert_equal(4, scene.tiles.length)
     assert(scene.tiles.frozen?)
     assert(scene.entities.frozen?)
-  end
-
-  def test_legacy_render_names_alias_the_2d_contract_in_0_2
-    assert_same(Aogera::Render::Scene2D, Aogera::Render::Scene)
-    assert_same(Aogera::Render::Projector2D, Aogera::Render::Projector)
   end
 end

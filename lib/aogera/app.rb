@@ -2,18 +2,6 @@
 
 module Aogera
   class App
-    PROTOTYPE_PATH = File.expand_path(
-      "../../content/prototypes/actors.rb",
-      __dir__
-    )
-    LEVEL_PATH = File.expand_path(
-      "../../content/levels/test_field.rb",
-      __dir__
-    )
-    DIALOGUE_PATH = File.expand_path(
-      "../../content/dialogue/test_field.rb",
-      __dir__
-    )
     PLAYER_KEY = :player
     TICK_HZ = Realtime::TICK_HZ
 
@@ -21,9 +9,12 @@ module Aogera
       clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
       raylib_api: nil
     )
-      prototypes = Prototype::Loader.load(PROTOTYPE_PATH)
-      level = Level::Loader.load(LEVEL_PATH, prototypes: prototypes)
-      dialogues = Dialogue::Loader.load(DIALOGUE_PATH)
+      prototypes = Prototype::Loader.load(Content::Paths.prototype(:actors))
+      level = Level::Loader.load(
+        Content::Paths.level(:test_field),
+        prototypes: prototypes
+      )
+      dialogues = Dialogue::Loader.load(Content::Paths.dialogue(:test_field))
       @session = Session.new(
         characters: {
           PLAYER_KEY => Character.new(

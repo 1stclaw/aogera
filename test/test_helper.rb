@@ -9,20 +9,9 @@ $LOAD_PATH.unshift(
 require "aogera"
 
 module AogeraTestPaths
-  PROTOTYPE_PATH = File.expand_path(
-    "../content/prototypes/actors.rb",
-    __dir__
-  )
-
-  LEVEL_PATH = File.expand_path(
-    "../content/levels/test_field.rb",
-    __dir__
-  )
-
-  DIALOGUE_PATH = File.expand_path(
-    "../content/dialogue/test_field.rb",
-    __dir__
-  )
+  PROTOTYPE_PATH = Aogera::Content::Paths.prototype(:actors)
+  LEVEL_PATH = Aogera::Content::Paths.level(:test_field)
+  DIALOGUE_PATH = Aogera::Content::Paths.dialogue(:test_field)
 end
 
 module AogeraTestSupport

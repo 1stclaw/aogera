@@ -5,14 +5,18 @@ module Aogera
     def initialize
       @next_entity_id = 0
       @active_entities = []
+      @entity_ids = [].freeze
+      @entity_ids_dirty = false
       @component_tables = {}
       @relations = Relations.new
+      @view = View.new(self)
     end
 
     def spawn(**components)
       entity_id = @next_entity_id
       @next_entity_id += 1
       @active_entities[entity_id] = true
+      @entity_ids_dirty = true
 
       components.each do |name, component|
         set_component(entity_id, name, component)
@@ -29,6 +33,7 @@ module Aogera
       end
       @relations.remove_entity(entity_id)
       @active_entities[entity_id] = false
+      @entity_ids_dirty = true
 
       entity_id
     end
@@ -41,9 +46,13 @@ module Aogera
     end
 
     def entity_ids
-      @active_entities.each_index.select do |entity_id|
+      return @entity_ids unless @entity_ids_dirty
+
+      @entity_ids = @active_entities.each_index.select do |entity_id|
         @active_entities[entity_id]
       end.freeze
+      @entity_ids_dirty = false
+      @entity_ids
     end
 
     def component(entity_id, name)
@@ -74,7 +83,7 @@ module Aogera
     end
 
     def view
-      View.new(self)
+      @view
     end
 
     private
