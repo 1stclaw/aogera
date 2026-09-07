@@ -27,7 +27,7 @@ The existing input mapper, handoff, tracker, modes, simulation, world, level loa
 
 `Render::Raylib2D` intentionally uses simple raylib primitives for this first transition. Logical map cells are rendered as a fixed-size grid and existing render keys/glyph information identify tiles and entities. No new sprite or level authoring format is introduced in 0.2.0.
 
-The terminal/Kitty renderer remains in the source tree for reference during the transition, but `App` now launches the raylib frontend.
+The transition is complete: Aogera now has a single raylib frontend. The legacy ASCII/Kitty renderers and terminal host/input/capability code were removed after the 0.2.0 migration proved the raylib path.
 
 ## Input
 

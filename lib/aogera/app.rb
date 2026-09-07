@@ -18,7 +18,6 @@ module Aogera
     TICK_HZ = Realtime::TICK_HZ
 
     def initialize(
-      env: ENV,
       clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
       raylib_api: nil
     )
@@ -57,9 +56,6 @@ module Aogera
       @input_tracker = Input::Tracker.new
       @projector = Render::Projector.new
 
-      # Keep +env+ in the initializer for 0.1.x call-site compatibility while
-      # the terminal backend remains in-tree. It is no longer used by App.
-      env
       api = raylib_api || RaylibAPI.new
       @host = Host::Raylib.new(api: api)
       @renderer = Render::Raylib2D.new(api: api)
