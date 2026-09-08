@@ -32,8 +32,9 @@ module Aogera
       STATUS_FONT_SIZE = 20
       STATUS_HEIGHT = 48
 
-      def initialize(api:)
+      def initialize(api:, bsp29_map: nil)
         @api = api
+        @bsp29_world = bsp29_map && BSP29World.new(map: bsp29_map)
       end
 
       def draw(level:, world:, status:, view:, camera_entity_id:)
@@ -47,7 +48,7 @@ module Aogera
           )
         )
 
-        draw_level(level)
+        draw_static_world(level)
         draw_entities(level, world, hidden_entity_id: camera_entity_id)
 
         @api.end_mode_3d
@@ -57,6 +58,14 @@ module Aogera
       end
 
       private
+
+      def draw_static_world(level)
+        if @bsp29_world
+          @bsp29_world.draw(@api)
+        else
+          draw_level(level)
+        end
+      end
 
       def draw_level(level)
         level.height.times do |grid_y|

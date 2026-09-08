@@ -1,0 +1,13 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
+require "aogera"
+
+path = ARGV.shift
+abort "usage: bundle exec ruby bin/aogera-bsp29 PATH.bsp" unless path
+abort "unexpected arguments: #{ARGV.join(' ')}" unless ARGV.empty?
+
+map = Aogera::BSP29::Reader.read(path)
+Aogera::App.new(bsp29_map: map).run

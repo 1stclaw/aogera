@@ -7,7 +7,8 @@ module Aogera
 
     def initialize(
       clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
-      raylib_api: nil
+      raylib_api: nil,
+      bsp29_map: nil
     )
       prototypes = Prototype::Loader.load(Content::Paths.prototype(:actors))
       authored_level = Level::Readers::Ruby.read(
@@ -58,7 +59,7 @@ module Aogera
 
       api = raylib_api || RaylibAPI.new
       @host = Host::Raylib.new(api: api)
-      @renderer = Render::Raylib3D.new(api: api)
+      @renderer = Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
       @clock = clock
       @fixed_step = FixedStep.new(hz: TICK_HZ)
     end

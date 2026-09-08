@@ -97,6 +97,15 @@ module Aogera
       )
     end
 
+    def draw_triangle_3d(a:, b:, c:, rgba:)
+      ::Raylib.DrawTriangle3D(
+        ::Raylib::Vector3.create(*a),
+        ::Raylib::Vector3.create(*b),
+        ::Raylib::Vector3.create(*c),
+        color(rgba)
+      )
+    end
+
     def screen_width
       ::Raylib.GetScreenWidth
     end

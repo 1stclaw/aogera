@@ -2,6 +2,9 @@
 
 require_relative "aogera/version"
 require_relative "aogera/world_units"
+require_relative "aogera/bsp29"
+require_relative "aogera/bsp29/coordinates"
+require_relative "aogera/bsp29/reader"
 require_relative "aogera/content/ruby_source"
 require_relative "aogera/content/paths"
 require_relative "aogera/dialogue/catalog"
@@ -48,6 +51,7 @@ require_relative "aogera/mode/transitions"
 require_relative "aogera/mode/dialogue"
 require_relative "aogera/mode/play"
 require_relative "aogera/raylib_api"
+require_relative "aogera/render/bsp29_world"
 require_relative "aogera/render/raylib_3d"
 
 require_relative "aogera/host"
