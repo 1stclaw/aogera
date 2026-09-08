@@ -329,7 +329,7 @@ GroundSpace / successor trace boundary
 
 Movement, melee, and interaction already consume the trace-result contract rather than the static grid implementation.
 
-Quake BSP collision hulls/clipnodes are therefore candidates for imported collision data when BSP29 loading begins; collision does not need to be reconstructed from rendered polygons merely because rendering also consumes BSP geometry.
+BSP29 loading and world-model rendering now exist, but the controlled BSP preview intentionally continues to use the matching grid collision backend. Quake BSP collision hulls/clipnodes are already preserved by `BSP29::Reader` and are the next static-collision source; collision must not be reconstructed from rendered polygons merely because rendering also consumes BSP geometry.
 
 ## 17. Deferred collision work
 
@@ -342,7 +342,7 @@ Aogera 0.3.2 does not yet implement:
 - projectiles or hitscan delivery;
 - generalized contents/masks;
 - rigid-body physics;
-- BSP loading itself;
+- BSP hull/clipnode integration into the trace service;
 - generic `Transform`, `PhysicsBody`, or `Spatial` frameworks.
 
 The current invariant is simpler:

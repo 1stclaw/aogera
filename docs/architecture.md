@@ -288,7 +288,14 @@ RaylibAPI
 raylib
 ```
 
-`Render::Raylib3D` directly extrudes the current grid level into primitive floors/walls and draws renderable entities from canonical `Position`. The controlled player is omitted from the first-person entity pass.
+`Render::Raylib3D` remains the first-person frontend and draws dynamic renderable entities from canonical `Position`. Static-world drawing currently has two explicit paths:
+
+```text
+Ruby/grid Level -> primitive floor/wall extrusion
+BSP29::MapData -> Render::BSP29World -> reconstructed world-model triangles
+```
+
+The controlled player is omitted from the first-person entity pass. The BSP preview renders world model `0` only and intentionally bypasses any generic scene representation.
 
 The camera eye uses the controlled entity's `Position` plus logical eye height. Its target comes from the `FirstPersonView` forward vector.
 
@@ -314,9 +321,11 @@ source file -> Reader -> Level::AuthoredData -> Level::Loader -> Level
 
 Aogera world-unit magnitude is Quake 1 compatible: one current grid cell is 32 world units. This is a measurement convention only; Quake entity-origin and gameplay conventions are not imported into core runtime semantics.
 
+`BSP29::Reader` is the first external Reader. It returns normalized `BSP29::MapData` rather than forcing BSP structure through the grid-shaped `Level::AuthoredData`. `Level::Loader` therefore remains honest about the representation it currently constructs.
+
 `Content::Paths` still centralizes current authored Ruby paths. There is intentionally no general asset manager yet.
 
-## Current 0.3.2 boundary
+## Current v0.3.2 RC boundary
 
 Aogera 0.3.2 has:
 
@@ -327,15 +336,17 @@ Aogera 0.3.2 has:
 - explicit retired-entity lifecycle state;
 - a separate temporary grid navigation representation;
 - a Reader -> normalized authored data -> Loader map boundary;
-- Quake 1-compatible world-unit magnitude with 32-unit current grid cells.
+- Quake 1-compatible world-unit magnitude with 32-unit current grid cells;
+- a validated BSP29 Reader preserving geometry, BSP tree, clipnodes, textures, entities, visibility/light blobs, and submodels;
+- a minimal BSP29 world-model renderer used by the controlled test-field preview.
 
 It does not yet contain:
 
-- BSP loading or BSP collision;
+- BSP collision as an authoritative static-world backend;
 - vertical actor collision, gravity, jumping, floor/ceiling/step handling;
 - projectiles or hitscan weapons;
 - generalized collision masks;
 - generic physics, transform, or spatial frameworks;
 - a general asset manager.
 
-The next BSP work can begin with a BSP29 Reader. It can normalize Quake axes while preserving 1:1 coordinate magnitude, then feed Aogera-normalized authored data into the loader/runtime boundary. Static world geometry/collision and later navigation can evolve without another entity-space or unit migration.
+The next BSP work should replace the temporary grid collision backend with BSP29 hull/clipnode tracing. Rendering and parsing no longer need another coordinate or unit migration; later navigation and brush-submodel behavior can evolve independently from the canonical entity-position model.

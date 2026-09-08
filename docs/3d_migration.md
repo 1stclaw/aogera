@@ -236,9 +236,11 @@ The current Ruby/grid reader converts source grid coordinates to Aogera world co
 
 World-unit magnitude is now Quake 1 compatible. The temporary grid uses 32 world units per cell, and existing linear gameplay/render values are scaled proportionally. This removes the old one-cell/one-unit prototype scale before external BSP geometry enters the runtime.
 
-## BSP boundary after v0.3.2
+## BSP boundary in the v0.3.2 RC
 
-The normalized runtime leaves a clear static-world replacement point:
+The normalized runtime now has a concrete BSP29 source path in addition to the Ruby/grid path. `BSP29::Reader` preserves BSP structure in normalized Aogera coordinates, and `Render::BSP29World` reconstructs and triangulates world-model faces for a controlled preview.
+
+The collision replacement point remains clear:
 
 ```text
 runtime entities
@@ -264,7 +266,6 @@ Navigation can evolve independently when the first BSP levels make a replacement
 
 Aogera v0.3.2 does not yet contain:
 
-- BSP loading;
 - vertical actor collision, gravity, jumping, or step/floor handling;
 - projectile or hitscan weapon systems;
 - generalized collision masks;
@@ -272,4 +273,6 @@ Aogera v0.3.2 does not yet contain:
 - generic asset management;
 - generic `Transform`, `PhysicsBody`, or `Spatial` frameworks.
 
-The v0.3.2 milestone adds one more deliberate boundary before BSP: **one continuous world-space runtime, one shared actor movement/collision path, explicit lifecycle state, one continuous spatial basis for combat/interaction, a Reader/Loader authored-data boundary, and Quake-compatible world-unit magnitude.**
+The v0.3.2 RC therefore establishes **one continuous world-space runtime, one shared actor movement/collision path, explicit lifecycle state, one continuous spatial basis for combat/interaction, a Reader/Loader authored-data boundary, Quake-compatible world-unit magnitude, a validated BSP29 Reader, and a minimal BSP world-model rendering path.**
+
+The controlled BSP29 fixture is intentionally still paired with the matching Ruby/grid gameplay backend. BSP collision is the next replacement step, not part of the RC.

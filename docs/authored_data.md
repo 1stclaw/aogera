@@ -22,7 +22,7 @@ Its responsibilities include:
 
 The current Ruby reader converts grid cells into world-space cell centers using the current 32-unit grid scale.
 
-A future BSP29 reader will additionally understand binary BSP29 lumps and Quake's Z-up coordinate convention. BSP-specific structure such as planes, faces, nodes, leaves, clipnodes, models, visibility, lighting, and entity declarations should be preserved where useful rather than flattened into a fake generic scene structure.
+`BSP29::Reader` now implements the first external map Reader. It understands binary BSP29 lumps and Quake's Z-up coordinate convention, and it preserves planes, faces, nodes, leaves, clipnodes, models, visibility, lighting, texture data, and entity declarations in normalized `BSP29::MapData` rather than flattening them into a fake generic scene structure.
 
 ## Normalized authored data
 
@@ -134,6 +134,6 @@ Quake  (x, y, z)
 Aogera (x, z, -y)
 ```
 
-That exact mapping still needs to be established with real BSP29 fixtures and executable tests, especially for plane normals, face winding, bounds, entity origins, and brush submodels.
+That mapping is now established in executable code and has been validated with a controlled BSP29 fixture compiled from Aogera's original `test_field`. Structural lump counts match ericw-tools, world bounds are consistent with the 1408×448 authored footprint, and the normalized `info_player_start` resolves to `(112, 0, 112)` as expected.
 
-No BSP reader is included in 0.3.2. The purpose of this release is to make its boundary explicit before the first BSP implementation.
+The BSP29 Reader establishes this normalization rule in executable code. It is intentionally not yet connected to `Level::Loader`, because the current loader constructs grid-backed `Level` objects and BSP static-world structure should not be forced through that representation. The first downstream consumer now exists as `Render::BSP29World`, which renders world model `0` directly from `BSP29::MapData`. The current `Level::Loader` remains grid-specific; BSP collision and later entity import should extend the static-world/runtime boundary from actual BSP requirements rather than flattening BSP into the grid representation.

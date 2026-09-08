@@ -108,16 +108,26 @@ Vertical actor collision, gravity, jumping, and arbitrary 3D collision shapes ar
 
 ## Current world drawing
 
-`Render::Raylib3D` still uses the authored grid directly for temporary static-world presentation. Tile width/length come from the level's normalized `cell_size` (32 world units for current authored content):
+The normal launch still uses the authored grid directly for temporary static-world presentation. Tile width/length come from the level's normalized `cell_size` (32 world units for current authored content):
 
 ```text
 passable tile -> floor primitive
 blocked tile  -> wall primitive
 ```
 
-Dynamic renderable entities are drawn at canonical `Position` values.
+The BSP29 preview adds a second static-world drawing path:
 
-This is intentionally a simple bridge. There is no `Scene3D`, `Projector3D`, model/material framework, or generic transform hierarchy.
+```text
+BSP29::MapData
+    -> world model 0 faces
+    -> surfedges / edges / vertices
+    -> convex face triangulation
+    -> RaylibAPI
+```
+
+Dynamic renderable entities are still drawn at canonical `Position` values. For the controlled preview, the matching Ruby `test_field` remains authoritative for gameplay/collision/navigation while BSP29 supplies visible static geometry.
+
+This is intentionally a simple RC bridge. There is no `Scene3D`, `Projector3D`, model/material framework, or generic transform hierarchy.
 
 ## Navigation is separate
 
@@ -146,7 +156,9 @@ This preserves the useful platform boundary established before the 3D renderer a
 
 Aogera 0.3.2 does not introduce:
 
-- BSP loading/rendering/collision;
+- BSP hull/clipnode collision;
+- BSP palette/texture sampling and lightmaps;
+- PVS-driven BSP visibility;
 - vertical actor physics;
 - projectile or hitscan rendering/simulation;
 - model or texture asset pipelines;
