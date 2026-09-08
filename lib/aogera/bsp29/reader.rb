@@ -106,7 +106,7 @@ module Aogera
           Plane.new(
             normal: Coordinates.vector(x, y, z),
             distance: distance,
-            type: type
+            type: Coordinates.plane_type(type)
           )
         end.freeze
       end

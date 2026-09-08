@@ -280,7 +280,7 @@ The current BFS navigation grid is derived planning data, not collision authorit
 Position
    |
    v
-(floor(x), floor(z)) navigation cell
+level.cell_for_world(x, z)
    |
    v
 BFS next cell

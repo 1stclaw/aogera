@@ -5,10 +5,20 @@ module Aogera
     module Coordinates
       module_function
 
+      PLANE_TYPE_MAP = { 0 => 0, 1 => 2, 2 => 1, 3 => 3, 4 => 5, 5 => 4 }.freeze
+
       # Quake is Z-up. Aogera is Y-up with +Z pointing south.
       # Unit magnitude is intentionally unchanged.
       def vector(x, y, z)
         Vec3.new(x: Float(x), y: Float(z), z: -Float(y))
+      end
+
+      # BSP plane type encodes the plane normal's dominant source axis.
+      # Keep it consistent with the normalized Aogera axes.
+      def plane_type(type)
+        PLANE_TYPE_MAP.fetch(Integer(type))
+      rescue KeyError, ArgumentError, TypeError
+        raise FormatError, "unsupported BSP29 plane type #{type}"
       end
 
       def bounds(mins, maxs)

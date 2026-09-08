@@ -93,15 +93,19 @@ module Aogera
 
       def texture_name(face)
         info = fetch(@map.texinfo, face.texinfo_index, "texinfo")
-        texture = @map.textures[info.texture_index]
+        texture = fetch(@map.textures, info.texture_index, "texture", allow_nil: true)
         texture&.name
       end
 
-      def fetch(values, index, label)
-        value = values[index]
-        return value if value
+      def fetch(values, index, label, allow_nil: false)
+        unless index.is_a?(Integer) && index >= 0 && index < values.length
+          raise BSP29::FormatError, "#{label} index is out of range: #{index}"
+        end
 
-        raise BSP29::FormatError, "#{label} index is out of range: #{index}"
+        value = values[index]
+        return value if value || allow_nil
+
+        raise BSP29::FormatError, "#{label} index is missing: #{index}"
       end
 
       def subtract(a, b)

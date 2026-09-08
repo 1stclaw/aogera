@@ -54,7 +54,7 @@ class BSP29ReaderTest < Minitest::Test
 
     assert_equal Aogera::BSP29::Vec3.new(x: 1.0, y: 3.0, z: -2.0), map.planes.first.normal
     assert_in_delta 64.0, map.planes.first.distance
-    assert_equal 5, map.planes.first.type
+    assert_equal 4, map.planes.first.type
 
     assert_equal Aogera::BSP29::Vec3.new(x: 10.0, y: 30.0, z: -20.0), map.vertices.first
     assert_equal [7, 8], map.marksurfaces
@@ -94,6 +94,16 @@ class BSP29ReaderTest < Minitest::Test
     assert_equal 12, model.visible_leaf_count
     assert_equal 13, model.first_face
     assert_equal 14, model.face_count
+  end
+
+  def test_normalizes_plane_types_to_aogera_axes
+    source_types = (0..5).map do |type|
+      [1.0, 0.0, 0.0, 1.0, type].pack("eeee l<")
+    end.join
+
+    map = Aogera::BSP29::Reader.read_bytes(build_bsp(planes: source_types))
+
+    assert_equal [0, 2, 1, 3, 5, 4], map.planes.map(&:type)
   end
 
   def test_reads_embedded_miptextures_without_palette_interpretation

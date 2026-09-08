@@ -42,6 +42,31 @@ class BSP29RenderTest < Minitest::Test
     assert_equal 2, renderer.triangles.length
   end
 
+  def test_rejects_negative_cross_reference_indices
+    map = square_map
+    bad_face = map.faces.first.with(texinfo_index: -1)
+    bad_map = map.with(faces: [bad_face].freeze)
+
+    error = assert_raises(Aogera::BSP29::FormatError) do
+      Aogera::Render::BSP29World.new(map: bad_map)
+    end
+
+    assert_match(/texinfo index is out of range: -1/, error.message)
+  end
+
+  def test_preserves_missing_texture_directory_entries
+    map = square_map
+    bad_texinfo = map.texinfo.first.with(texture_index: 1)
+    map_with_missing_texture = map.with(
+      texinfo: [bad_texinfo].freeze,
+      textures: [map.textures.first, nil].freeze
+    )
+
+    renderer = Aogera::Render::BSP29World.new(map: map_with_missing_texture)
+
+    assert_nil renderer.triangles.first.texture_name
+  end
+
   private
 
   def square_map(extra_face: false)

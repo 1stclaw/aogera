@@ -185,7 +185,7 @@ It derives temporary cells from canonical positions only while planning:
 Position(x, y, z)
       |
       v
-(floor(x), floor(z))
+level.cell_for_world(x, z)
       |
       v
 BFS next cell
