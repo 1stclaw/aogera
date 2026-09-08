@@ -10,8 +10,8 @@ module Aogera
         target = world.component(target_id, :position)
         return unless source && target
 
-        start = cell_for(source)
-        target_cell = cell_for(target)
+        start = cell_for(level, source)
+        target_cell = cell_for(level, target)
         goals = adjacent_goals(
           level: level,
           world: world,
@@ -39,8 +39,8 @@ module Aogera
 
       private
 
-      def cell_for(position)
-        [position.x.floor, position.z.floor].freeze
+      def cell_for(level, position)
+        level.cell_for_world(position.x, position.z)
       end
 
       def adjacent_goals(level:, world:, source_id:, target_cell:)
@@ -112,7 +112,10 @@ module Aogera
           next false unless collision&.blocks_movement
 
           position = world.component(entity_id, :position)
-          position && position.x.floor == x && position.z.floor == z
+          next false unless position
+
+          cell_x, cell_z = level.cell_for_world(position.x, position.z)
+          cell_x == x && cell_z == z
         end
       end
 

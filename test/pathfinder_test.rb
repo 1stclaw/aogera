@@ -6,7 +6,7 @@ class PathfinderTest < Minitest::Test
   def test_finds_step_around_blocked_terrain
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 5, height: 5),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 5, height: 5),
       spawns: [],
       relations: []
     )
@@ -35,7 +35,7 @@ class PathfinderTest < Minitest::Test
   def test_returns_current_navigation_cell_when_source_is_already_in_goal_cell
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 5, height: 5),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 5, height: 5),
       spawns: [],
       relations: []
     )

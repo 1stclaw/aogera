@@ -59,6 +59,7 @@ module Aogera
         prototype_definition,
         x: entry_definition.x,
         y: entry_definition.y,
+        z: entry_definition.z,
         extra_components: extra
       )
 
@@ -92,18 +93,19 @@ module Aogera
         @reference_ids[spawn.key] = instantiate(
           prototype,
           x: spawn.x,
-          y: spawn.y
+          y: spawn.y,
+          z: spawn.z
         )
       end
     end
 
-    def instantiate(prototype, x:, y:, extra_components: {})
+    def instantiate(prototype, x:, y:, z:, extra_components: {})
       components = prototype.components.merge(
         prototype_ref: Component::PrototypeRef.new(name: prototype.name),
         position: Component::Position.new(
-          x: x + 0.5,
-          y: 0.0,
-          z: y + 0.5
+          x: Float(x),
+          y: Float(y),
+          z: Float(z)
         )
       ).merge(extra_components)
 

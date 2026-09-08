@@ -11,9 +11,12 @@ module Aogera
         )
       }.freeze
 
-      attr_reader :width, :height
+      attr_reader :width, :height, :cell_size
 
-      def initialize(width: nil, height: nil, rows: nil, tiles: nil)
+      def initialize(width: nil, height: nil, rows: nil, tiles: nil, cell_size: WorldUnits::GRID_CELL_SIZE)
+        @cell_size = Float(cell_size)
+        raise ArgumentError, "cell_size must be positive" unless @cell_size.positive?
+
         if rows
           initialize_from_rows(
             rows,
@@ -45,6 +48,26 @@ module Aogera
 
       def passable?(x, y)
         tile_at(x, y)&.passable || false
+      end
+
+      def cell_center(x, y)
+        [
+          WorldUnits.grid_center(x, cell_size: cell_size),
+          WorldUnits.grid_center(y, cell_size: cell_size)
+        ].freeze
+      end
+
+      def cell_for_world(x, z)
+        [
+          WorldUnits.grid_cell(x, cell_size: cell_size),
+          WorldUnits.grid_cell(z, cell_size: cell_size)
+        ].freeze
+      end
+
+      def cell_bounds(x, y)
+        min_x = Integer(x) * cell_size
+        min_z = Integer(y) * cell_size
+        [min_x, min_z, min_x + cell_size, min_z + cell_size].freeze
       end
 
       private

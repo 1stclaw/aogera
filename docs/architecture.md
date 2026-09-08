@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.1 runtime and its present boundaries.
+This document describes the current Aogera 0.3.2 runtime and its present boundaries.
 
 ## Design goals
 
@@ -17,13 +17,25 @@ Aogera favors a small, explicit, data-oriented runtime over framework-heavy abst
 ## Lifetime model
 
 ```text
-persistent              authored                 runtime
-----------------        ----------------         ----------------
-Session                 Level                    Simulation
-└── Character           ├── Terrain              ├── World
-                        ├── Spawns               ├── Bindings
-                        ├── Entries              ├── Executor
-                        └── Relations             └── step number
+persistent              authored pipeline                 runtime
+----------------        -------------------------         ----------------
+Session                 source file                       Simulation
+└── Character               |                             ├── World
+                            v                             ├── Bindings
+                         Reader                           ├── Executor
+                            |                             └── step number
+                            v
+                     Level::AuthoredData
+                            |
+                            v
+                         Loader
+                            |
+                            v
+                          Level
+                        ├── Terrain
+                        ├── Spawns
+                        ├── Entries
+                        └── Relations
 
 control/view
 ----------------
@@ -75,10 +87,10 @@ Aogera's coordinate convention is:
 +Z = south
 ```
 
-The current flat authored levels spawn actors at Y = 0.0. Authored cell coordinates are converted at instantiation time:
+The current flat authored levels spawn actors at Y = 0.0. Source-format readers normalize authored coordinates before runtime loading. The current Ruby/grid reader uses 32 world units per cell:
 
 ```text
-cell (x, y) -> Position(x + 0.5, 0.0, y + 0.5)
+cell (x, y) -> Position((x + 0.5) * 32, 0.0, (y + 0.5) * 32)
 ```
 
 The grid coordinate is not retained as a second runtime entity position. There is no position synchronization step and no player/NPC distinction in spatial representation.
@@ -173,7 +185,7 @@ For planning only:
 Position(x, y, z)
       |
       v
-navigation cell = (floor(x), floor(z))
+navigation cell = (floor(x / cell_size), floor(z / cell_size))
       |
       v
 BFS next cell
@@ -292,18 +304,30 @@ content/levels/
 content/dialogue/
 ```
 
-`Content::Paths` centralizes paths used by the current Ruby loaders. There is intentionally no general asset manager yet.
+Map/world authored data now has an explicit Reader/Loader boundary:
 
-## Current 0.3.1 boundary
+```text
+source file -> Reader -> Level::AuthoredData -> Level::Loader -> Level
+```
 
-Aogera 0.3.1 has:
+`Level::Readers::Ruby` understands the current Ruby/grid source format and converts source grid positions into Aogera world coordinates. `Level::Loader` accepts normalized `Level::AuthoredData` only and owns Aogera-facing validation/construction rather than file parsing.
+
+Aogera world-unit magnitude is Quake 1 compatible: one current grid cell is 32 world units. This is a measurement convention only; Quake entity-origin and gameplay conventions are not imported into core runtime semantics.
+
+`Content::Paths` still centralizes current authored Ruby paths. There is intentionally no general asset manager yet.
+
+## Current 0.3.2 boundary
+
+Aogera 0.3.2 has:
 
 - one continuous runtime position model for player, enemies, NPCs, and spatial interactables;
 - one ground movement/collision execution path for current actors;
 - one trace-result contract for movement and obstruction;
 - continuous player/NPC melee validation;
 - explicit retired-entity lifecycle state;
-- a separate temporary grid navigation representation.
+- a separate temporary grid navigation representation;
+- a Reader -> normalized authored data -> Loader map boundary;
+- Quake 1-compatible world-unit magnitude with 32-unit current grid cells.
 
 It does not yet contain:
 
@@ -314,4 +338,4 @@ It does not yet contain:
 - generic physics, transform, or spatial frameworks;
 - a general asset manager.
 
-The next BSP work can focus on replacing static world geometry/collision and later navigation without first reconciling multiple runtime entity coordinate systems.
+The next BSP work can begin with a BSP29 Reader. It can normalize Quake axes while preserving 1:1 coordinate magnitude, then feed Aogera-normalized authored data into the loader/runtime boundary. Static world geometry/collision and later navigation can evolve without another entity-space or unit migration.

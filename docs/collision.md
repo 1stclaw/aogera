@@ -1,6 +1,6 @@
-# Aogera 0.3.1 Collision and Spatial Queries
+# Aogera 0.3.2 Collision and Spatial Queries
 
-This document describes the current Aogera 0.3.1 ground-space collision model.
+This document describes the current Aogera 0.3.2 ground-space collision model.
 
 The system is deliberately narrower than a general physics engine. It provides continuous X/Z spatial facts for current actors and gameplay while keeping the API suitable for a later replacement of static grid collision with BSP collision data.
 
@@ -148,10 +148,12 @@ The query covers the complete requested displacement, so anti-tunneling behavior
 The current authored level is a grid. Impassable terrain cells act as solid static collision cells.
 
 ```text
-cell (x, z)
+grid cell (x, z), cell size S
 
-X = x .. x + 1
-Z = z .. z + 1
+X = x * S .. (x + 1) * S
+Z = z * S .. (z + 1) * S
+
+Current authored grid levels use S = 32 world units.
 ```
 
 Static terrain participates in the same earliest-hit result as dynamic entities.
@@ -294,7 +296,7 @@ NPCs therefore share runtime collision and movement with the player even while r
 
 ## 15. Filtering
 
-Aogera 0.3.1 does not introduce Quake-style contents/mask families.
+Aogera 0.3.2 does not introduce Quake-style contents/mask families.
 
 Current trace calls support concrete filtering needs such as:
 
@@ -331,7 +333,7 @@ Quake BSP collision hulls/clipnodes are therefore candidates for imported collis
 
 ## 17. Deferred collision work
 
-Aogera 0.3.1 does not yet implement:
+Aogera 0.3.2 does not yet implement:
 
 - vertical actor collision;
 - gravity or jumping;

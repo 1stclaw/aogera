@@ -6,7 +6,7 @@ class RetirementLifecycleTest < Minitest::Test
   def setup
     @level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 6, height: 5),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 6, height: 5),
       spawns: [],
       relations: []
     )
@@ -247,7 +247,7 @@ class RetirementWallContactRegressionTest < Minitest::Test
     }.freeze
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0,
         rows: Array.new(5, "   |  "),
         tiles: tiles
       ),

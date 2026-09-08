@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "aogera/version"
+require_relative "aogera/world_units"
 require_relative "aogera/content/ruby_source"
 require_relative "aogera/content/paths"
 require_relative "aogera/dialogue/catalog"
@@ -24,6 +25,7 @@ require_relative "aogera/world"
 
 require_relative "aogera/level"
 require_relative "aogera/level/terrain"
+require_relative "aogera/level/readers/ruby"
 require_relative "aogera/level/loader"
 require_relative "aogera/session"
 

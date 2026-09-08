@@ -37,7 +37,7 @@ class PathfindingChaseTest < Minitest::Test
     hero_id = simulation.spawn_character(character_key: :hero, prototype: :player)
     hunter_id = simulation.entity_id_for_spawn(:hunter)
 
-    controller = Aogera::RealtimeController.new(npc_interval: 1)
+    controller = Aogera::RealtimeController.new(npc_interval: 1, npc_speed: 2.0)
     commands = controller.build(
       input: Aogera::Input::Snapshot.empty,
       level: level,

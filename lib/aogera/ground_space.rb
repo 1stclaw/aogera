@@ -242,15 +242,22 @@ module Aogera
     end
 
     def terrain_hit(level:, start_x:, start_z:, dx:, dz:, radius:)
-      min_x = ([start_x, start_x + dx].min - radius).floor
-      max_x = ([start_x, start_x + dx].max + radius).floor
-      min_z = ([start_z, start_z + dz].min - radius).floor
-      max_z = ([start_z, start_z + dz].max + radius).floor
+      min_grid_x, min_grid_z = level.cell_for_world(
+        [start_x, start_x + dx].min - radius,
+        [start_z, start_z + dz].min - radius
+      )
+      max_grid_x, max_grid_z = level.cell_for_world(
+        [start_x, start_x + dx].max + radius,
+        [start_z, start_z + dz].max + radius
+      )
 
       best = nil
-      (min_z..max_z).each do |grid_z|
-        (min_x..max_x).each do |grid_x|
+      (min_grid_z..max_grid_z).each do |grid_z|
+        (min_grid_x..max_grid_x).each do |grid_x|
           next if level.passable?(grid_x, grid_z)
+
+          cell_min_x, cell_min_z, cell_max_x, cell_max_z =
+            level.cell_bounds(grid_x, grid_z)
 
           hit = if radius.zero?
             segment_aabb_hit(
@@ -258,10 +265,10 @@ module Aogera
               start_z: start_z,
               dx: dx,
               dz: dz,
-              min_x: grid_x.to_f,
-              min_z: grid_z.to_f,
-              max_x: grid_x + 1.0,
-              max_z: grid_z + 1.0
+              min_x: cell_min_x,
+              min_z: cell_min_z,
+              max_x: cell_max_x,
+              max_z: cell_max_z
             )
           else
             swept_circle_cell_hit(
@@ -270,8 +277,10 @@ module Aogera
               dx: dx,
               dz: dz,
               radius: radius,
-              grid_x: grid_x,
-              grid_z: grid_z
+              min_x: cell_min_x,
+              min_z: cell_min_z,
+              max_x: cell_max_x,
+              max_z: cell_max_z
             )
           end
           next unless hit
@@ -381,12 +390,17 @@ module Aogera
       end
     end
 
-    def swept_circle_cell_hit(start_x:, start_z:, dx:, dz:, radius:, grid_x:, grid_z:)
-      min_x = grid_x.to_f
-      min_z = grid_z.to_f
-      max_x = grid_x + 1.0
-      max_z = grid_z + 1.0
-
+    def swept_circle_cell_hit(
+      start_x:,
+      start_z:,
+      dx:,
+      dz:,
+      radius:,
+      min_x:,
+      min_z:,
+      max_x:,
+      max_z:
+    )
       if circle_overlaps_aabb?(start_x, start_z, radius, min_x, min_z, max_x, max_z)
         return local_hit(0.0, 0.0, 0.0, true)
       end

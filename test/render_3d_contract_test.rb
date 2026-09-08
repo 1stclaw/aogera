@@ -16,6 +16,16 @@ class Render3DContractTest < Minitest::Test
       @tiles.fetch([x, y], :ground)
     end
 
+    def cell_size = 1.0
+
+    def cell_center(x, y)
+      [x + 0.5, y + 0.5]
+    end
+
+    def cell_for_world(x, z)
+      [x.floor, z.floor]
+    end
+
     def inside?(x, y)
       x >= 0 && y >= 0 && x < width && y < height
     end
@@ -115,10 +125,10 @@ class Render3DContractTest < Minitest::Test
     floor = cubes.find { |cube| cube[:x] == 0.5 }
     wall = cubes.find { |cube| cube[:x] == 1.5 }
 
-    assert_in_delta(-0.04, floor[:y])
-    assert_in_delta(0.08, floor[:height])
-    assert_in_delta(0.5, wall[:y])
-    assert_in_delta(1.0, wall[:height])
+    assert_in_delta(-1.28, floor[:y])
+    assert_in_delta(2.56, floor[:height])
+    assert_in_delta(16.0, wall[:y])
+    assert_in_delta(32.0, wall[:height])
   end
 
   def test_camera_entity_is_hidden_but_other_renderable_entities_are_drawn

@@ -1,8 +1,8 @@
-# Aogera 3D Migration: v0.2.3 to v0.3.1
+# Aogera 3D Migration: v0.2.3 to v0.3.2
 
-This document summarizes the architectural state of Aogera v0.3.1 relative to the final cleaned 2D/raylib baseline, v0.2.3.
+This document summarizes the architectural state of Aogera v0.3.2 relative to the final cleaned 2D/raylib baseline, v0.2.3.
 
-It is a state comparison rather than a chronological changelog. Superseded intermediate solutions are omitted; only systems and boundaries that exist in v0.3.1 are described here.
+It is a state comparison rather than a chronological changelog. Superseded intermediate solutions are omitted; only systems and boundaries that exist in v0.3.2 are described here.
 
 ## v0.2.3 baseline
 
@@ -32,7 +32,7 @@ Render::Raylib2D
 
 Runtime gameplay was also grid-oriented.
 
-## v0.3.1 runtime position
+## v0.3.2 runtime position
 
 Aogera now has one canonical continuous runtime position:
 
@@ -51,7 +51,7 @@ All current spatial runtime entities use the same world-space coordinate convent
 Current grid-authored cells map to world-space centers only when entities are instantiated:
 
 ```text
-cell (x, y) -> Position(x + 0.5, 0.0, y + 0.5)
+cell (x, y) -> Position((x + 0.5) * 32, 0.0, (y + 0.5) * 32)
 ```
 
 The authored grid is not retained as a second entity-position model. Player, enemies, and NPCs do not synchronize against a stored runtime cell coordinate.
@@ -224,7 +224,19 @@ BFS navigation cells
 
 It no longer defines runtime actor positions, actor locomotion, melee adjacency, or player/NPC collision as separate systems.
 
-## BSP boundary after v0.3.1
+## Authored-data and unit normalization
+
+Aogera 0.3.2 adds a real source-format boundary before BSP work:
+
+```text
+source -> Reader -> normalized Level::AuthoredData -> Level::Loader -> runtime
+```
+
+The current Ruby/grid reader converts source grid coordinates to Aogera world coordinates. `Level::Loader` no longer parses source files and rejects unnormalized source definitions.
+
+World-unit magnitude is now Quake 1 compatible. The temporary grid uses 32 world units per cell, and existing linear gameplay/render values are scaled proportionally. This removes the old one-cell/one-unit prototype scale before external BSP geometry enters the runtime.
+
+## BSP boundary after v0.3.2
 
 The normalized runtime leaves a clear static-world replacement point:
 
@@ -250,7 +262,7 @@ Navigation can evolve independently when the first BSP levels make a replacement
 
 ## Still absent by design
 
-Aogera v0.3.1 does not yet contain:
+Aogera v0.3.2 does not yet contain:
 
 - BSP loading;
 - vertical actor collision, gravity, jumping, or step/floor handling;
@@ -260,4 +272,4 @@ Aogera v0.3.1 does not yet contain:
 - generic asset management;
 - generic `Transform`, `PhysicsBody`, or `Spatial` frameworks.
 
-The v0.3.1 milestone is deliberately narrower: **one continuous world-space model for runtime entities, one shared actor movement/collision path, explicit lifecycle state, and one continuous spatial basis for combat and interaction.**
+The v0.3.2 milestone adds one more deliberate boundary before BSP: **one continuous world-space runtime, one shared actor movement/collision path, explicit lifecycle state, one continuous spatial basis for combat/interaction, a Reader/Loader authored-data boundary, and Quake-compatible world-unit magnitude.**

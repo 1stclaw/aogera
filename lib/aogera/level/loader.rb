@@ -5,42 +5,39 @@ module Aogera
     module Loader
       module_function
 
-      def load(path, prototypes:)
-        absolute_path = Content::RubySource.absolute_path(path, kind: :level)
-        require absolute_path
+      def load(authored_data, prototypes:)
+        unless authored_data.is_a?(AuthoredData)
+          raise ArgumentError, "Level::Loader expects normalized Level::AuthoredData"
+        end
 
-        definition_name = Content::RubySource.constant_name_for(absolute_path)
-        definition = Definitions.const_get(definition_name, false)
-
-        terrain = Terrain.new(rows: definition.rows, tiles: definition.tiles)
-
-        validate_spawns!(terrain, definition.spawns, prototypes)
-        validate_entries!(terrain, definition.entries)
-        validate_reference_keys!(definition.spawns, definition.entries)
-        validate_default_entry!(definition.default_entry, definition.entries)
-        validate_relations!(definition.relations, definition.spawns, definition.entries)
+        terrain = authored_data.terrain
+        validate_spawns!(terrain, authored_data.spawns, prototypes)
+        validate_entries!(terrain, authored_data.entries)
+        validate_reference_keys!(authored_data.spawns, authored_data.entries)
+        validate_default_entry!(authored_data.default_entry, authored_data.entries)
+        validate_relations!(authored_data.relations, authored_data.spawns, authored_data.entries)
 
         Level.new(
-          name: definition.name,
+          name: authored_data.name,
           terrain: terrain,
-          spawns: definition.spawns,
-          entries: definition.entries,
-          relations: definition.relations,
-          default_entry: definition.default_entry
+          spawns: authored_data.spawns,
+          entries: authored_data.entries,
+          relations: authored_data.relations,
+          default_entry: authored_data.default_entry
         )
       end
 
       def validate_spawns!(terrain, spawns, prototypes)
         spawns.each do |spawn|
           prototypes.fetch(spawn.prototype)
-          validate_position!(terrain, spawn.x, spawn.y, "#{spawn.prototype} spawn")
+          validate_position!(terrain, spawn.x, spawn.z, "#{spawn.prototype} spawn")
         end
       end
       private_class_method :validate_spawns!
 
       def validate_entries!(terrain, entries)
         entries.each do |entry|
-          validate_position!(terrain, entry.x, entry.y, "#{entry.key} entry")
+          validate_position!(terrain, entry.x, entry.z, "#{entry.key} entry")
         end
       end
       private_class_method :validate_entries!
@@ -75,13 +72,16 @@ module Aogera
       end
       private_class_method :validate_relations!
 
-      def validate_position!(terrain, x, y, label)
-        unless terrain.inside?(x, y)
-          raise ArgumentError, "#{label} is outside the terrain at (#{x}, #{y})"
+      def validate_position!(terrain, x, z, label)
+        grid_x, grid_z = terrain.cell_for_world(x, z)
+        unless terrain.inside?(grid_x, grid_z)
+          raise ArgumentError,
+            "#{label} is outside the terrain at world position (#{x}, #{z})"
         end
-        return if terrain.passable?(x, y)
+        return if terrain.passable?(grid_x, grid_z)
 
-        raise ArgumentError, "#{label} is on blocked terrain at (#{x}, #{y})"
+        raise ArgumentError,
+          "#{label} is on blocked terrain at world position (#{x}, #{z})"
       end
       private_class_method :validate_position!
     end

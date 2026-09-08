@@ -10,7 +10,7 @@ class GroundMovementTest < Minitest::Test
     }.freeze
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0,
         rows: ["     ", "   | ", "     "],
         tiles: tiles
       ),
@@ -40,7 +40,7 @@ class GroundMovementTest < Minitest::Test
   def test_blocking_entity_ground_body_is_solid_to_continuous_player_motion
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 5, height: 5),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 5, height: 5),
       spawns: [],
       relations: []
     )
@@ -78,7 +78,7 @@ class GroundMovementSweepTest < Minitest::Test
     }.freeze
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0,
         rows: ["     ", "   | ", "     "],
         tiles: tiles
       ),
@@ -112,7 +112,7 @@ class GroundMovementCornerTest < Minitest::Test
     }.freeze
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0,
         rows: ["     ", "     ", "   | ", "  || ", "     "],
         tiles: tiles
       ),
@@ -144,7 +144,7 @@ class GroundMovementBodyShapeTest < Minitest::Test
   def test_blocking_actor_uses_ground_body_circle_instead_of_whole_grid_cell
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 6, height: 6),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 6, height: 6),
       spawns: [],
       relations: []
     )
@@ -175,7 +175,7 @@ class GroundMovementBodyShapeTest < Minitest::Test
   def test_nonblocking_ground_body_does_not_stop_movement
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 6, height: 6),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 6, height: 6),
       spawns: [],
       relations: []
     )
@@ -206,7 +206,7 @@ class GroundMovementBodyShapeTest < Minitest::Test
   def test_moving_entity_radius_comes_from_ground_body
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 5, height: 5),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 5, height: 5),
       spawns: [],
       relations: []
     )
@@ -242,7 +242,7 @@ class GroundMovementMultiContactTest < Minitest::Test
     }.freeze
     @level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0,
         rows: Array.new(5, "   |  "),
         tiles: tiles
       ),

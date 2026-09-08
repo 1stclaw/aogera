@@ -222,7 +222,7 @@ class GroundTraceTest < Minitest::Test
   def blank_level(width:, height:)
     Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: width, height: height),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: width, height: height),
       spawns: [],
       relations: []
     )
@@ -235,7 +235,7 @@ class GroundTraceTest < Minitest::Test
     }.freeze
     Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(rows: rows, tiles: tiles),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, rows: rows, tiles: tiles),
       spawns: [],
       relations: []
     )

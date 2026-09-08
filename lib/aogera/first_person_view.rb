@@ -2,7 +2,7 @@
 
 module Aogera
   class FirstPersonView
-    DEFAULT_EYE_HEIGHT = 0.68
+    DEFAULT_EYE_HEIGHT = 21.76
     DEFAULT_FOVY = 60.0
     DEFAULT_MOUSE_SENSITIVITY = 0.0025
     MAX_PITCH = Math::PI * 0.47

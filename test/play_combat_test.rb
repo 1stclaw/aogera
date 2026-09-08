@@ -43,19 +43,14 @@ class PlayCombatTest < Minitest::Test
     }.freeze
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0,
         rows: ["     ", "  |  ", "     "],
         tiles: tiles
       ),
       spawns: [
-        Aogera::Level::Spawn.new(
-          key: :goblin,
-          prototype: :goblin,
-          x: 3,
-          y: 1
-        )
+        authored_spawn(key: :goblin, prototype: :goblin, x: 3, y: 1)
       ],
-      entries: [default_entry(x: 1, y: 1, facing: :east)],
+      entries: [authored_entry(x: 1, y: 1, facing: :east)],
       default_entry: :start,
       relations: []
     )

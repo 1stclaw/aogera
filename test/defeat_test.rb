@@ -6,7 +6,7 @@ class DefeatTest < Minitest::Test
   def setup
     @level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 5, height: 5),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 5, height: 5),
       spawns: [],
       relations: []
     )

@@ -117,7 +117,7 @@ class RaylibFrontendTest < Minitest::Test
   def test_raylib_3d_renderer_wraps_world_drawing_in_first_person_3d_mode
     api = FakeAPI.new
     renderer = Aogera::Render::Raylib3D.new(api: api)
-    terrain = Aogera::Level::Terrain.new(width: 1, height: 1)
+    terrain = Aogera::Level::Terrain.new(cell_size: 1.0, width: 1, height: 1)
     level = Aogera::Level.new(
       name: :test,
       terrain: terrain,

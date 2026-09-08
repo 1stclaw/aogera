@@ -10,8 +10,11 @@ module Aogera
       raylib_api: nil
     )
       prototypes = Prototype::Loader.load(Content::Paths.prototype(:actors))
+      authored_level = Level::Readers::Ruby.read(
+        Content::Paths.level(:test_field)
+      )
       level = Level::Loader.load(
-        Content::Paths.level(:test_field),
+        authored_level,
         prototypes: prototypes
       )
       dialogues = Dialogue::Loader.load(Content::Paths.dialogue(:test_field))

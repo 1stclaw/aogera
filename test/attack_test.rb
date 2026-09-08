@@ -6,7 +6,7 @@ class AttackTest < Minitest::Test
   def setup
     @level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(width: 5, height: 5),
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 5, height: 5),
       spawns: [],
       relations: []
     )
@@ -159,7 +159,7 @@ class AttackTest < Minitest::Test
     }.freeze
     level = Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(
+      terrain: Aogera::Level::Terrain.new(cell_size: 1.0,
         rows: ["     ", "  |  ", "     "],
         tiles: tiles
       ),

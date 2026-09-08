@@ -132,10 +132,10 @@ module Aogera
       source = world.component(entity_id, :position)
       return unless source
 
-      cell_x = source.x.floor + step[0]
-      cell_z = source.z.floor + step[1]
-      target_x = cell_x + 0.5
-      target_z = cell_z + 0.5
+      source_cell_x, source_cell_z = level.cell_for_world(source.x, source.z)
+      cell_x = source_cell_x + step[0]
+      cell_z = source_cell_z + step[1]
+      target_x, target_z = level.cell_center(cell_x, cell_z)
       dx = target_x - source.x
       dz = target_z - source.z
       distance = Math.hypot(dx, dz)

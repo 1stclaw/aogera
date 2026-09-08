@@ -1,4 +1,4 @@
-# Aogera 0.3.1 Raylib 3D Frontend
+# Aogera 0.3.2 Raylib 3D Frontend
 
 Aogera's active 3D frontend consumes the same canonical runtime position used by simulation and collision.
 
@@ -57,7 +57,7 @@ The coordinate convention is:
 Current grid-authored actors begin at cell centers:
 
 ```text
-cell (x, y) -> Position(x + 0.5, 0.0, y + 0.5)
+cell (x, y) -> Position((x + 0.5) * 32, 0.0, (y + 0.5) * 32)
 ```
 
 The renderer draws entities directly from these coordinates. There is no renderer-owned entity position and no player-only spatial component.
@@ -108,7 +108,7 @@ Vertical actor collision, gravity, jumping, and arbitrary 3D collision shapes ar
 
 ## Current world drawing
 
-`Render::Raylib3D` still uses the authored grid directly for temporary static-world presentation:
+`Render::Raylib3D` still uses the authored grid directly for temporary static-world presentation. Tile width/length come from the level's normalized `cell_size` (32 world units for current authored content):
 
 ```text
 passable tile -> floor primitive
@@ -124,8 +124,8 @@ This is intentionally a simple bridge. There is no `Scene3D`, `Projector3D`, mod
 `Simulation::Pathfinder` still uses the authored grid as temporary BFS navigation data. It derives cells with:
 
 ```text
-cell_x = floor(position.x)
-cell_z = floor(position.z)
+cell_x = floor(position.x / level.cell_size)
+cell_z = floor(position.z / level.cell_size)
 ```
 
 Those cells are not renderer state and are not stored as entity positions. NPC movement returns to continuous world-space displacement before entering `GroundMove`.
@@ -144,7 +144,7 @@ This preserves the useful platform boundary established before the 3D renderer a
 
 ## Still deferred
 
-Aogera 0.3.1 does not introduce:
+Aogera 0.3.2 does not introduce:
 
 - BSP loading/rendering/collision;
 - vertical actor physics;

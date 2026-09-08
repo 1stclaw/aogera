@@ -3,11 +3,10 @@
 module Aogera
   module Render
     class Raylib3D
-      TILE_SIZE = 1.0
-      FLOOR_HEIGHT = 0.08
-      WALL_HEIGHT = 1.0
-      ENTITY_WIDTH = 0.55
-      ENTITY_HEIGHT = 0.8
+      FLOOR_HEIGHT = 2.56
+      WALL_HEIGHT = 32.0
+      ENTITY_WIDTH = 17.6
+      ENTITY_HEIGHT = 25.6
 
       BACKGROUND = [24, 28, 34, 255].freeze
       STATUS_BACKGROUND = [11, 12, 15, 230].freeze
@@ -70,16 +69,17 @@ module Aogera
       def draw_tile(level, grid_x, grid_y)
         render_key = level.render_key_at(grid_x, grid_y)
         color = TERRAIN.fetch(render_key, DEFAULT_TERRAIN)
-        x, z = grid_center(grid_x, grid_y)
+        x, z = level.cell_center(grid_x, grid_y)
+        tile_size = level.cell_size
 
         if render_key == :wall
           @api.draw_cube(
             x: x,
             y: WALL_HEIGHT / 2.0,
             z: z,
-            width: TILE_SIZE,
+            width: tile_size,
             height: WALL_HEIGHT,
-            length: TILE_SIZE,
+            length: tile_size,
             rgba: color
           )
         else
@@ -87,9 +87,9 @@ module Aogera
             x: x,
             y: -(FLOOR_HEIGHT / 2.0),
             z: z,
-            width: TILE_SIZE,
+            width: tile_size,
             height: FLOOR_HEIGHT,
-            length: TILE_SIZE,
+            length: tile_size,
             rgba: color
           )
         end
@@ -102,7 +102,8 @@ module Aogera
           position = world.component(entity_id, :position)
           renderable = world.component(entity_id, :renderable)
           next unless position && renderable
-          next unless level.inside?(position.x.floor, position.z.floor)
+          grid_x, grid_z = level.cell_for_world(position.x, position.z)
+          next unless level.inside?(grid_x, grid_z)
 
           @api.draw_cube(
             x: position.x,
@@ -114,13 +115,6 @@ module Aogera
             rgba: ENTITIES.fetch(renderable.render_key, DEFAULT_ENTITY)
           )
         end
-      end
-
-      def grid_center(grid_x, grid_y)
-        [
-          (grid_x * TILE_SIZE) + (TILE_SIZE / 2.0),
-          (grid_y * TILE_SIZE) + (TILE_SIZE / 2.0)
-        ]
       end
 
       def camera_for(world:, view:, camera_entity_id:)

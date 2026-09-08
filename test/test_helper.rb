@@ -116,14 +116,29 @@ module AogeraTestSupport
     entries: [],
     default_entry: nil
   )
+    terrain = Aogera::Level::Terrain.new(
+      width: width,
+      height: height,
+      cell_size: 1.0
+    )
+    authored_spawns = spawns.map do |spawn|
+      x, z = terrain.cell_center(spawn.x, spawn.y)
+      Aogera::Level::AuthoredSpawn.new(
+        key: spawn.key, prototype: spawn.prototype, x: x, y: 0.0, z: z
+      )
+    end
+    authored_entries = entries.map do |entry|
+      x, z = terrain.cell_center(entry.x, entry.y)
+      Aogera::Level::AuthoredEntry.new(
+        key: entry.key, x: x, y: 0.0, z: z, facing: entry.facing
+      )
+    end
+
     Aogera::Level.new(
       name: :test,
-      terrain: Aogera::Level::Terrain.new(
-        width: width,
-        height: height
-      ),
-      spawns: spawns,
-      entries: entries,
+      terrain: terrain,
+      spawns: authored_spawns,
+      entries: authored_entries,
       relations: relations,
       default_entry: default_entry
     )
@@ -134,6 +149,26 @@ module AogeraTestSupport
       key: key,
       x: x,
       y: y,
+      facing: facing
+    )
+  end
+
+  def authored_spawn(key:, prototype:, x:, y:, cell_size: 1.0)
+    Aogera::Level::AuthoredSpawn.new(
+      key: key,
+      prototype: prototype,
+      x: Aogera::WorldUnits.grid_center(x, cell_size: cell_size),
+      y: 0.0,
+      z: Aogera::WorldUnits.grid_center(y, cell_size: cell_size)
+    )
+  end
+
+  def authored_entry(x: 2, y: 2, key: :start, facing: :south, cell_size: 1.0)
+    Aogera::Level::AuthoredEntry.new(
+      key: key,
+      x: Aogera::WorldUnits.grid_center(x, cell_size: cell_size),
+      y: 0.0,
+      z: Aogera::WorldUnits.grid_center(y, cell_size: cell_size),
       facing: facing
     )
   end
