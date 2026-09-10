@@ -7,8 +7,8 @@ module Aogera
     # The compiled hull keeps its fixed Quake dimensions. GroundBody radius is
     # still supplied for policy validation only; it does not resize the BSP
     # hull. One GroundHull adapter is cached per authored radius so navigation
-    # can validate different actor bodies without silently reusing a hull bound
-    # to another radius.
+    # and all BSP-mode actor movement can share the same compiled-hull source
+    # without silently reusing a hull bound to another radius.
     class GroundClearance
       def self.for_world(map_data:)
         new(

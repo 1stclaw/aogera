@@ -140,7 +140,7 @@ cell_x = floor(position.x / level.cell_size)
 cell_z = floor(position.z / level.cell_size)
 ```
 
-Those cells are not renderer state and are not stored as entity positions. In BSP mode, BFS candidate transitions are converted from cell centers back to world coordinates and checked against compiled hull-1 static clearance before they are enqueued. Dynamic entity occupancy remains a grid-cell planning rule. NPC movement returns to continuous world-space displacement before entering `GroundMove`, and its execution backend remains grid collision for now.
+Those cells are not renderer state and are not stored as entity positions. In BSP mode, BFS candidate transitions are converted from cell centers back to world coordinates and checked against compiled hull-1 static clearance before they are enqueued. Dynamic entity occupancy remains a grid-cell planning rule. NPC movement returns to continuous world-space displacement before entering `GroundMove`, and its execution uses the same `BSP29::GroundClearance` source for static hull-1 collision.
 
 ## Combat and interaction
 

@@ -32,7 +32,7 @@ class BSP29NavigationClearanceTest < Minitest::Test
     assert_includes [[0, -1], [0, 1]], step
   end
 
-  def test_bsp_aware_bfs_reroute_still_executes_with_grid_backed_npc_movement
+  def test_bsp_aware_bfs_reroute_executes_with_same_bsp_clearance_backend
     level = level_with(
       width: 5,
       height: 5,
@@ -54,9 +54,15 @@ class BSP29NavigationClearanceTest < Minitest::Test
         )
       ]
     )
+    clearance = Aogera::BSP29::GroundClearance.for_world(
+      map_data: bsp_map_with_solid_box
+    )
     simulation = Aogera::Simulation.new(
       level: level,
-      prototypes: prototype_catalog
+      prototypes: prototype_catalog,
+      ground_space: Aogera::GroundSpace.new(
+        bsp29_ground_hull: clearance
+      )
     )
     hero_id = simulation.spawn_character(
       character_key: :hero,
@@ -65,9 +71,7 @@ class BSP29NavigationClearanceTest < Minitest::Test
     hunter_id = simulation.entity_id_for_spawn(:hunter)
     controller = Aogera::RealtimeController.new(
       pathfinder: Aogera::Simulation::Pathfinder.new(
-        ground_clearance: Aogera::BSP29::GroundClearance.for_world(
-          map_data: bsp_map_with_solid_box
-        )
+        ground_clearance: clearance
       ),
       npc_interval: 1,
       npc_speed: 2.0
@@ -91,7 +95,7 @@ class BSP29NavigationClearanceTest < Minitest::Test
     )
   end
 
-  def test_app_configures_bsp_navigation_clearance_without_changing_npc_movement_space
+  def test_app_shares_bsp_ground_clearance_between_navigation_and_actor_movement
     app = Aogera::App.new(
       clock: -> { 0.0 },
       raylib_api: Object.new,
@@ -103,13 +107,14 @@ class BSP29NavigationClearanceTest < Minitest::Test
     clearance = pathfinder.instance_variable_get(:@ground_clearance)
     simulation = mode.simulation
     executor = simulation.instance_variable_get(:@executor)
-    npc_movement = executor.instance_variable_get(:@ground_movement)
-    player_movement = executor.instance_variable_get(:@character_ground_movement)
+    movement = executor.instance_variable_get(:@ground_movement)
+    movement_space = movement.instance_variable_get(:@ground_space)
+    movement_clearance = movement_space.instance_variable_get(:@bsp29_ground_hull)
 
     assert_instance_of(Aogera::BSP29::GroundClearance, clearance)
-    refute_same(npc_movement, player_movement)
-    assert_nil(npc_movement.instance_variable_get(:@ground_space).instance_variable_get(:@bsp29_ground_hull))
-    refute_nil(player_movement.instance_variable_get(:@ground_space).instance_variable_get(:@bsp29_ground_hull))
+    assert_same(clearance, movement_clearance)
+    assert_same(mode.instance_variable_get(:@ground_space), movement_space)
+    refute executor.instance_variable_defined?(:@character_ground_movement)
   end
 
   private

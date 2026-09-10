@@ -9,18 +9,12 @@ module Aogera
 
       def initialize(
         ground_movement: nil,
-        ground_space: GroundSpace.new,
-        character_ground_movement: nil,
-        character_ground_space: nil
+        ground_space: GroundSpace.new
       )
         @ground_space = ground_space
         @ground_movement = ground_movement || GroundMovement.new(
           ground_space: ground_space
         )
-        @character_ground_movement = character_ground_movement ||
-          if character_ground_space
-            GroundMovement.new(ground_space: character_ground_space)
-          end
       end
 
       def execute(level:, world:, commands:, bindings:)
@@ -28,7 +22,7 @@ module Aogera
         commands.each do |command|
           effect = case command
           in Commands::GroundMove
-            execute_ground_move(world, level, command, bindings)
+            execute_ground_move(world, level, command)
           in Commands::Attack
             execute_attack(world, level, command, bindings)
           in Commands::Defeat
@@ -46,14 +40,13 @@ module Aogera
 
       private
 
-      def execute_ground_move(world, level, command, bindings)
+      def execute_ground_move(world, level, command)
         return unless active_entity?(world, command.entity_id)
 
         position = world.component(command.entity_id, :position)
         return unless position
 
-        movement = ground_movement_for(bindings, command.entity_id)
-        resolved = movement.resolve(
+        resolved = @ground_movement.resolve(
           level: level,
           world: world,
           entity_id: command.entity_id,
@@ -64,14 +57,6 @@ module Aogera
 
         world.set_component(command.entity_id, :position, resolved)
         nil
-      end
-
-      def ground_movement_for(bindings, entity_id)
-        if @character_ground_movement && bindings.bound_entity?(entity_id)
-          @character_ground_movement
-        else
-          @ground_movement
-        end
       end
 
       def execute_attack(world, level, command, bindings)

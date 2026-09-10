@@ -13,7 +13,7 @@ class BSP29SimulationCollisionTest < Minitest::Test
     simulation = Aogera::Simulation.new(
       level: level,
       prototypes: prototype_catalog,
-      character_ground_space: bsp_ground_space(map_data)
+      ground_space: bsp_ground_space(map_data)
     )
     player_id = simulation.spawn_character(
       character_key: :hero,
@@ -35,16 +35,16 @@ class BSP29SimulationCollisionTest < Minitest::Test
     assert_in_delta(4.0, position.z)
   end
 
-  def test_spawned_npc_ground_move_stays_on_grid_collision_backend
+  def test_spawned_npc_ground_move_uses_bsp_static_collision_backend
     map_data = bsp_map_with_solid_behind_x_plane(3.0)
     level = open_level(
       spawns: [spawn(key: :goblin, prototype: :goblin, x: 4.0, z: 2.0)],
-      entries: [entry(key: :start, x: 4.0, z: 6.0)]
+      entries: [entry(key: :start, x: 8.0, z: 8.0)]
     )
     simulation = Aogera::Simulation.new(
       level: level,
       prototypes: prototype_catalog,
-      character_ground_space: bsp_ground_space(map_data)
+      ground_space: bsp_ground_space(map_data)
     )
     simulation.spawn_character(character_key: :hero, prototype: :player)
     goblin_id = simulation.entity_id_for_spawn(:goblin)
@@ -60,12 +60,114 @@ class BSP29SimulationCollisionTest < Minitest::Test
     )
 
     position = simulation.world_view.component(goblin_id, :position)
-    assert_in_delta(2.0, position.x)
+    assert_in_delta(3.0, position.x)
     assert_in_delta(2.0, position.z)
   end
 
-  def test_retiring_grid_blocker_does_not_freeze_other_goblin_against_character_bsp_hull
-    map_data = bsp_map_with_solid_behind_x_plane(4.0)
+  def test_one_bsp_ground_space_handles_player_and_npc_authored_radii
+    map_data = bsp_map_with_solid_behind_x_plane(3.0)
+    level = open_level(
+      spawns: [spawn(key: :goblin, prototype: :goblin, x: 4.0, z: 2.0)],
+      entries: [entry(key: :start, x: 4.0, z: 4.0, facing: :west)]
+    )
+    simulation = Aogera::Simulation.new(
+      level: level,
+      prototypes: prototype_catalog,
+      ground_space: bsp_ground_space(map_data)
+    )
+    player_id = simulation.spawn_character(
+      character_key: :hero,
+      prototype: :player
+    )
+    goblin_id = simulation.entity_id_for_spawn(:goblin)
+
+    simulation.step(
+      commands: ground_moves(
+        Aogera::Simulation::Commands::GroundMove.new(
+          entity_id: player_id,
+          dx: -2.0,
+          dz: 0.0
+        ),
+        Aogera::Simulation::Commands::GroundMove.new(
+          entity_id: goblin_id,
+          dx: -2.0,
+          dz: 0.0
+        )
+      )
+    )
+
+    player_position = simulation.world_view.component(player_id, :position)
+    goblin_position = simulation.world_view.component(goblin_id, :position)
+    assert_in_delta(3.0, player_position.x)
+    assert_in_delta(4.0, player_position.z)
+    assert_in_delta(3.0, goblin_position.x)
+    assert_in_delta(2.0, goblin_position.z)
+  end
+
+  def test_spawned_npc_slides_along_bsp_wall_with_existing_ground_movement_solver
+    map_data = bsp_map_with_solid_behind_x_plane(3.0)
+    level = open_level(
+      spawns: [spawn(key: :goblin, prototype: :goblin, x: 4.0, z: 2.0)],
+      entries: [entry(key: :start, x: 8.0, z: 8.0)]
+    )
+    simulation = Aogera::Simulation.new(
+      level: level,
+      prototypes: prototype_catalog,
+      ground_space: bsp_ground_space(map_data)
+    )
+    simulation.spawn_character(character_key: :hero, prototype: :player)
+    goblin_id = simulation.entity_id_for_spawn(:goblin)
+
+    simulation.step(
+      commands: ground_moves(
+        Aogera::Simulation::Commands::GroundMove.new(
+          entity_id: goblin_id,
+          dx: -2.0,
+          dz: 2.0
+        )
+      )
+    )
+
+    position = simulation.world_view.component(goblin_id, :position)
+    assert_in_delta(3.0, position.x)
+    assert_in_delta(4.0, position.z)
+  end
+
+  def test_dynamic_ground_body_still_blocks_npc_before_empty_bsp_world
+    map_data = empty_bsp_map
+    level = open_level(
+      spawns: [
+        spawn(key: :mover, prototype: :goblin, x: 4.0, z: 2.0),
+        spawn(key: :blocker, prototype: :goblin, x: 3.0, z: 2.0)
+      ],
+      entries: [entry(key: :start, x: 8.0, z: 8.0)]
+    )
+    simulation = Aogera::Simulation.new(
+      level: level,
+      prototypes: prototype_catalog,
+      ground_space: bsp_ground_space(map_data)
+    )
+    simulation.spawn_character(character_key: :hero, prototype: :player)
+    mover_id = simulation.entity_id_for_spawn(:mover)
+
+    simulation.step(
+      commands: ground_moves(
+        Aogera::Simulation::Commands::GroundMove.new(
+          entity_id: mover_id,
+          dx: -2.0,
+          dz: 0.0
+        )
+      )
+    )
+
+    position = simulation.world_view.component(mover_id, :position)
+    assert_in_delta(3.56, position.x)
+    assert_in_delta(2.0, position.z)
+  end
+
+  def test_retiring_dynamic_blocker_allows_bsp_backed_npc_to_continue
+    map_data = empty_bsp_map
+    clearance = Aogera::BSP29::GroundClearance.for_world(map_data: map_data)
     level = open_level(
       spawns: [
         spawn(key: :hunter, prototype: :goblin, x: 4.5, z: 2.5),
@@ -83,7 +185,9 @@ class BSP29SimulationCollisionTest < Minitest::Test
     simulation = Aogera::Simulation.new(
       level: level,
       prototypes: catalog_with_dead_blocker,
-      character_ground_space: bsp_ground_space(map_data)
+      ground_space: Aogera::GroundSpace.new(
+        bsp29_ground_hull: clearance
+      )
     )
     player_id = simulation.spawn_character(character_key: :hero, prototype: :player)
     hunter_id = simulation.entity_id_for_spawn(:hunter)
@@ -97,6 +201,9 @@ class BSP29SimulationCollisionTest < Minitest::Test
     assert simulation.world_view.retired?(blocker_id)
 
     controller = Aogera::RealtimeController.new(
+      pathfinder: Aogera::Simulation::Pathfinder.new(
+        ground_clearance: clearance
+      ),
       npc_interval: 1,
       npc_speed: Aogera::Realtime::TICK_HZ
     )
@@ -127,10 +234,26 @@ class BSP29SimulationCollisionTest < Minitest::Test
 
   def bsp_ground_space(map_data)
     Aogera::GroundSpace.new(
-      bsp29_ground_hull: Aogera::BSP29::GroundHull.for_world(
-        map_data: map_data,
-        ground_body_radius: 0.22
+      bsp29_ground_hull: Aogera::BSP29::GroundClearance.for_world(
+        map_data: map_data
       )
+    )
+  end
+
+  def empty_bsp_map
+    model = Aogera::BSP29::Model.new(
+      bounds: nil,
+      origin: Aogera::BSP29::Vec3.new(x: 0.0, y: 0.0, z: 0.0),
+      headnodes: [99, -1, -1, -1].freeze,
+      visible_leaf_count: 0,
+      first_face: 0,
+      face_count: 0
+    )
+
+    Struct.new(:planes, :clipnodes, :world_model).new(
+      [].freeze,
+      [].freeze,
+      model
     )
   end
 

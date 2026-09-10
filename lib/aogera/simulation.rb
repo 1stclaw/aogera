@@ -9,18 +9,14 @@ module Aogera
     def initialize(
       level:,
       prototypes:,
-      ground_space: GroundSpace.new,
-      character_ground_space: nil
+      ground_space: GroundSpace.new
     )
       @level = level
       @prototypes = prototypes
       @world = World.new
       @bindings = Bindings.new
       @step_number = 0
-      @executor = Executor.new(
-        ground_space: ground_space,
-        character_ground_space: character_ground_space
-      )
+      @executor = Executor.new(ground_space: ground_space)
       @reference_ids = {}
 
       instantiate_spawns
