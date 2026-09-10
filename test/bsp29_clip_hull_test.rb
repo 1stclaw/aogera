@@ -184,6 +184,32 @@ class BSP29ClipHullTest < Minitest::Test
     assert_equal(-2, hull.point_contents(vec(-1, 0, 0)))
   end
 
+
+  def test_for_world_rejects_render_headnode_zero_as_clip_hull
+    model = Aogera::BSP29::Model.new(
+      bounds: nil,
+      origin: vec(0, 0, 0),
+      headnodes: [0, -1, -1, -1].freeze,
+      visible_leaf_count: 0,
+      first_face: 0,
+      face_count: 0
+    )
+    map_data = Struct.new(:planes, :clipnodes, :world_model).new(
+      [x_plane],
+      [ClipNode.new(plane_index: 0, children: [-1, -2].freeze)],
+      model
+    )
+
+    error = assert_raises(ArgumentError) do
+      Aogera::BSP29::ClipHull.for_world(
+        map_data: map_data,
+        hull_index: 0
+      )
+    end
+
+    assert_match(/compiled clip hull/, error.message)
+  end
+
   private
 
   def x_plane_hull

@@ -3,8 +3,8 @@
 module Aogera
   module Render
     # Minimal BSP29 static-world renderer used by the controlled test-field
-    # fixture. It draws only world model 0. Gameplay/collision remain owned by
-    # the current Level until BSP collision is connected in a later patch.
+    # fixture. It draws only world model 0. Navigation and authored gameplay
+    # still use the current Level; BSP movement collision is handled elsewhere.
     class BSP29World
       Triangle = Data.define(:a, :b, :c, :texture_name)
 

@@ -39,6 +39,7 @@ module Aogera
             end_x: x + remaining_x,
             end_z: z + remaining_z,
             radius: radius,
+            ground_y: position.y,
             ignore_entity_id: entity_id,
             entity_filter: blocker
           )
@@ -151,6 +152,7 @@ module Aogera
           end_x: position.x,
           end_z: position.z,
           radius: radius,
+          ground_y: position.y,
           ignore_entity_id: entity_id,
           entity_filter: entity_filter
         )

@@ -162,6 +162,7 @@ module Aogera
           start_z: source.z,
           end_x: target.x,
           end_z: target.z,
+          ground_y: source.y,
           ignore_entity_id: controlled_entity_id,
           entity_filter: action_obstacle_filter(target_id)
         )

@@ -199,7 +199,9 @@ GroundMove
 
 The Pathfinder checks terrain passability and projects active blocking entities into navigation cells. Navigation cells are temporary planning values and are never synchronized back into entity state.
 
-This preserves the useful current BFS while allowing a future BSP/navigation representation to replace it without changing canonical positions or collision execution.
+In BSP mode the grid remains the BFS topology, but each candidate cell-center transition is also checked through `BSP29::GroundClearance`, which traces compiled hull 1 using the source actor's authored `GroundBody` radius as the existing fixed-hull contract check. Dynamic entities are still handled by the established cell-occupancy rule; the BSP query is static-world clearance only.
+
+This preserves the useful current BFS while making its planned transitions conservative with respect to the static BSP geometry before NPC movement execution itself changes backend.
 
 ## Combat
 
@@ -338,15 +340,17 @@ Aogera 0.3.2 has:
 - a Reader -> normalized authored data -> Loader map boundary;
 - Quake 1-compatible world-unit magnitude with 32-unit current grid cells;
 - a validated BSP29 Reader preserving geometry, BSP tree, clipnodes, textures, entities, visibility/light blobs, and submodels;
-- a minimal BSP29 world-model renderer used by the controlled test-field preview.
+- a minimal BSP29 world-model renderer used by the controlled test-field preview;
+- BSP29 compiled hull 1 as the bound-player static movement backend;
+- BSP29 world-model node/leaf tracing for melee and interaction obstruction.
 
 It does not yet contain:
 
-- BSP collision as an authoritative static-world backend;
+- BSP-backed spawned-NPC static movement;
 - vertical actor collision, gravity, jumping, floor/ceiling/step handling;
 - projectiles or hitscan weapons;
 - generalized collision masks;
 - generic physics, transform, or spatial frameworks;
 - a general asset manager.
 
-The next BSP work should replace the temporary grid collision backend with BSP29 hull/clipnode tracing. Rendering and parsing no longer need another coordinate or unit migration; later navigation and brush-submodel behavior can evolve independently from the canonical entity-position model.
+In BSP mode, dynamic entity rendering now consumes canonical `Position` directly and no longer uses Ruby-grid bounds as a presentation gate. The current BFS representation is also retained, but candidate center-to-center transitions are validated against BSP hull-1 static clearance. Spawned-NPC movement execution still uses the grid-backed `GroundSpace`; switching that execution path to BSP can therefore be tested as a separate next step. Brush-submodel behavior can continue to evolve independently from the canonical entity-position model.

@@ -6,13 +6,21 @@ module Aogera
 
     attr_reader :level, :step_number
 
-    def initialize(level:, prototypes:)
+    def initialize(
+      level:,
+      prototypes:,
+      ground_space: GroundSpace.new,
+      character_ground_space: nil
+    )
       @level = level
       @prototypes = prototypes
       @world = World.new
       @bindings = Bindings.new
       @step_number = 0
-      @executor = Executor.new
+      @executor = Executor.new(
+        ground_space: ground_space,
+        character_ground_space: character_ground_space
+      )
       @reference_ids = {}
 
       instantiate_spawns

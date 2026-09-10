@@ -164,6 +164,7 @@ module Aogera
         start_z: source.z,
         end_x: target.x,
         end_z: target.z,
+        ground_y: source.y,
         ignore_entity_id: source_id,
         entity_filter: lambda do |entity_id|
           next true if entity_id == target_id

@@ -111,8 +111,7 @@ module Aogera
           position = world.component(entity_id, :position)
           renderable = world.component(entity_id, :renderable)
           next unless position && renderable
-          grid_x, grid_z = level.cell_for_world(position.x, position.z)
-          next unless level.inside?(grid_x, grid_z)
+          next unless entity_position_visible?(level, position)
 
           @api.draw_cube(
             x: position.x,
@@ -124,6 +123,13 @@ module Aogera
             rgba: ENTITIES.fetch(renderable.render_key, DEFAULT_ENTITY)
           )
         end
+      end
+
+      def entity_position_visible?(level, position)
+        return true if @bsp29_world
+
+        grid_x, grid_z = level.cell_for_world(position.x, position.z)
+        level.inside?(grid_x, grid_z)
       end
 
       def camera_for(world:, view:, camera_entity_id:)

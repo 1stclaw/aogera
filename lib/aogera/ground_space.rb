@@ -5,6 +5,12 @@ module Aogera
     ArcHit = Data.define(:entity_id, :separation, :alignment)
 
     EPSILON = 1e-9
+    BSP29_OBSTRUCTION_HEIGHT = 16.0
+
+    def initialize(bsp29_ground_hull: nil, bsp29_point_hull: nil)
+      @bsp29_ground_hull = bsp29_ground_hull
+      @bsp29_point_hull = bsp29_point_hull
+    end
 
     def position(world:, entity_id:)
       world.component(entity_id, :position)
@@ -117,6 +123,7 @@ module Aogera
       start_z:,
       end_x:,
       end_z:,
+      ground_y: 0.0,
       ignore_entity_id: nil,
       entity_filter: nil
     )
@@ -128,6 +135,7 @@ module Aogera
         end_x: end_x,
         end_z: end_z,
         radius: 0.0,
+        ground_y: ground_y,
         ignore_entity_id: ignore_entity_id,
         entity_filter: entity_filter
       )
@@ -141,6 +149,7 @@ module Aogera
       end_x:,
       end_z:,
       radius:,
+      ground_y: 0.0,
       ignore_entity_id: nil,
       entity_filter: nil
     )
@@ -155,6 +164,7 @@ module Aogera
         end_x: end_x,
         end_z: end_z,
         radius: radius,
+        ground_y: ground_y,
         ignore_entity_id: ignore_entity_id,
         entity_filter: entity_filter
       )
@@ -172,6 +182,7 @@ module Aogera
       end_x:,
       end_z:,
       radius:,
+      ground_y:,
       ignore_entity_id:,
       entity_filter:
     )
@@ -180,6 +191,7 @@ module Aogera
       end_x = Float(end_x)
       end_z = Float(end_z)
       radius = Float(radius)
+      ground_y = Float(ground_y)
       dx = end_x - start_x
       dz = end_z - start_z
 
@@ -190,7 +202,8 @@ module Aogera
           start_z: start_z,
           dx: dx,
           dz: dz,
-          radius: radius
+          radius: radius,
+          ground_y: ground_y
         ),
         entity_hit(
           world: world,
@@ -241,7 +254,88 @@ module Aogera
       end
     end
 
-    def terrain_hit(level:, start_x:, start_z:, dx:, dz:, radius:)
+    def terrain_hit(level:, start_x:, start_z:, dx:, dz:, radius:, ground_y:)
+      if @bsp29_point_hull && radius.zero?
+        return bsp29_point_hit(
+          start_x: start_x,
+          start_z: start_z,
+          dx: dx,
+          dz: dz,
+          ground_y: ground_y
+        )
+      end
+
+      if @bsp29_ground_hull && radius.positive?
+        return bsp29_ground_hit(
+          start_x: start_x,
+          start_z: start_z,
+          dx: dx,
+          dz: dz,
+          radius: radius,
+          ground_y: ground_y
+        )
+      end
+
+      grid_terrain_hit(
+        level: level,
+        start_x: start_x,
+        start_z: start_z,
+        dx: dx,
+        dz: dz,
+        radius: radius
+      )
+    end
+
+    def bsp29_point_hit(start_x:, start_z:, dx:, dz:, ground_y:)
+      trace_y = ground_y + BSP29_OBSTRUCTION_HEIGHT
+      trace = @bsp29_point_hull.trace(
+        start_position: BSP29::Vec3.new(
+          x: start_x,
+          y: trace_y,
+          z: start_z
+        ),
+        end_position: BSP29::Vec3.new(
+          x: start_x + dx,
+          y: trace_y,
+          z: start_z + dz
+        )
+      )
+      return unless trace.hit?
+
+      normal = trace.plane_normal
+      Hit.new(
+        fraction: trace.start_solid ? 0.0 : trace.fraction,
+        normal_x: normal ? normal.x : 0.0,
+        normal_z: normal ? normal.z : 0.0,
+        entity_id: nil,
+        world_hit: true,
+        start_blocked: trace.start_solid
+      )
+    end
+
+    def bsp29_ground_hit(start_x:, start_z:, dx:, dz:, radius:, ground_y:)
+      trace = @bsp29_ground_hull.trace(
+        start_x: start_x,
+        start_z: start_z,
+        end_x: start_x + dx,
+        end_z: start_z + dz,
+        feet_y: ground_y,
+        ground_body_radius: radius
+      )
+      return unless trace.hit?
+
+      normal = trace.plane_normal
+      Hit.new(
+        fraction: trace.start_solid ? 0.0 : trace.fraction,
+        normal_x: normal ? normal.x : 0.0,
+        normal_z: normal ? normal.z : 0.0,
+        entity_id: nil,
+        world_hit: true,
+        start_blocked: trace.start_solid
+      )
+    end
+
+    def grid_terrain_hit(level:, start_x:, start_z:, dx:, dz:, radius:)
       min_grid_x, min_grid_z = level.cell_for_world(
         [start_x, start_x + dx].min - radius,
         [start_z, start_z + dz].min - radius

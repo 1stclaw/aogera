@@ -125,6 +125,8 @@ Current consumers include:
 - interaction obstruction;
 - line-of-sight-like spatial checks.
 
+In the BSP preview, zero-radius static obstruction is now provided by `BSP29::PointHull`, which traverses world-model headnode 0 through BSP nodes and leaves. Dynamic `GroundBody` circles still participate in the same earliest-hit query. The current ground-style combat model samples the BSP point trace 16 world units above the source `Position.y`; this keeps the trace off the floor/brush boundary without introducing vertical aiming, gravity, or a new actor-height model.
+
 A segment trace is not an attack and does not define damage or target policy.
 
 ## 6. Swept-circle traces
@@ -139,13 +141,21 @@ It asks:
 
 > How far can this ground body move before first contact?
 
-Current player and NPC locomotion both use this query through `Simulation::GroundMovement`.
+Current player and NPC locomotion both use this query through `Simulation::GroundMovement`, but the BSP preview deliberately supplies different static backends while navigation remains grid-based:
+
+```text
+bound persistent character -> BSP29 hull 1 static collision
+spawned NPCs              -> Ruby-grid static collision
+all actors                -> dynamic GroundBody collision
+```
+
+This split is temporary and explicit. It prevents grid-planned NPC movement from being rejected by a different BSP clearance model before BSP-aware navigation exists.
 
 The query covers the complete requested displacement, so anti-tunneling behavior does not depend on dividing movement into many artificial substeps.
 
-## 7. Static terrain backend
+## 7. Static terrain backends
 
-The current authored level is a grid. Impassable terrain cells act as solid static collision cells.
+The current authored level is still a grid. Impassable terrain cells act as solid static collision cells for the normal Ruby launch and for spawned NPC movement in the BSP preview.
 
 ```text
 grid cell (x, z), cell size S
@@ -156,9 +166,23 @@ Z = z * S .. (z + 1) * S
 Current authored grid levels use S = 32 world units.
 ```
 
-Static terrain participates in the same earliest-hit result as dynamic entities.
+The BSP preview additionally supplies two static-space BSP adapters:
 
-This static backend is intentionally replaceable. Gameplay callers consume `GroundTrace`, not grid-cell collision details.
+- `BSP29::GroundHull` traces Quake BSP29 compiled hull 1 through clipnodes for bound-player movement;
+- `BSP29::PointHull` traces world-model headnode 0 through nodes/leaves for zero-radius melee and interaction obstruction.
+
+Hull 1 is a fixed collision-source shape with horizontal half-extent 16 and vertical bounds -24..32 around the Quake hull origin; it is not derived from `GroundBody(radius)`. PointHull is shape-free and blocks only `CONTENTS_SOLID` for now; generalized Quake-style contents/masks remain deferred.
+
+The current 0.3.2 policy is explicit rather than pretending those shapes are equivalent:
+
+```text
+BSP static clearance        -> compiled hull 1
+actor-vs-actor clearance    -> authored GroundBody radius
+```
+
+`GroundHull` is constructed with the authored radius of the character it serves. `GroundSpace` forwards the moving body's radius into each BSP trace and `GroundHull` verifies that it matches the configured radius. The value does **not** resize the compiled hull; the check exists so a fixed BSP hull cannot silently be reused for a differently sized actor. `horizontal_clearance_delta` exposes the difference between hull 1's 16-unit half-extent and the bound `GroundBody` radius for diagnostics.
+
+Static terrain participates in the same earliest-hit result as dynamic entities. Gameplay callers consume `GroundTrace`, not grid-cell or clipnode details.
 
 ## 8. Dynamic collision backend
 
@@ -292,7 +316,7 @@ continuous waypoint displacement
 GroundMove
 ```
 
-NPCs therefore share runtime collision and movement with the player even while route planning still uses the authored grid.
+NPCs still share the same continuous `Position`, `GroundMove`, `GroundBody`, and `GroundMovement` machinery with the player, but in the current BSP preview their **movement execution** backend remains the authored grid. BFS topology is also still the grid, while candidate center-to-center transitions are now additionally validated against BSP29 compiled hull-1 static clearance. This deliberately removes the dangerous direction of mismatch where BFS plans a route that the future BSP movement backend cannot traverse, without switching NPC movement execution in the same patch.
 
 ## 15. Filtering
 
@@ -307,29 +331,33 @@ Current trace calls support concrete filtering needs such as:
 
 More elaborate collision categories can be introduced when real gameplay requires them.
 
-## 16. BSP replacement boundary
+## 16. Current BSP authority boundary
 
-The current static side of the collision service is:
-
-```text
-GroundSpace
-    |
-    +-- static grid collision
-    +-- dynamic GroundBody collision
-```
-
-A later BSP-oriented shape can become:
+The BSP preview is intentionally hybrid while collision is migrated incrementally:
 
 ```text
-GroundSpace / successor trace boundary
-    |
-    +-- BSP29 collision data
-    +-- dynamic entity collision
+visible static world          -> BSP29 model 0
+bound-player static movement -> BSP29 compiled hull 1
+NPC static movement          -> Ruby grid
+zero-radius obstruction      -> BSP29 hull-0 node/leaf tree
+BFS topology                 -> Ruby grid
+BFS static step clearance    -> BSP29 compiled hull 1
+dynamic actor collision      -> GroundBody circles
 ```
 
-Movement, melee, and interaction already consume the trace-result contract rather than the static grid implementation.
+`Simulation::Executor` selects the BSP-backed movement service only for an entity bound through `Simulation::Bindings`. Ordinary spawned NPCs continue to use the default grid-backed movement service.
 
-BSP29 loading and world-model rendering now exist, but the controlled BSP preview intentionally continues to use the matching grid collision backend. Quake BSP collision hulls/clipnodes are already preserved by `BSP29::Reader` and are the next static-collision source; collision must not be reconstructed from rendered polygons merely because rendering also consumes BSP geometry.
+This split is a temporary safety boundary, not the target architecture. It exists because standard BSP29 compiled hulls have fixed clearance while Aogera currently authors smaller `GroundBody` radii. The controlled 32-unit water pinch in `test_field` exposes that mismatch: the player circle with radius 7.04 has positive clearance, while hull 1's 16-unit horizontal half-extent has zero clearance in a 32-unit gap.
+
+For the current BSP preview that mismatch is accepted as a source-format limitation rather than hidden. The bound-player `GroundHull` records radius 7.04 and reports a horizontal clearance delta of 8.96 units, while still tracing the unmodified compiled hull. Supporting arbitrary authored radii for static BSP collision remains deferred until there is a collision source that can actually represent them.
+
+Zero-radius melee/interaction obstruction now uses `BSP29::PointHull` through model headnode 0. `App` supplies the same BSP point-backed `GroundSpace` to player target selection, NPC melee planning, and executor-side attack validation, so those domains no longer disagree about static obstruction.
+
+For navigation, `App` also supplies `Simulation::Pathfinder` with `BSP29::GroundClearance`. The Pathfinder keeps the current grid cells, ordering, target-adjacent goals, and dynamic-cell occupancy behavior. During BFS expansion it converts the current and candidate cells to their world-space centers and accepts the transition only when compiled hull 1 is clear for the source actor. `GroundClearance` caches a radius-bound `GroundHull` adapter per authored `GroundBody` radius; the radius remains a contract check and does not resize the fixed BSP hull.
+
+Positive-radius NPC movement execution itself remains grid-backed. This is intentionally one-way conservative during the migration: navigation may reject a grid-clear transition that BSP hull 1 cannot traverse, but the executor does not yet apply a stricter BSP backend after BFS has chosen a route.
+
+Collision continues to use BSP collision/partition data rather than reconstructed render triangles.
 
 ## 17. Deferred collision work
 
@@ -342,9 +370,9 @@ Aogera 0.3.2 does not yet implement:
 - projectiles or hitscan delivery;
 - generalized contents/masks;
 - rigid-body physics;
-- BSP hull/clipnode integration into the trace service;
+- arbitrary authored actor radii for BSP static collision;
 - generic `Transform`, `PhysicsBody`, or `Spatial` frameworks.
 
-The current invariant is simpler:
+The current invariant is narrower:
 
-> **Aogera has one runtime world-space model; movement and gameplay consume shared collision results instead of maintaining competing spatial truths.**
+> **Aogera keeps one continuous runtime position/body model while static grid and BSP authorities are migrated behind explicit, tested boundaries.**

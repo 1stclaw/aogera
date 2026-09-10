@@ -168,6 +168,72 @@ class Render3DContractTest < Minitest::Test
     assert_in_delta 1.5, entity_cubes.first[:x]
   end
 
+  def test_grid_renderer_still_clips_entities_outside_level_bounds
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 0.5, y: 0.0, z: 0.5)
+    )
+    world.spawn(
+      position: Aogera::Component::Position.new(x: 4.5, y: 0.0, z: 0.5),
+      renderable: Aogera::Component::Renderable.new(
+        render_key: :goblin,
+        glyph: "G",
+        layer: 10
+      )
+    )
+
+    Aogera::Render::Raylib3D.new(api: api).draw(
+      level: FakeLevel.new(width: 2, height: 1),
+      world: world.view,
+      status: "test",
+      view: Aogera::FirstPersonView.for_direction(:east),
+      camera_entity_id: camera_id
+    )
+
+    entity_cubes = api.calls
+      .select { |call| call.first == :draw_cube }
+      .map(&:last)
+      .select { |cube| cube[:height] == Aogera::Render::Raylib3D::ENTITY_HEIGHT }
+
+    assert_empty entity_cubes
+  end
+
+  def test_bsp_renderer_draws_entities_without_consulting_grid_bounds
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 112.0, y: 0.0, z: 112.0)
+    )
+    world.spawn(
+      position: Aogera::Component::Position.new(x: 2048.0, y: 0.0, z: 2048.0),
+      renderable: Aogera::Component::Renderable.new(
+        render_key: :goblin,
+        glyph: "G",
+        layer: 10
+      )
+    )
+    bsp29_map = Object.new
+    bsp29_map.define_singleton_method(:world_model) { nil }
+
+    Aogera::Render::Raylib3D.new(api: api, bsp29_map: bsp29_map).draw(
+      level: Object.new,
+      world: world.view,
+      status: "test",
+      view: Aogera::FirstPersonView.for_direction(:east),
+      camera_entity_id: camera_id
+    )
+
+    entity_cubes = api.calls
+      .select { |call| call.first == :draw_cube }
+      .map(&:last)
+      .select { |cube| cube[:height] == Aogera::Render::Raylib3D::ENTITY_HEIGHT }
+
+    assert_equal 1, entity_cubes.length
+    assert_in_delta 2048.0, entity_cubes.first[:x]
+    assert_in_delta 2048.0, entity_cubes.first[:z]
+  end
+
   def test_entities_without_renderable_component_are_not_drawn
     api = FakeAPI.new
     world = Aogera::World.new

@@ -5,6 +5,10 @@ module Aogera
     class Pathfinder
       DIRECTIONS = Direction::VECTORS
 
+      def initialize(ground_clearance: nil)
+        @ground_clearance = ground_clearance
+      end
+
       def next_step(level:, world:, source_id:, target_id:)
         source = world.component(source_id, :position)
         target = world.component(target_id, :position)
@@ -25,6 +29,7 @@ module Aogera
           level: level,
           world: world,
           source_id: source_id,
+          source: source,
           start: start,
           target_cell: target_cell,
           goals: goals
@@ -60,10 +65,11 @@ module Aogera
         end
       end
 
-      def search(level:, world:, source_id:, start:, target_cell:, goals:)
+      def search(level:, world:, source_id:, source:, start:, target_cell:, goals:)
         queue = [start]
         head = 0
         parents = { start => nil }
+        ground_body = world.component(source_id, :ground_body)
 
         while head < queue.length
           current = queue[head]
@@ -81,6 +87,13 @@ module Aogera
               x: neighbor[0],
               z: neighbor[1],
               except_id: source_id
+            )
+            next unless transition_clear?(
+              level: level,
+              from: current,
+              to: neighbor,
+              feet_y: source.y,
+              ground_body: ground_body
             )
 
             parents[neighbor] = current
@@ -117,6 +130,22 @@ module Aogera
           cell_x, cell_z = level.cell_for_world(position.x, position.z)
           cell_x == x && cell_z == z
         end
+      end
+
+      def transition_clear?(level:, from:, to:, feet_y:, ground_body:)
+        return true unless @ground_clearance
+        return false unless ground_body&.radius&.positive?
+
+        start_x, start_z = level.cell_center(from[0], from[1])
+        end_x, end_z = level.cell_center(to[0], to[1])
+        @ground_clearance.clear?(
+          start_x: start_x,
+          start_z: start_z,
+          end_x: end_x,
+          end_z: end_z,
+          feet_y: feet_y,
+          ground_body_radius: ground_body.radius
+        )
       end
 
       def first_step(parents, goal, start)

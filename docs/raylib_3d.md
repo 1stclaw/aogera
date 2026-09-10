@@ -78,6 +78,8 @@ It is plain Aogera state, not a raylib FFI object.
 
 The controlled player is omitted from the ordinary entity drawing pass because the current presentation is first person.
 
+For the normal Ruby/grid static-world path, entity drawing still respects `Level` bounds. In BSP mode, the renderer does not convert entity positions back to grid cells and does not use `Level#inside?` as a drawing gate; positioned/renderable entities are drawn directly from canonical world-space `Position`.
+
 ## Input cadence
 
 Keyboard actions follow the gameplay/fixed-step path. Mouse deltas are applied to `FirstPersonView` once per rendered frame, including frames in which zero simulation ticks are due.
@@ -125,7 +127,7 @@ BSP29::MapData
     -> RaylibAPI
 ```
 
-Dynamic renderable entities are still drawn at canonical `Position` values. For the controlled preview, the matching Ruby `test_field` remains authoritative for gameplay/collision/navigation while BSP29 supplies visible static geometry.
+Dynamic renderable entities are still drawn at canonical `Position` values. For the controlled preview, the matching Ruby `test_field` remains the authored gameplay and navigation-topology bridge while BSP29 supplies visible static geometry and selected collision queries.
 
 This is intentionally a simple RC bridge. There is no `Scene3D`, `Projector3D`, model/material framework, or generic transform hierarchy.
 
@@ -138,7 +140,7 @@ cell_x = floor(position.x / level.cell_size)
 cell_z = floor(position.z / level.cell_size)
 ```
 
-Those cells are not renderer state and are not stored as entity positions. NPC movement returns to continuous world-space displacement before entering `GroundMove`.
+Those cells are not renderer state and are not stored as entity positions. In BSP mode, BFS candidate transitions are converted from cell centers back to world coordinates and checked against compiled hull-1 static clearance before they are enqueued. Dynamic entity occupancy remains a grid-cell planning rule. NPC movement returns to continuous world-space displacement before entering `GroundMove`, and its execution backend remains grid collision for now.
 
 ## Combat and interaction
 

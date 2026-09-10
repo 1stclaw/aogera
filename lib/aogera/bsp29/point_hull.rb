@@ -2,8 +2,13 @@
 
 module Aogera
   module BSP29
-    class ClipHull
-      CONTENTS_EMPTY = -1
+    # Point/line collision through BSP29 model headnode 0.
+    #
+    # Unlike compiled clip hulls 1..3, hull 0 is represented by the BSP node
+    # tree and terminates in leaves. Only CONTENTS_SOLID blocks the current
+    # obstruction query; other contents remain traversable until Aogera gains
+    # explicit contents/mask semantics.
+    class PointHull
       CONTENTS_SOLID = -2
 
       Trace = Data.define(
@@ -22,35 +27,32 @@ module Aogera
         end
       end
 
-      COMPILED_HULL_INDICES = (1..3).freeze
-
-      def self.for_model(map_data:, model:, hull_index:)
-        hull_index = Integer(hull_index)
-        unless COMPILED_HULL_INDICES.cover?(hull_index) &&
-            hull_index < model.headnodes.length
-          raise ArgumentError,
-            "hull_index #{hull_index} is not a BSP29 compiled clip hull (1..3)"
+      def self.for_model(map_data:, model:)
+        unless model.headnodes.length.positive?
+          raise FormatError, "BSP29 model has no hull-0 headnode"
         end
 
         new(
           planes: map_data.planes,
-          clipnodes: map_data.clipnodes,
-          headnode: model.headnodes.fetch(hull_index)
+          nodes: map_data.nodes,
+          leaves: map_data.leaves,
+          headnode: model.headnodes.fetch(0)
         )
       end
 
-      def self.for_world(map_data:, hull_index:)
+      def self.for_world(map_data:)
         model = map_data.world_model
         raise FormatError, "BSP29 map has no world model" unless model
 
-        for_model(map_data: map_data, model: model, hull_index: hull_index)
+        for_model(map_data: map_data, model: model)
       end
 
-      def initialize(planes:, clipnodes:, headnode:)
+      def initialize(planes:, nodes:, leaves:, headnode:)
         @planes = planes
-        @clipnodes = clipnodes
+        @nodes = nodes
+        @leaves = leaves
         @headnode = Integer(headnode)
-        validate_headnode!
+        validate_reference!(@headnode, 0)
       end
 
       def point_contents(position)
@@ -97,9 +99,10 @@ module Aogera
         keyword_init: true
       )
 
-      def recursive_trace(node_index, start_fraction, end_fraction, start_position, end_position, state, depth)
-        if node_index.negative?
-          if node_index == CONTENTS_SOLID
+      def recursive_trace(reference, start_fraction, end_fraction, start_position, end_position, state, depth)
+        if reference.negative?
+          contents = fetch_leaf(reference).contents
+          if contents == CONTENTS_SOLID
             state.start_solid = true if start_fraction.zero?
           else
             state.all_solid = false
@@ -107,14 +110,14 @@ module Aogera
           return true
         end
 
-        clipnode = fetch_clipnode(node_index, depth)
-        plane = fetch_plane(clipnode.plane_index)
+        node = fetch_node(reference, depth)
+        plane = fetch_plane(node.plane_index)
         start_distance = plane_distance(plane, start_position)
         end_distance = plane_distance(plane, end_position)
 
         if start_distance >= 0.0 && end_distance >= 0.0
           return recursive_trace(
-            clipnode.children.fetch(0),
+            node.children.fetch(0),
             start_fraction,
             end_fraction,
             start_position,
@@ -126,7 +129,7 @@ module Aogera
 
         if start_distance < 0.0 && end_distance < 0.0
           return recursive_trace(
-            clipnode.children.fetch(1),
+            node.children.fetch(1),
             start_fraction,
             end_fraction,
             start_position,
@@ -145,7 +148,7 @@ module Aogera
         far_side = 1 - near_side
 
         return false unless recursive_trace(
-          clipnode.children.fetch(near_side),
+          node.children.fetch(near_side),
           start_fraction,
           middle_fraction,
           start_position,
@@ -154,7 +157,7 @@ module Aogera
           depth + 1
         )
 
-        far_child = clipnode.children.fetch(far_side)
+        far_child = node.children.fetch(far_side)
         unless contents_at(far_child, middle_position, depth + 1) == CONTENTS_SOLID
           return recursive_trace(
             far_child,
@@ -180,30 +183,43 @@ module Aogera
         false
       end
 
-      def contents_at(node_index, position, depth)
-        current = node_index
+      def contents_at(reference, position, depth)
+        current = reference
         current_depth = depth
 
         until current.negative?
-          clipnode = fetch_clipnode(current, current_depth)
-          plane = fetch_plane(clipnode.plane_index)
+          node = fetch_node(current, current_depth)
+          plane = fetch_plane(node.plane_index)
           side = plane_distance(plane, position).negative? ? 1 : 0
-          current = clipnode.children.fetch(side)
+          current = node.children.fetch(side)
           current_depth += 1
         end
 
-        current
+        fetch_leaf(current).contents
       end
 
-      def fetch_clipnode(index, depth)
-        if depth > @clipnodes.length
-          raise FormatError, "BSP29 clipnode tree contains a cycle"
+      def fetch_node(index, depth)
+        if depth > @nodes.length
+          raise FormatError, "BSP29 node tree contains a cycle"
         end
-        if index.negative? || index >= @clipnodes.length
-          raise FormatError, "BSP29 clipnode index #{index} is outside the clipnodes lump"
+        if index.negative? || index >= @nodes.length
+          raise FormatError, "BSP29 node index #{index} is outside the nodes lump"
         end
 
-        @clipnodes.fetch(index)
+        @nodes.fetch(index)
+      end
+
+      def fetch_leaf(reference)
+        unless reference.negative?
+          raise FormatError, "BSP29 leaf reference #{reference} is not negative"
+        end
+
+        index = -reference - 1
+        if index.negative? || index >= @leaves.length
+          raise FormatError, "BSP29 leaf index #{index} is outside the leaves lump"
+        end
+
+        @leaves.fetch(index)
       end
 
       def fetch_plane(index)
@@ -214,11 +230,12 @@ module Aogera
         @planes.fetch(index)
       end
 
-      def validate_headnode!
-        return if @headnode.negative?
-        return if @headnode < @clipnodes.length
-
-        raise FormatError, "BSP29 headnode #{@headnode} is outside the clipnodes lump"
+      def validate_reference!(reference, depth)
+        if reference.negative?
+          fetch_leaf(reference)
+        else
+          fetch_node(reference, depth)
+        end
       end
 
       def plane_distance(plane, position)

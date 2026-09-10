@@ -31,7 +31,16 @@ module Aogera
         }
       )
 
-      simulation = Simulation.new(level: level, prototypes: prototypes)
+      ground_space = ground_space_for(bsp29_map)
+      simulation = Simulation.new(
+        level: level,
+        prototypes: prototypes,
+        ground_space: ground_space,
+        character_ground_space: character_ground_space_for(
+          bsp29_map,
+          prototypes: prototypes
+        )
+      )
       simulation.spawn_character(
         character_key: PLAYER_KEY,
         prototype: :player,
@@ -50,7 +59,12 @@ module Aogera
           session: @session,
           player_key: PLAYER_KEY,
           dialogues: dialogues,
-          view: @view
+          controller: RealtimeController.new(
+            pathfinder: pathfinder_for(bsp29_map),
+            ground_space: ground_space
+          ),
+          view: @view,
+          ground_space: ground_space
         )
       )
       @mapper = Input::Mapper.new
@@ -82,6 +96,36 @@ module Aogera
     end
 
     private
+
+    def pathfinder_for(bsp29_map)
+      return Simulation::Pathfinder.new unless bsp29_map
+
+      Simulation::Pathfinder.new(
+        ground_clearance: BSP29::GroundClearance.for_world(
+          map_data: bsp29_map
+        )
+      )
+    end
+
+    def ground_space_for(bsp29_map)
+      return GroundSpace.new unless bsp29_map
+
+      GroundSpace.new(
+        bsp29_point_hull: BSP29::PointHull.for_world(map_data: bsp29_map)
+      )
+    end
+
+    def character_ground_space_for(bsp29_map, prototypes:)
+      return unless bsp29_map
+
+      player_body = prototypes.fetch(:player).components.fetch(:ground_body)
+      GroundSpace.new(
+        bsp29_ground_hull: BSP29::GroundHull.for_world(
+          map_data: bsp29_map,
+          ground_body_radius: player_body.radius
+        )
+      )
+    end
 
     def poll_input
       @host.poll_events.each do |physical_event|
