@@ -1,6 +1,6 @@
 # BSP29 Reader and Static Preview
 
-Aogera's first Quake map integration begins with a **format Reader** and now includes a minimal static-world preview. The v0.3.2 RC keeps parsing, rendering, and gameplay collision deliberately separated.
+Aogera's first Quake map integration begins with a **format Reader** and now includes a static-world preview plus operational BSP collision queries. The v0.3.2 RC keeps parsing, rendering, gameplay collision, and temporary navigation topology deliberately separated.
 
 The current path is:
 
@@ -15,7 +15,9 @@ BSP29::Reader
 BSP29::MapData
    |
    +--> Render::BSP29World (world model 0 preview)
-   +--> BSP29::GroundHull (compiled hull 1, bound-player movement)
+   +--> BSP29::GroundClearance (compiled hull 1, actor movement/BFS clearance)
+   |       |
+   |       +--> BSP29::GroundHull (radius-bound fixed-hull adapter)
    +--> BSP29::PointHull (headnode 0, obstruction traces)
    +--> future map-entity importer
 ```
@@ -89,7 +91,7 @@ No Quake palette or raylib texture conversion is performed yet.
 
 Brush model `0` remains the static world model. Additional BSP submodels remain separate in `MapData#models`; the Reader does not flatten doors/platforms/moving brush candidates into world geometry.
 
-Clipnodes and model headnodes are preserved as first-class collision data. The current preview now uses compiled hull 1 for bound-player static movement while other gameplay domains remain deliberately grid-backed.
+Clipnodes and model headnodes are preserved as first-class collision data. The current preview uses one shared `BSP29::GroundClearance` source over compiled hull 1 for player/NPC static movement and BFS candidate-step clearance, while the temporary BFS topology itself remains grid-based.
 
 ## Entity lump
 
@@ -178,7 +180,7 @@ bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp
 
 The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices`, verifies/corrects polygon winding against the normalized BSP face plane, triangulates the convex polygon, and sends the triangles through `RaylibAPI`. The fixture texture names are mapped to diagnostic colors; embedded miptexture pixels are not sampled yet.
 
-For the controlled `test_field.bsp` fixture, gameplay state still comes from the existing Ruby `test_field`, but collision authority is now deliberately split. The bound persistent character uses BSP29 compiled hull 1 for static movement; zero-radius melee/interaction obstruction uses world-model headnode 0 through `BSP29::PointHull`; spawned NPC movement execution still uses the matching Ruby grid. BFS keeps that grid as topology and dynamic occupancy data, but candidate center-to-center transitions are now validated against BSP29 compiled hull 1 through `BSP29::GroundClearance`. Dynamic actor-vs-actor collision remains continuous `GroundBody` collision. This is an intentional short-lived integration bridge, not the final BSP level runtime.
+For the controlled `test_field.bsp` fixture, gameplay state still comes from the existing Ruby `test_field`, but static collision authority has moved further toward BSP. The bound persistent character uses BSP29 compiled hull 1 for static movement; zero-radius melee/interaction obstruction uses world-model headnode 0 through `BSP29::PointHull`; and spawned NPC movement now uses BSP29 compiled hull 1 through `BSP29::GroundClearance`. BFS keeps the Ruby grid as topology and dynamic occupancy data, while candidate center-to-center transitions use that same `GroundClearance` instance. Dynamic actor-vs-actor collision remains continuous `GroundBody` collision. This is an intentional short-lived integration bridge, not the final BSP level runtime.
 
 `PointHull` follows BSP node children into leaves (`-(leaf_index + 1)`) and currently treats only `CONTENTS_SOLID` as blocking. Ground-style obstruction queries sample that point trace 16 world units above the source feet position so the flat combat/interaction model does not run exactly along floor/brush boundaries. This is a temporary 0.3.2 bridge, not vertical combat or a general contents/mask system.
 
@@ -195,10 +197,11 @@ The BSP path does not yet provide:
 - palette conversion or raylib textures;
 - lightmap rendering;
 - PVS traversal;
-- BSP-backed NPC static movement execution;
 - arbitrary authored actor radii for BSP static collision;
 - brush-submodel motion;
 - map-entity spawning through `Level::Loader`;
 - navigation generation.
 
 Those systems should consume `BSP29::MapData` rather than reopen or reinterpret the source file themselves.
+
+The detailed history of the collision migration, the fixed hull-1 policy, the remaining Ruby-grid navigation roles, and the incremental path toward BSP-authored navigation are documented in `docs/bsp_collision_migration.md`.

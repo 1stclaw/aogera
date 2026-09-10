@@ -8,7 +8,7 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 **Version: 0.3.2 RC**
 
-Aogera 0.3.2 is at release-candidate status. It keeps the unified continuous runtime introduced in 0.3.1, standardizes Quake-compatible world-unit magnitude, introduces the Reader/Loader authored-data boundary, and adds the first validated BSP29 path.
+Aogera 0.3.2 is now at a true release-candidate checkpoint. It keeps the unified continuous runtime introduced in 0.3.1, standardizes Quake-compatible world-unit magnitude, introduces the Reader/Loader authored-data boundary, and advances the validated BSP29 path through static rendering, compiled-hull actor collision, point obstruction traces, and BSP-aware BFS clearance.
 
 Every spatial runtime entity uses:
 
@@ -55,16 +55,17 @@ The Reader has been validated end-to-end with an Aogera-controlled BSP29 fixture
 
 ### Runtime movement and collision
 
-Player and NPC locomotion both use `Simulation::Commands::GroundMove` and the same continuous swept-circle collision solver. `GroundSpace` provides shared distance, arc, segment-trace, and swept-circle queries, returning structured `GroundTrace` results. Static terrain cells and active dynamic bodies participate in one earliest-hit contract.
+Player and NPC locomotion both use `Simulation::Commands::GroundMove` and the same continuous swept-circle collision solver. `GroundSpace` provides shared distance, arc, segment-trace, and swept-circle queries, returning structured `GroundTrace` results. The active static-world backend and dynamic bodies participate in one earliest-hit contract. The normal Ruby launch uses grid terrain; the BSP preview uses compiled hull/node data.
 
 Melee and interaction keep their own authored reach/arc profiles while using shared spatial and obstruction queries. Defeated actors enter an explicit retired lifecycle state: they may retain runtime identity and descriptive state, but they no longer act or participate in ordinary active collision queries.
 
-The remaining grid has two deliberately limited jobs:
+The remaining grid has deliberately limited jobs in the BSP preview:
 
-- current authored static terrain and spawned-NPC movement;
-- temporary BFS navigation topology.
+- current Ruby-authored level/spawn/entry scaffolding;
+- temporary BFS navigation topology and dynamic cell occupancy;
+- the normal non-BSP Ruby rendering/collision fallback.
 
-Navigation cells are derived from world-space positions and are not runtime entity state. In BSP mode, BFS still searches those cells, but candidate center-to-center transitions are additionally validated against BSP29 compiled hull-1 clearance before they enter the route.
+Navigation cells are derived from world-space positions and are not runtime entity state. In BSP mode, BFS still searches those cells, but candidate center-to-center transitions are additionally validated against the same BSP29 compiled hull-1 clearance used by actor movement execution.
 
 ## Running
 
@@ -81,7 +82,7 @@ For the controlled BSP29 test-field preview:
 bundle exec ruby bin/aogera-bsp29 /path/to/test_field.bsp
 ```
 
-That preview uses BSP29 world-model faces for static rendering and the matching Ruby `test_field` as the remaining authored/navigation bridge. Bound-player static movement uses BSP29 compiled hull 1, melee/interaction obstruction uses the BSP world-model node/leaf tree, and spawned-NPC static movement remains grid-backed. BFS still uses the Ruby grid as its topology, but in BSP mode each candidate center-to-center step is now rejected when compiled hull 1 reports insufficient static clearance. This is an intentional incremental migration boundary.
+That preview uses BSP29 world-model faces for static rendering and the matching Ruby `test_field` as the remaining authored/navigation bridge. Bound-player and spawned-NPC static movement use BSP29 compiled hull 1, melee/interaction obstruction uses the BSP world-model node/leaf tree, and BFS still uses the Ruby grid as its topology. In BSP mode each candidate center-to-center BFS step and spawned-NPC movement execution share the same `BSP29::GroundClearance` source. This is an intentional incremental migration boundary.
 
 ## Controls
 
@@ -104,7 +105,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The v0.3.2 RC documentation snapshot corresponds to the playable BSP preview baseline of **236 runs / 719 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The v0.3.2 RC documentation snapshot corresponds to the playable BSP preview baseline of **239 runs / 727 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 
@@ -118,13 +119,14 @@ Position + FirstPersonView
         -> Render::Raylib3D -> RaylibAPI -> raylib
 ```
 
-Aogera still has no generic scene/projector/transform layer, no general physics system, and no general asset manager. The normal path directly extrudes the authored grid; the BSP29 preview reconstructs and triangulates world-model faces without routing them through a generic scene representation. Collision remains deliberately hybrid during the migration: bound-player static movement uses BSP29 compiled hull 1, melee/interaction obstruction uses the BSP node/leaf point hull, NPC static movement remains grid-backed, BFS keeps grid topology while validating candidate transitions against BSP hull-1 clearance, and dynamic actor collision remains continuous `GroundBody` collision. Vertical actor collision, gravity, jumping, and projectile/hitscan systems remain future work.
+Aogera still has no generic scene/projector/transform layer, no general physics system, and no general asset manager. The normal path directly extrudes the authored grid; the BSP29 preview reconstructs and triangulates world-model faces without routing them through a generic scene representation. Collision remains deliberately hybrid during the migration: actor static movement uses BSP29 compiled hull 1 through one shared `GroundClearance` backend, melee/interaction obstruction uses the BSP node/leaf point hull, BFS keeps grid topology while validating candidate transitions against the same BSP hull-1 clearance source, and dynamic actor collision remains continuous `GroundBody` collision. Vertical actor collision, gravity, jumping, and projectile/hitscan systems remain future work.
 
 ## Documentation
 
 - `docs/architecture.md` — current runtime architecture and subsystem boundaries;
 - `docs/authored_data.md` — Reader/normalized-data/Loader boundary and world-unit convention;
 - `docs/bsp29.md` — current BSP29 binary Reader, normalization, records, and inspection tool;
+- `docs/bsp_collision_migration.md` — v0.3.2 BSP collision migration history, current authority map, fixed-hull limitation, and incremental pathfinding roadmap;
 - `docs/collision.md` — current ground-space trace, sweep, movement, and obstruction model;
 - `docs/raylib_3d.md` — raylib 3D frontend and first-person presentation path;
 - `docs/3d_migration.md` — cumulative architectural change from the v0.2.3 2D baseline to v0.3.2.
@@ -135,6 +137,8 @@ The 0.3.2 runtime now includes the first BSP29 **Reader**. BSP29 binary structur
 
 The first downstream BSP integration now exists as a minimal world-model renderer. A controlled 44×14 test-field fixture compiled as BSP29 has matching structural counts between ericw-tools and `BSP29::Reader`, and its normalized player start resolves to `(112, 0, 112)` as expected.
 
-The current BSP collision-query boundary consumes compiled clip hull 1 for bound-player movement and the world-model node/leaf tree for melee/interaction obstruction. BSP-mode dynamic entity rendering no longer consults the Ruby grid for bounds. Grid BFS now keeps its existing cell topology and dynamic-cell occupancy rules while validating candidate center-to-center transitions against BSP hull-1 static clearance. Spawned-NPC movement execution itself remains grid-backed; changing that authority is the next separate collision milestone.
+The current BSP collision-query boundary consumes compiled clip hull 1 for all current actor static movement and the world-model node/leaf tree for melee/interaction obstruction. BSP-mode dynamic entity rendering no longer consults the Ruby grid for bounds. Grid BFS keeps its existing cell topology and dynamic-cell occupancy rules while validating candidate center-to-center transitions against the same BSP hull-1 static-clearance source used by movement execution.
+
+This is the v0.3.2 RC stopping point for collision/navigation migration: unless a concrete RC bug appears, further BSP navigation/entity-import work belongs after this checkpoint rather than being folded into the release candidate. See `docs/bsp_collision_migration.md` for the detailed migration record and roadmap.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.
