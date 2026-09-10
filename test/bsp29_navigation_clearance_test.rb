@@ -22,14 +22,16 @@ class BSP29NavigationClearanceTest < Minitest::Test
       )
     )
 
-    step = pathfinder.next_step(
+    waypoint = pathfinder.next_waypoint(
       level: level,
       world: world.view,
       source_id: source,
       target_id: target
     )
 
-    assert_includes [[0, -1], [0, 1]], step
+    assert_instance_of Aogera::Simulation::Pathfinder::Waypoint, waypoint
+    assert_in_delta 1.5, waypoint.x
+    assert_includes [1.5, 3.5], waypoint.z
   end
 
   def test_bsp_aware_bfs_reroute_executes_with_same_bsp_clearance_backend
@@ -160,7 +162,7 @@ class BSP29NavigationClearanceTest < Minitest::Test
       marksurface_count: 0,
       ambient_levels: [0, 0, 0, 0].freeze
     )
-    empty_leaf = replace_data(solid_leaf, contents: -1)
+    empty_leaf = solid_leaf.with(contents: -1)
     plane = plane(1, 0, 0, 0)
     node = Aogera::BSP29::Node.new(
       plane_index: 0,

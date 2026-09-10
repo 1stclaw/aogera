@@ -14,6 +14,13 @@ module Aogera
       @characters.keys.freeze
     end
 
+    def apply_effects(effects)
+      effects.each { |effect| validate_effect!(effect) }
+      effects.each { |effect| apply_effect(effect) }
+    end
+
+    private
+
     def apply_effect(effect)
       case effect
       in Effect::DamageCharacter
@@ -24,51 +31,13 @@ module Aogera
       end
     end
 
-    def apply_effects(effects)
-      effects.each { |effect| validate_effect!(effect) }
-      effects.each { |effect| apply_effect(effect) }
-    end
-
     def damage_character(character_key, amount)
-      validate_amount!(amount)
       current = character(character_key)
       replace_character(
         character_key,
-        current.replace(hp: [current.hp - amount, 0].max)
+        current.with(hp: [current.hp - amount, 0].max)
       )
     end
-
-    def heal_character(character_key, amount)
-      validate_amount!(amount)
-      current = character(character_key)
-      replace_character(
-        character_key,
-        current.replace(hp: [current.hp + amount, current.max_hp].min)
-      )
-    end
-
-    def spend_mp(character_key, amount)
-      validate_amount!(amount)
-      current = character(character_key)
-      return false if amount > current.mp
-
-      replace_character(
-        character_key,
-        current.replace(mp: current.mp - amount)
-      )
-      true
-    end
-
-    def restore_mp(character_key, amount)
-      validate_amount!(amount)
-      current = character(character_key)
-      replace_character(
-        character_key,
-        current.replace(mp: [current.mp + amount, current.max_mp].min)
-      )
-    end
-
-    private
 
     def normalize_characters(characters)
       unless characters.is_a?(Hash)

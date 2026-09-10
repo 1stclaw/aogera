@@ -90,13 +90,14 @@ class SpatialNormalizationTest < Minitest::Test
     )
     hunter_id = simulation.entity_id_for_spawn(:hunter)
 
-    command = Aogera::RealtimeController.new(npc_interval: 1).build(
+    commands = Aogera::RealtimeController.new(npc_interval: 1).build(
       input: Aogera::Input::Snapshot.empty,
       level: level,
       world: simulation.world_view,
       controlled_id: player_id,
       tick_number: 1
-    ).to_a.fetch(0)
+    ).to_a
+    command = commands.find { |candidate| candidate.is_a?(Aogera::Simulation::Commands::GroundMove) }
 
     assert_instance_of Aogera::Simulation::Commands::GroundMove, command
     assert_equal hunter_id, command.entity_id

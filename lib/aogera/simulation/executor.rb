@@ -4,7 +4,7 @@ module Aogera
   class Simulation
     class Executor
       RETIRED_COMPONENTS = %i[
-        behavior collision renderable combatant interactable
+        behavior collision renderable combatant interactable steering_target
       ].freeze
 
       def initialize(
@@ -23,6 +23,10 @@ module Aogera
           effect = case command
           in Commands::GroundMove
             execute_ground_move(world, level, command)
+          in Commands::SetSteeringTarget
+            execute_set_steering_target(world, command)
+          in Commands::ClearSteeringTarget
+            execute_clear_steering_target(world, command)
           in Commands::Attack
             execute_attack(world, level, command, bindings)
           in Commands::Defeat
@@ -56,6 +60,27 @@ module Aogera
         )
 
         world.set_component(command.entity_id, :position, resolved)
+        nil
+      end
+
+      def execute_set_steering_target(world, command)
+        return unless active_entity?(world, command.entity_id)
+
+        world.set_component(
+          command.entity_id,
+          :steering_target,
+          Component::SteeringTarget.new(
+            x: Float(command.x),
+            z: Float(command.z)
+          )
+        )
+        nil
+      end
+
+      def execute_clear_steering_target(world, command)
+        return unless active_entity?(world, command.entity_id)
+
+        world.remove_component(command.entity_id, :steering_target)
         nil
       end
 
@@ -102,37 +127,12 @@ module Aogera
         return false unless separation
         return false if separation > Float(profile.reach)
 
-        unobstructed_attack?(
+        @ground_space.unobstructed_between?(
           level: level,
           world: world,
-          attacker_id: command.attacker_id,
+          source_id: command.attacker_id,
           target_id: command.target_id
         )
-      end
-
-      def unobstructed_attack?(level:, world:, attacker_id:, target_id:)
-        source = @ground_space.position(world: world, entity_id: attacker_id)
-        target = @ground_space.position(world: world, entity_id: target_id)
-        return false unless source && target
-
-        trace = @ground_space.trace_segment(
-          level: level,
-          world: world,
-          start_x: source.x,
-          start_z: source.z,
-          end_x: target.x,
-          end_z: target.z,
-          ground_y: source.y,
-          ignore_entity_id: attacker_id,
-          entity_filter: lambda do |entity_id|
-            next true if entity_id == target_id
-
-            collision = world.component(entity_id, :collision)
-            collision&.blocks_movement || false
-          end
-        )
-
-        trace.clear? || trace.entity_id == target_id
       end
 
       def execute_defeat(world, command)

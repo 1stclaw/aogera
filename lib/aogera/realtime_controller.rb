@@ -43,8 +43,7 @@ module Aogera
           next if entity_id == controlled_id
           next if world.respond_to?(:retired?) && world.retired?(entity_id)
 
-          command = behavior_command(level, world, entity_id)
-          commands << command if command
+          commands.concat(behavior_commands(level, world, entity_id))
         end
       end
 
@@ -81,9 +80,9 @@ module Aogera
       (tick_number % interval).zero?
     end
 
-    def behavior_command(level, world, entity_id)
+    def behavior_commands(level, world, entity_id)
       behavior = world.component(entity_id, :behavior)
-      return unless behavior
+      return [] unless behavior
 
       handler = BEHAVIOR_HANDLERS.fetch(behavior.kind) do
         raise ArgumentError,
@@ -93,13 +92,24 @@ module Aogera
       __send__(handler, level, world, entity_id)
     end
 
-    def idle_behavior(_level, _world, _entity_id)
-      nil
+    def idle_behavior(_level, world, entity_id)
+      clear_steering_target(world, entity_id)
     end
 
-    def wander_behavior(_level, _world, entity_id)
+    def wander_behavior(_level, world, entity_id)
+      source = world.component(entity_id, :position)
+      return clear_steering_target(world, entity_id) unless source
+
       dx, dz = Direction::VECTORS.sample
-      ground_move(entity_id, dx * @npc_step, dz * @npc_step)
+      move_dx = dx * @npc_step
+      move_dz = dz * @npc_step
+      target_x = source.x + move_dx
+      target_z = source.z + move_dz
+
+      [
+        set_steering_target(entity_id, target_x, target_z),
+        ground_move(entity_id, move_dx, move_dz)
+      ]
     end
 
     def chase(level, world, entity_id)
@@ -107,42 +117,45 @@ module Aogera
         kind: :targets,
         source_id: entity_id
       ).first
-      return unless target_id
-      return if world.respond_to?(:retired?) && world.retired?(target_id)
+      return clear_steering_target(world, entity_id) unless target_id
+      if world.respond_to?(:retired?) && world.retired?(target_id)
+        return clear_steering_target(world, entity_id)
+      end
 
       combatant = world.component(entity_id, :combatant)
       melee = world.component(entity_id, :melee_attack)
       if combatant&.attack&.positive? && melee &&
           melee_reachable?(level, world, entity_id, target_id, melee)
-        return Simulation::Commands::Attack.new(
-          attacker_id: entity_id,
-          target_id: target_id,
-          damage: combatant.attack
-        )
+        return clear_steering_target(world, entity_id) + [
+          Simulation::Commands::Attack.new(
+            attacker_id: entity_id,
+            target_id: target_id,
+            damage: combatant.attack
+          )
+        ]
       end
 
-      step = @pathfinder.next_step(
+      waypoint = @pathfinder.next_waypoint(
         level: level,
         world: world,
         source_id: entity_id,
         target_id: target_id
       )
-      return unless step
+      return clear_steering_target(world, entity_id) unless waypoint
 
       source = world.component(entity_id, :position)
-      return unless source
+      return clear_steering_target(world, entity_id) unless source
 
-      source_cell_x, source_cell_z = level.cell_for_world(source.x, source.z)
-      cell_x = source_cell_x + step[0]
-      cell_z = source_cell_z + step[1]
-      target_x, target_z = level.cell_center(cell_x, cell_z)
-      dx = target_x - source.x
-      dz = target_z - source.z
+      dx = waypoint.x - source.x
+      dz = waypoint.z - source.z
       distance = Math.hypot(dx, dz)
-      return if distance.zero?
+      return clear_steering_target(world, entity_id) if distance.zero?
 
       scale = [@npc_step / distance, 1.0].min
-      ground_move(entity_id, dx * scale, dz * scale)
+      [
+        set_steering_target(entity_id, waypoint.x, waypoint.z),
+        ground_move(entity_id, dx * scale, dz * scale)
+      ]
     end
 
     def melee_reachable?(level, world, source_id, target_id, profile)
@@ -153,28 +166,26 @@ module Aogera
       )
       return false unless separation && separation <= Float(profile.reach)
 
-      source = @ground_space.position(world: world, entity_id: source_id)
-      target = @ground_space.position(world: world, entity_id: target_id)
-      return false unless source && target
-
-      trace = @ground_space.trace_segment(
+      @ground_space.unobstructed_between?(
         level: level,
         world: world,
-        start_x: source.x,
-        start_z: source.z,
-        end_x: target.x,
-        end_z: target.z,
-        ground_y: source.y,
-        ignore_entity_id: source_id,
-        entity_filter: lambda do |entity_id|
-          next true if entity_id == target_id
-
-          collision = world.component(entity_id, :collision)
-          collision&.blocks_movement || false
-        end
+        source_id: source_id,
+        target_id: target_id
       )
+    end
 
-      trace.clear? || trace.entity_id == target_id
+    def set_steering_target(entity_id, x, z)
+      Simulation::Commands::SetSteeringTarget.new(
+        entity_id: entity_id,
+        x: x,
+        z: z
+      )
+    end
+
+    def clear_steering_target(world, entity_id)
+      return [] unless world.component(entity_id, :steering_target)
+
+      [Simulation::Commands::ClearSteeringTarget.new(entity_id: entity_id)]
     end
 
     def ground_move(entity_id, dx, dz)

@@ -116,6 +116,31 @@ module Aogera
       end.freeze
     end
 
+    def unobstructed_between?(level:, world:, source_id:, target_id:)
+      source = position(world: world, entity_id: source_id)
+      target = position(world: world, entity_id: target_id)
+      return false unless source && target
+
+      trace = trace_segment(
+        level: level,
+        world: world,
+        start_x: source.x,
+        start_z: source.z,
+        end_x: target.x,
+        end_z: target.z,
+        ground_y: source.y,
+        ignore_entity_id: source_id,
+        entity_filter: lambda do |entity_id|
+          next true if entity_id == target_id
+
+          collision = world.component(entity_id, :collision)
+          collision&.blocks_movement || false
+        end
+      )
+
+      trace.clear? || trace.entity_id == target_id
+    end
+
     def trace_segment(
       level:,
       world:,

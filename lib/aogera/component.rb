@@ -6,6 +6,7 @@ module Aogera
     Retired = Data.define()
     Position = Data.define(:x, :y, :z)
     GroundBody = Data.define(:radius)
+    SteeringTarget = Data.define(:x, :z)
     Health = Data.define(:current, :max)
     Renderable = Data.define(:render_key, :glyph, :layer)
     Behavior = Data.define(:kind)

@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.2a runtime and its present boundaries.
+This document describes the current Aogera 0.3.3 development runtime and its present boundaries. The BSP/collision architecture is inherited unchanged from the stable 0.3.2a checkpoint; 0.3.3 begins with internal data-model cleanup.
 
 ## Design goals
 
@@ -45,7 +45,7 @@ FirstPersonView
 └── FOV / mouse sensitivity
 ```
 
-`Session` owns persistent character state. `Level` is immutable authored structure. `World` is the canonical mutable runtime container and owns entity IDs, component tables, and runtime relations. Runtime entity IDs never serve as persistent identity.
+`Session` owns persistent character state. `Character` is an immutable validated `Data` value and persistent updates replace it with `Data#with`. Public persistent mutation enters through `Session#apply_effects`; effect-specific replacement helpers remain internal, and unsupported healing/MP verbs are not exposed ahead of real gameplay systems. `Level` is immutable authored structure. `World` is the canonical mutable runtime container and owns entity IDs, component tables, and runtime relations. Runtime entity IDs never serve as persistent identity.
 
 `FirstPersonView` owns logical first-person orientation and updates at render cadence. It is not raylib camera state and it is not the player's physical position.
 
@@ -118,6 +118,8 @@ Current command types include:
 
 ```text
 GroundMove
+SetSteeringTarget
+ClearSteeringTarget
 Attack
 Defeat
 Despawn
@@ -133,7 +135,15 @@ All current actor locomotion uses:
 GroundMove(entity_id, dx, dz)
 ```
 
-The player produces view-relative continuous displacement every fixed simulation tick. NPC behavior produces continuous ground displacement at the NPC decision cadence. Both are executed by the same `GroundMovement` and the same `GroundSpace#sweep_circle` collision path.
+The player produces view-relative continuous displacement every fixed simulation tick. NPC behavior still produces continuous ground displacement at the NPC decision cadence. Both are executed by the same `GroundMovement` and the same `GroundSpace#sweep_circle` collision path.
+
+NPC navigation/behavior decisions can additionally persist:
+
+```text
+SteeringTarget(x, z)
+```
+
+`SteeringTarget` is runtime intent data, not a second position and not velocity. In the current 0.3.3 preparation stage, a decision that chooses a steering target also emits the same `GroundMove` it emitted before, so movement timing has not changed yet. Attack/idle/no-route decisions clear an existing target, and retirement strips it with other active-behavior components. A later patch may consume this target every simulation tick to separate locomotion cadence from AI/navigation cadence.
 
 ### Current body model
 
@@ -191,6 +201,14 @@ navigation cell = (floor(x / cell_size), floor(z / cell_size))
 BFS next cell
       |
       v
+Pathfinder::Waypoint(x, z)
+      |
+      v
+SteeringTarget(x, z)
+      |
+      +--> persisted runtime movement intent
+      |
+      v
 continuous waypoint displacement
       |
       v
@@ -199,9 +217,11 @@ GroundMove
 
 The Pathfinder checks terrain passability and projects active blocking entities into navigation cells. Navigation cells are temporary planning values and are never synchronized back into entity state.
 
+The cell representation is also private to the Pathfinder boundary. `next_waypoint` returns an immutable world-space `Pathfinder::Waypoint(x, z)` at the selected cell center. `RealtimeController` consumes that waypoint without calling `cell_for_world` or `cell_center`, then records the world-space destination as `Component::SteeringTarget`. This keeps both the grid topology and the transient `Pathfinder::Waypoint` behind the navigation/behavior boundary. The current controller still computes the same capped `GroundMove` from that waypoint on the same decision tick; persistent steering data is preparation for separating locomotion timing in a later patch.
+
 In BSP mode the grid remains the BFS topology, but each candidate cell-center transition is also checked through `BSP29::GroundClearance`, which traces compiled hull 1 using the source actor's authored `GroundBody` radius as the existing fixed-hull contract check. Dynamic entities are still handled by the established cell-occupancy rule; the BSP query is static-world clearance only.
 
-This preserves the useful current BFS while making its planned transitions use the same static BSP clearance source as spawned-NPC movement execution.
+This preserves the useful current BFS while making its planned transitions use the same static BSP clearance source as spawned-NPC movement execution. The Pathfinder memoizes the directed static result for each level/radius/feet-height/cell-edge combination, because that answer cannot change while the loaded BSP is unchanged. Dynamic cell occupancy is deliberately outside that cache and is evaluated on every search.
 
 ## Combat
 
@@ -216,7 +236,7 @@ Player target selection combines:
 - current first-person heading;
 - authored reach and attack arc;
 - continuous body separation;
-- segment obstruction traces.
+- segment obstruction traces through the shared `GroundSpace#unobstructed_between?` entity query.
 
 NPC chase/combat uses the same continuous separation and obstruction model before emitting `Attack`.
 
@@ -327,9 +347,9 @@ Aogera world-unit magnitude is Quake 1 compatible: one current grid cell is 32 w
 
 `Content::Paths` still centralizes current authored Ruby paths. There is intentionally no general asset manager yet.
 
-## Current v0.3.2a boundary
+## Current v0.3.3 boundary
 
-Aogera 0.3.2a has:
+Aogera 0.3.3 currently has:
 
 - one continuous runtime position model for player, enemies, NPCs, and spatial interactables;
 - one ground movement/collision execution path for current actors;

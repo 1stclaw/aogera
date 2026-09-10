@@ -64,12 +64,27 @@ class PlayModeTest < Minitest::Test
   end
 
   def test_status_uses_persistent_character_and_solo_controls
-    @session.damage_character(:hero, 3)
-    @session.spend_mp(:hero, 1)
+    session = Aogera::Session.new(
+      characters: {
+        hero: Aogera::Character.new(
+          hp: 7,
+          max_hp: 10,
+          mp: 3,
+          max_mp: 4,
+          attack: 2
+        )
+      }
+    )
+    mode = Aogera::Mode::Play.new(
+      simulation: @simulation,
+      session: session,
+      player_key: :hero,
+      dialogues: dialogue_catalog
+    )
 
-    assert_match "Hero HP 7/10 MP 3/4", @mode.status_text
-    assert_match "Space attack", @mode.status_text
-    assert_match "Enter interact", @mode.status_text
+    assert_match "Hero HP 7/10 MP 3/4", mode.status_text
+    assert_match "Space attack", mode.status_text
+    assert_match "Enter interact", mode.status_text
   end
 
   def test_player_motion_updates_canonical_world_position

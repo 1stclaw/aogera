@@ -272,9 +272,9 @@ GroundMove
     -> BSP29 ClipHull 1
 ```
 
-This became the v0.3.2a release checkpoint.
+This is the v0.3.2 RC checkpoint.
 
-## 9. Current v0.3.2a authority map
+## 9. Current v0.3.2 RC authority map
 
 The current BSP preview is still hybrid, but static collision authority is no longer split between player and NPC movement.
 
@@ -308,7 +308,7 @@ SPAWNS / ENTRIES / CURRENT LEVEL CONSTRUCTION
     Ruby authored test_field through Level::Readers::Ruby / Level::Loader
 ```
 
-This is the key release invariant:
+This is the key RC invariant:
 
 > BSP29 now answers the static collision questions used by BSP-mode actor movement and obstruction, while the Ruby grid remains a temporary navigation/authored-level scaffold.
 
@@ -322,7 +322,7 @@ It still provides several concrete services in v0.3.2:
 - authored spawn/entry declarations and their current level validation;
 - BFS cell topology;
 - BFS dynamic occupancy projection;
-- cell-center waypoints used by the current NPC steering model;
+- cell-center waypoint generation internal to the current Pathfinder;
 - the complete static collision/rendering fallback for the normal non-BSP Ruby launch.
 
 The controlled BSP launch intentionally continues loading the matching Ruby level because gameplay entity import from the BSP entity lump has not yet replaced it.
@@ -337,7 +337,7 @@ The current Pathfinder still performs ordinary grid BFS:
 continuous Position
     -> temporary grid cell
     -> BFS over grid neighbors
-    -> next cell center
+    -> world-space Pathfinder::Waypoint at the next cell center
     -> continuous GroundMove
 ```
 
@@ -361,7 +361,23 @@ BSP hull-1 center-to-center clearance?
 accept BFS transition
 ```
 
-Planning and movement execution therefore consult the same compiled static collision source even though route topology is still cell-based.
+Planning and movement execution therefore consult the same compiled static collision source even though route topology is still cell-based. The Pathfinder caches the result of each directed static cell-center transition, keyed by loaded level, authored body radius, feet height, and the two cells. Repeated NPC planning therefore does not recursively traverse the same immutable BSP hull for the same edge every half-second. Dynamic occupancy remains uncached and is checked before static transition clearance on every BFS expansion.
+
+As of the 0.3.3 cleanup line, that cell topology is no longer part of the controller contract. The Pathfinder exposes `next_waypoint`, returning immutable world-space `Pathfinder::Waypoint(x, z)` data. `RealtimeController` no longer converts a cardinal BFS step back into a grid cell and then into a cell center.
+
+The next preparation seam is explicit runtime steering intent:
+
+```text
+Pathfinder::Waypoint(x, z)
+        |
+        v
+Component::SteeringTarget(x, z)
+        |
+        v
+GroundMove
+```
+
+`SteeringTarget` is persisted on the NPC so navigation decisions and locomotion no longer need to share a transient local variable. This patch deliberately does **not** change movement cadence: the same 2 Hz NPC decision still stores the target and emits the same capped `GroundMove` immediately. Existing targets are cleared when the actor attacks, idles, loses a route/target, or retires. The following migration step can therefore move physical steering to the 30 Hz simulation cadence without changing the Pathfinder API or reintroducing grid knowledge into the controller.
 
 This is intentionally a compatibility bridge rather than a new navigation architecture.
 
@@ -369,9 +385,9 @@ This is intentionally a compatibility bridge rather than a new navigation archit
 
 Further navigation work should remain incremental.
 
-### Phase A: preserve the release baseline
+### Phase A: preserve the RC
 
-Do not replace BFS while preserving the v0.3.2a baseline. Treat regressions in the controlled BSP field as maintenance bugs rather than opportunities for broad redesign.
+Do not replace BFS while stabilizing/releasing v0.3.2. Treat regressions in the controlled BSP field as RC bugs rather than opportunities for broad redesign.
 
 ### Phase B: isolate grid topology from `Level::Terrain`
 
@@ -393,7 +409,7 @@ At that point `Level::Terrain` can remain as the normal Ruby-level implementatio
 
 ## 13. Deferred systems
 
-The v0.3.2a release intentionally does not combine the collision migration with:
+The v0.3.2 RC intentionally does not combine the collision migration with:
 
 - gravity;
 - jumping;
@@ -412,7 +428,7 @@ The v0.3.2a release intentionally does not combine the collision migration with:
 
 These should be introduced only when their own milestone requires them.
 
-## 14. Release test and manual fixture commands
+## 14. RC test and manual fixture commands
 
 The documented automated baseline for this checkpoint is:
 
@@ -433,7 +449,7 @@ bundle exec ruby bin/aogera-bsp29 \
   ~/Downloads/aogera-test-field-bsp29-fixture/test_field.bsp
 ```
 
-Manual release checks should include:
+Manual RC checks should include:
 
 - player movement and wall sliding;
 - goblin movement and rerouting;
@@ -442,8 +458,8 @@ Manual release checks should include:
 - melee/interaction obstruction by BSP walls;
 - the known blocked 32-unit water pinch, which remains an expected fixed-hull limitation.
 
-## 15. Release-baseline rule
+## 15. Release-candidate rule
 
 For v0.3.2, the migration is now at a coherent stopping point.
 
-After v0.3.2a, avoid folding new collision/navigation features into this release baseline. The important achievement is not removal of every grid data structure; it is that BSP-mode static collision now has one consistent authority while the remaining grid roles are narrow, visible, and testable.
+Unless a concrete RC bug appears, avoid further collision/navigation feature work before release. The important achievement is not removal of every grid data structure; it is that BSP-mode static collision now has one consistent authority while the remaining grid roles are narrow, visible, and testable.

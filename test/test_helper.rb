@@ -15,15 +15,6 @@ module AogeraTestPaths
 end
 
 module AogeraTestSupport
-  def replace_data(record, **changes)
-    values = record.class.members.to_h do |member|
-      value = changes.key?(member) ? changes.fetch(member) : record.public_send(member)
-      [member, value]
-    end
-
-    record.class.new(**values)
-  end
-
   def prototype_catalog(
     goblin_behavior: :chase,
     melee_reach: 0.65,

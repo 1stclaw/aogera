@@ -121,6 +121,86 @@ class RealtimeControllerTest < Minitest::Test
     assert_instance_of Aogera::Simulation::Commands::Attack, due.to_a.first
   end
 
+  def test_chase_consumes_world_space_waypoint_without_grid_conversion
+    world = Aogera::World.new
+    goblin_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      melee_attack: Aogera::Component::MeleeAttack.new(reach: 0.1, arc_degrees: 110.0),
+      behavior: Aogera::Component::Behavior.new(kind: :chase),
+      combatant: Aogera::Component::Combatant.new(attack: 1)
+    )
+    hero_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 4.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
+    )
+    world.add_relation(kind: :targets, source_id: goblin_id, target_id: hero_id)
+
+    waypoint = Aogera::Simulation::Pathfinder::Waypoint.new(x: 2.5, z: 3.5)
+    pathfinder = Struct.new(:waypoint) do
+      def next_waypoint(**)
+        waypoint
+      end
+    end.new(waypoint)
+    controller = Aogera::RealtimeController.new(
+      pathfinder: pathfinder,
+      npc_interval: 1,
+      npc_speed: 2.0
+    )
+
+    commands = controller.build(
+      input: Aogera::Input::Snapshot.empty,
+      level: Object.new,
+      world: world.view,
+      controlled_id: hero_id,
+      tick_number: 1
+    ).to_a
+
+    target_command = commands.fetch(0)
+    move_command = commands.fetch(1)
+
+    assert_instance_of Aogera::Simulation::Commands::SetSteeringTarget, target_command
+    assert_equal goblin_id, target_command.entity_id
+    assert_in_delta waypoint.x, target_command.x
+    assert_in_delta waypoint.z, target_command.z
+
+    assert_instance_of Aogera::Simulation::Commands::GroundMove, move_command
+    assert_equal goblin_id, move_command.entity_id
+    assert_in_delta 2.0 / Aogera::Realtime::TICK_HZ, Math.hypot(move_command.dx, move_command.dz)
+    assert_in_delta move_command.dx, move_command.dz
+  end
+
+  def test_existing_steering_target_is_cleared_before_melee_attack
+    world = Aogera::World.new
+    goblin_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      steering_target: Aogera::Component::SteeringTarget.new(x: 3.5, z: 2.5),
+      melee_attack: Aogera::Component::MeleeAttack.new(reach: 0.65, arc_degrees: 110.0),
+      behavior: Aogera::Component::Behavior.new(kind: :chase),
+      combatant: Aogera::Component::Combatant.new(attack: 1)
+    )
+    hero_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22)
+    )
+    world.add_relation(kind: :targets, source_id: goblin_id, target_id: hero_id)
+
+    commands = Aogera::RealtimeController.new(npc_interval: 1).build(
+      input: Aogera::Input::Snapshot.empty,
+      level: level_with(spawns: []),
+      world: world.view,
+      controlled_id: hero_id,
+      tick_number: 1
+    ).to_a
+
+    assert_equal 2, commands.length
+    assert_instance_of Aogera::Simulation::Commands::ClearSteeringTarget, commands.fetch(0)
+    assert_equal goblin_id, commands.fetch(0).entity_id
+    assert_instance_of Aogera::Simulation::Commands::Attack, commands.fetch(1)
+    assert_equal goblin_id, commands.fetch(1).attacker_id
+  end
+
   def test_player_command_precedes_npc_command_when_both_are_due
     world = Aogera::World.new
     goblin_id = world.spawn(

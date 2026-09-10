@@ -4,6 +4,8 @@ module Aogera
   class Simulation
     module Commands
       GroundMove = Data.define(:entity_id, :dx, :dz)
+      SetSteeringTarget = Data.define(:entity_id, :x, :z)
+      ClearSteeringTarget = Data.define(:entity_id)
       Attack = Data.define(:attacker_id, :target_id, :damage)
       Defeat = Data.define(:entity_id)
       Despawn = Data.define(:entity_id)

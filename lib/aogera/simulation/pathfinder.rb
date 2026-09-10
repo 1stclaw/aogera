@@ -3,13 +3,18 @@
 module Aogera
   class Simulation
     class Pathfinder
+      Waypoint = Data.define(:x, :z)
       DIRECTIONS = Direction::VECTORS
 
       def initialize(ground_clearance: nil)
         @ground_clearance = ground_clearance
+        # Static BSP clearance for a directed grid edge cannot change while
+        # the loaded level and actor hull policy are unchanged. Dynamic cell
+        # occupancy is intentionally evaluated outside this cache.
+        @static_transition_clearance = {}
       end
 
-      def next_step(level:, world:, source_id:, target_id:)
+      def next_waypoint(level:, world:, source_id:, target_id:)
         source = world.component(source_id, :position)
         target = world.component(target_id, :position)
         return unless source && target
@@ -23,7 +28,7 @@ module Aogera
           target_cell: target_cell
         )
         return if goals.empty?
-        return [0, 0] if goals.key?(start)
+        return waypoint_for(level, start) if goals.key?(start)
 
         first_step = search(
           level: level,
@@ -36,13 +41,16 @@ module Aogera
         )
         return unless first_step
 
-        [
-          first_step[0] - start[0],
-          first_step[1] - start[1]
-        ]
+        waypoint_for(level, first_step)
       end
 
       private
+
+
+      def waypoint_for(level, cell)
+        x, z = level.cell_center(cell[0], cell[1])
+        Waypoint.new(x: x, z: z)
+      end
 
       def cell_for(level, position)
         level.cell_for_world(position.x, position.z)
@@ -136,16 +144,38 @@ module Aogera
         return true unless @ground_clearance
         return false unless ground_body&.radius&.positive?
 
-        start_x, start_z = level.cell_center(from[0], from[1])
-        end_x, end_z = level.cell_center(to[0], to[1])
-        @ground_clearance.clear?(
-          start_x: start_x,
-          start_z: start_z,
-          end_x: end_x,
-          end_z: end_z,
+        key = static_transition_key(
+          level: level,
+          from: from,
+          to: to,
           feet_y: feet_y,
           ground_body_radius: ground_body.radius
         )
+
+        @static_transition_clearance.fetch(key) do
+          start_x, start_z = level.cell_center(from[0], from[1])
+          end_x, end_z = level.cell_center(to[0], to[1])
+          @static_transition_clearance[key] = @ground_clearance.clear?(
+            start_x: start_x,
+            start_z: start_z,
+            end_x: end_x,
+            end_z: end_z,
+            feet_y: feet_y,
+            ground_body_radius: ground_body.radius
+          )
+        end
+      end
+
+      def static_transition_key(level:, from:, to:, feet_y:, ground_body_radius:)
+        [
+          level,
+          ground_body_radius,
+          feet_y,
+          from[0],
+          from[1],
+          to[0],
+          to[1]
+        ].freeze
       end
 
       def first_step(parents, goal, start)

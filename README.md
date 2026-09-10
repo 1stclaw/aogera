@@ -6,9 +6,9 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.3.2a**
+**Version: 0.3.3 (development)**
 
-Aogera 0.3.2a is the stabilized BSP29 collision checkpoint built from the 0.3.2 release-candidate line. It keeps the unified continuous runtime introduced in 0.3.1, standardizes Quake-compatible world-unit magnitude, introduces the Reader/Loader authored-data boundary, and advances the validated BSP29 path through static rendering, compiled-hull actor collision, point obstruction traces, and BSP-aware BFS clearance.
+Aogera 0.3.3 is an internal cleanup line built on the stable 0.3.2a BSP29 collision checkpoint. The cleanup line raises the project baseline to Ruby 3.4+, normalizes persistent `Character` state as immutable `Data`, narrows `Session` mutation to validated persistent-effect batches, and is separating legacy grid navigation decisions from locomotion in small behavior-preserving steps. BSP rendering and collision semantics remain inherited from 0.3.2a.
 
 Every spatial runtime entity uses:
 
@@ -65,9 +65,11 @@ The remaining grid has deliberately limited jobs in the BSP preview:
 - temporary BFS navigation topology and dynamic cell occupancy;
 - the normal non-BSP Ruby rendering/collision fallback.
 
-Navigation cells are derived from world-space positions and are not runtime entity state. In BSP mode, BFS still searches those cells, but candidate center-to-center transitions are additionally validated against the same BSP29 compiled hull-1 clearance used by actor movement execution.
+Navigation cells are derived from world-space positions and are not runtime entity state. In BSP mode, BFS still searches those cells, but candidate center-to-center transitions are additionally validated against the same BSP29 compiled hull-1 clearance used by actor movement execution. Because BSP static geometry is immutable for the loaded level, the Pathfinder memoizes those directed static transition results per level, actor radius, and feet height; dynamic entity occupancy is still recomputed on every search. The grid is now internal to `Simulation::Pathfinder`: its public chase result is a world-space `Pathfinder::Waypoint(x, z)`, so `RealtimeController` no longer converts grid directions or cells into movement targets. NPC decisions now also persist their chosen world-space destination as `Component::SteeringTarget(x, z)`. During this preparation patch the controller still emits the same `GroundMove` on the same NPC decision tick; the component exists so a later patch can move locomotion to the fixed simulation cadence without changing the navigation contract.
 
 ## Running
+
+Aogera 0.3.3 requires **Ruby 3.4+**. The repository currently pins Ruby 3.4.10 for development through `.ruby-version`.
 
 ```bash
 bundle install
@@ -105,7 +107,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The v0.3.2a release snapshot corresponds to the playable BSP preview baseline of **239 runs / 727 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The stable v0.3.2a BSP baseline was **239 runs / 727 assertions / 0 failures / 0 errors / 0 skips**. After the current 0.3.3 steering-target preparation, the known cleanup baseline is **254 runs / 782 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 
@@ -140,6 +142,6 @@ The first downstream BSP integration now exists as a minimal world-model rendere
 
 The current BSP collision-query boundary consumes compiled clip hull 1 for all current actor static movement and the world-model node/leaf tree for melee/interaction obstruction. BSP-mode dynamic entity rendering no longer consults the Ruby grid for bounds. Grid BFS keeps its existing cell topology and dynamic-cell occupancy rules while validating candidate center-to-center transitions against the same BSP hull-1 static-clearance source used by movement execution.
 
-The v0.3.2a release keeps this collision/navigation stopping point: further BSP navigation/entity-import work belongs after this checkpoint rather than being folded into the maintenance release. See `docs/bsp_collision_migration.md` for the detailed migration record and roadmap.
+The stable v0.3.2a release remains the collision/navigation checkpoint. The 0.3.3 line is intentionally cleanup-focused: further BSP navigation/entity-import features remain deferred while data-model and coordination seams are simplified. See `docs/bsp_collision_migration.md` for the detailed migration record and roadmap.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

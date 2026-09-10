@@ -217,6 +217,96 @@ class GroundTraceTest < Minitest::Test
     assert_in_delta 3.5, trace.end_x
   end
 
+  def test_unobstructed_between_allows_target_as_first_dynamic_hit
+    level = blank_level(width: 6, height: 4)
+    world = Aogera::World.new
+    source = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
+    )
+    target = world.spawn(
+      position: Aogera::Component::Position.new(x: 4.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
+    )
+
+    assert @space.unobstructed_between?(
+      level: level,
+      world: world.view,
+      source_id: source,
+      target_id: target
+    )
+  end
+
+  def test_unobstructed_between_rejects_static_wall
+    level = row_level("      ", "   |  ", "      ")
+    world = Aogera::World.new
+    source = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
+    )
+    target = world.spawn(
+      position: Aogera::Component::Position.new(x: 4.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
+    )
+
+    refute @space.unobstructed_between?(
+      level: level,
+      world: world.view,
+      source_id: source,
+      target_id: target
+    )
+  end
+
+  def test_unobstructed_between_rejects_blocking_entity_before_target
+    level = blank_level(width: 6, height: 4)
+    world = Aogera::World.new
+    source = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
+    )
+    world.spawn(
+      position: Aogera::Component::Position.new(x: 3.0, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3),
+      collision: Aogera::Component::Collision.new(blocks_movement: true)
+    )
+    target = world.spawn(
+      position: Aogera::Component::Position.new(x: 4.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
+    )
+
+    refute @space.unobstructed_between?(
+      level: level,
+      world: world.view,
+      source_id: source,
+      target_id: target
+    )
+  end
+
+  def test_unobstructed_between_ignores_nonblocking_entity
+    level = blank_level(width: 6, height: 4)
+    world = Aogera::World.new
+    source = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
+    )
+    world.spawn(
+      position: Aogera::Component::Position.new(x: 3.0, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3),
+      collision: Aogera::Component::Collision.new(blocks_movement: false)
+    )
+    target = world.spawn(
+      position: Aogera::Component::Position.new(x: 4.5, y: 0.0, z: 1.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.3)
+    )
+
+    assert @space.unobstructed_between?(
+      level: level,
+      world: world.view,
+      source_id: source,
+      target_id: target
+    )
+  end
+
   private
 
   def blank_level(width:, height:)
@@ -240,4 +330,5 @@ class GroundTraceTest < Minitest::Test
       relations: []
     )
   end
+
 end

@@ -191,6 +191,9 @@ level.cell_for_world(x, z)
 BFS next cell
       |
       v
+Pathfinder::Waypoint(x, z)
+      |
+      v
 continuous waypoint displacement
       |
       v
@@ -223,7 +226,7 @@ In the BSP preview it still provides:
 Ruby-authored level/spawn/entry scaffolding
 BFS cell topology
 BFS dynamic occupancy projection
-cell-center waypoints
+cell-center waypoint generation inside Pathfinder
 ```
 
 The normal non-BSP Ruby launch also continues to use grid terrain for its own static rendering and collision fallback.
@@ -242,7 +245,7 @@ The current Ruby/grid reader converts source grid coordinates to Aogera world co
 
 World-unit magnitude is now Quake 1 compatible. The temporary grid uses 32 world units per cell, and existing linear gameplay/render values are scaled proportionally. This removes the old one-cell/one-unit prototype scale before external BSP geometry enters the runtime.
 
-## BSP collision and navigation boundary in the v0.3.2a release
+## BSP collision and navigation boundary in the v0.3.2 RC
 
 The normalized runtime now has a concrete BSP29 source path in addition to the Ruby/grid path. `BSP29::Reader` preserves BSP structure in normalized Aogera coordinates, and `Render::BSP29World` reconstructs and triangulates world-model faces for the controlled preview.
 
@@ -269,7 +272,7 @@ Navigation is intentionally only partially migrated. `Simulation::Pathfinder` st
 
 The controlled fixture also exposes the fixed compiled-hull limitation: standard hull 1 has a 16-unit horizontal half-extent, while Aogera authors smaller `GroundBody` radii. The 32-unit water pinch therefore has zero nominal hull-1 slack even though the old player circle fit. v0.3.2 records this mismatch instead of hiding it by resizing the map or pretending `GroundBody` can resize a compiled BSP hull.
 
-This is the v0.3.2a release stopping point. BSP-native navigation topology, BSP gameplay entity import, and removal of the Ruby-level bridge are later migrations. See `docs/bsp_collision_migration.md` for the detailed sequence and roadmap.
+This is the release-candidate stopping point. BSP-native navigation topology, BSP gameplay entity import, and removal of the Ruby-level bridge are later migrations. See `docs/bsp_collision_migration.md` for the detailed sequence and roadmap.
 
 ## Still absent by design
 
@@ -282,6 +285,6 @@ Aogera v0.3.2 does not yet contain:
 - generic asset management;
 - generic `Transform`, `PhysicsBody`, or `Spatial` frameworks.
 
-The v0.3.2a release therefore establishes **one continuous world-space runtime, one shared actor movement/collision path, explicit lifecycle state, one continuous spatial basis for combat/interaction, a Reader/Loader authored-data boundary, Quake-compatible world-unit magnitude, a validated BSP29 Reader, BSP world-model rendering, compiled-hull actor static collision, point-hull obstruction, and BSP-aware clearance validation inside the existing grid BFS.**
+The v0.3.2 RC therefore establishes **one continuous world-space runtime, one shared actor movement/collision path, explicit lifecycle state, one continuous spatial basis for combat/interaction, a Reader/Loader authored-data boundary, Quake-compatible world-unit magnitude, a validated BSP29 Reader, BSP world-model rendering, compiled-hull actor static collision, point-hull obstruction, and BSP-aware clearance validation inside the existing grid BFS.**
 
 The controlled BSP29 fixture is intentionally still paired with the matching Ruby-authored level for spawns, entries, and BFS topology. That remaining bridge is explicit and is no longer the BSP-mode static collision authority.

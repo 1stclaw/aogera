@@ -20,6 +20,7 @@ class RetirementLifecycleTest < Minitest::Test
       health: Aogera::Component::Health.new(current: 0, max: 4),
       position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      steering_target: Aogera::Component::SteeringTarget.new(x: 3.5, z: 2.5),
       collision: Aogera::Component::Collision.new(blocks_movement: true)
     )
 
@@ -37,6 +38,7 @@ class RetirementLifecycleTest < Minitest::Test
     assert world.component(entity_id, :position)
     assert world.component(entity_id, :ground_body)
     assert_nil world.component(entity_id, :collision)
+    assert_nil world.component(entity_id, :steering_target)
   end
 
   def test_retired_entity_can_be_explicitly_despawned
@@ -95,6 +97,31 @@ class RetirementLifecycleTest < Minitest::Test
     assert world.retired?(target)
     assert_in_delta 2.5, position.x
     assert_in_delta 1.5, position.z
+  end
+
+  def test_steering_target_buffered_after_defeat_is_ignored
+    world = Aogera::World.new
+    entity_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      health: Aogera::Component::Health.new(current: 0, max: 1),
+      collision: Aogera::Component::Collision.new(blocks_movement: true)
+    )
+
+    execute_buffer(
+      world,
+      [
+        Aogera::Simulation::Commands::Defeat.new(entity_id: entity_id),
+        Aogera::Simulation::Commands::SetSteeringTarget.new(
+          entity_id: entity_id,
+          x: 4.5,
+          z: 2.5
+        )
+      ]
+    )
+
+    assert world.retired?(entity_id)
+    assert_nil world.component(entity_id, :steering_target)
   end
 
   def test_ground_move_buffered_after_defeat_is_ignored

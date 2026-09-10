@@ -23,14 +23,13 @@ the implementation that exists today.
 
 Aogera is currently a Ruby + raylib project.
 
-For the v0.3.2 line, the intended minimum Ruby version remains:
+The stable v0.3.2a line retained Ruby 3.2 compatibility. The v0.3.3 development line deliberately raises the minimum to:
 
 ```text
-Ruby 3.2+
+Ruby 3.4+
 ```
 
-The v0.3.2a maintenance release deliberately keeps this compatibility baseline. Raise it only
-in a later development milestone when newer Ruby features provide measured value.
+This is now an explicit project baseline rather than an experiment. It permits the codebase to use modern immutable-data conveniences such as `Data#with` without compatibility shims.
 
 Current development environments may be newer than the supported baseline. At the time this
 document was written:
@@ -59,21 +58,11 @@ A future optimization opportunity is not a reason to distort today's code.
 
 ---
 
-# 2. Near-term Ruby baseline evaluation
+# 2. Ruby 3.4 baseline
 
-After v0.3.2 is released, Aogera may evaluate raising its minimum Ruby version from 3.2 to
-3.4.
+Aogera 0.3.3 adopts Ruby 3.4+ as its development and support baseline. The immediate purpose is simpler, more consistent modern Ruby rather than syntax churn or speculative optimization.
 
-This should be treated as an engineering decision rather than a version-number preference.
-
-The main question is:
-
-> Does Ruby 3.4 materially simplify or speed up real Aogera workloads enough to justify
-> dropping Ruby 3.2 compatibility?
-
-A version bump should earn its cost through measurable benefits.
-
-Potential Ruby 3.4 benefits worth evaluating include:
+The project should still measure the runtime benefits rather than assume them. Relevant Ruby 3.4 advantages to evaluate include:
 
 - newer `Data` conveniences such as `Data#with`;
 - YJIT improvements;
@@ -89,13 +78,11 @@ The evaluation should use Aogera itself rather than generic language microbenchm
 
 # 3. Ruby 3.4 experiment targets
 
-The first Ruby-version experiment should compare the current supported configuration against
-the actual development environment.
+The first runtime experiment should compare the supported Ruby 3.4 configuration with and without YJIT, and may keep older results only as historical reference.
 
 At minimum, benchmark:
 
 ```text
-Ruby 3.2 interpreter
 Ruby 3.4 interpreter
 Ruby 3.4 + YJIT
 ```
@@ -388,13 +375,9 @@ A future Ruby minimum-version bump may justify small consistency cleanups.
 
 One example is immutable persistent character state.
 
-Current code may retain explicit replacement helpers for Ruby 3.2 compatibility. If the
-minimum eventually becomes Ruby 3.4+, newer `Data` facilities may allow simpler immutable
-value records.
+The 0.3.3 cleanup line has now converted persistent `Character` state to a validated `Data` value and uses `Data#with` for replacement updates. It also narrows `Session` mutation to `apply_effects`, keeping effect-specific replacement logic private instead of exposing speculative healing or MP-management verbs before those systems exist. This is the preferred idiom for flat immutable persistent values when validation remains straightforward.
 
-This should be evaluated only after compatibility policy changes.
-
-Do not refactor working persistent-state code solely to make it look more modern.
+Do not force service objects, catalogs, or state owners into `Data.define`; the goal is to distinguish data from systems, not to eliminate classes.
 
 Other cleanup opportunities should follow the same rule:
 
@@ -548,15 +531,7 @@ release branch/main
     -> stable supported baseline
 ```
 
-If Ruby 3.4 becomes the new minimum, make that change as an explicit development milestone
-with:
-
-- documentation;
-- CI/runtime verification;
-- compatibility notes;
-- benchmark justification.
-
-Do not silently raise the requirement because development machines already run newer Ruby.
+Ruby 3.4 became the explicit minimum in the 0.3.3 cleanup milestone. Future minimum-version changes should follow the same discipline: document them, verify the intended runtime, and justify them through clarity, tooling, or measured performance rather than silently following development-machine versions.
 
 ---
 
@@ -564,14 +539,13 @@ Do not silently raise the requirement because development machines already run n
 
 The following questions should be revisited after v0.3.2 rather than answered prematurely.
 
-## Ruby 3.4 minimum
+## Ruby 3.4 performance
 
 Ask:
 
-- Does it simplify enough real code?
 - Does YJIT materially improve Aogera?
-- Does it reduce allocation/GC cost?
-- Is dropping Ruby 3.2 acceptable?
+- Does Ruby 3.4 reduce allocation/GC cost in hot paths?
+- Which real Aogera workloads benefit enough to influence coding decisions?
 
 ## Ruby 4.1+
 
@@ -607,7 +581,6 @@ Ask:
 
 This document does **not** commit Aogera to:
 
-- Ruby 3.4 as an immediate minimum;
 - Ruby 4.x adoption;
 - ZJIT;
 - Ractors;

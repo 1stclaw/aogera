@@ -79,6 +79,31 @@ class SimulationStepTest < Minitest::Test
     assert_equal :hero, result.effects.first.character_key
   end
 
+  def test_steering_target_commands_update_runtime_component_data
+    set_target = Aogera::Simulation::Commands::SetSteeringTarget.new(
+      entity_id: @hero_id,
+      x: 4.25,
+      z: 3.75
+    )
+
+    @simulation.step(
+      commands: Aogera::Simulation::Commands::Buffer.new([set_target])
+    )
+    target = @simulation.world_view.component(@hero_id, :steering_target)
+
+    assert_instance_of Aogera::Component::SteeringTarget, target
+    assert_in_delta 4.25, target.x
+    assert_in_delta 3.75, target.z
+
+    @simulation.step(
+      commands: Aogera::Simulation::Commands::Buffer.new([
+        Aogera::Simulation::Commands::ClearSteeringTarget.new(entity_id: @hero_id)
+      ])
+    )
+
+    assert_nil @simulation.world_view.component(@hero_id, :steering_target)
+  end
+
   def test_planning_is_outside_simulation_and_does_not_advance_world
     controller = Aogera::RealtimeController.new(
       npc_interval: 1

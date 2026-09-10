@@ -1,8 +1,8 @@
-# Aogera 0.3.2a Collision and Spatial Queries
+# Aogera 0.3.2 Collision and Spatial Queries
 
-This document describes the current Aogera 0.3.2a ground-space collision model.
+This document describes the current Aogera 0.3.2 ground-space collision model.
 
-The system is deliberately narrower than a general physics engine. It provides continuous X/Z spatial facts for current actors and gameplay while supporting both the normal Ruby/grid fallback and the BSP29 static-collision backend used by the BSP preview.
+The system is deliberately narrower than a general physics engine. It provides continuous X/Z spatial facts for current actors and gameplay while keeping the API suitable for a later replacement of static grid collision with BSP collision data.
 
 ## 1. Spatial authority
 
@@ -119,6 +119,8 @@ It asks:
 
 > What is the first relevant obstruction between these two ground points?
 
+`GroundSpace#unobstructed_between?` is the shared entity-to-entity form of this query. It resolves source and target positions, ignores the source body, treats the target as an acceptable terminal hit, and treats other entities as obstructing only when their `Collision` component has `blocks_movement` enabled. Player targeting, NPC melee planning, and executor-side attack validation use this same query instead of rebuilding the trace/filter policy independently.
+
 Current consumers include:
 
 - melee obstruction;
@@ -173,7 +175,7 @@ The BSP preview additionally supplies explicit static-space BSP adapters:
 
 Hull 1 is a fixed collision-source shape with horizontal half-extent 16 and vertical bounds -24..32 around the Quake hull origin; it is not derived from `GroundBody(radius)`. PointHull is shape-free and blocks only `CONTENTS_SOLID` for now; generalized Quake-style contents/masks remain deferred.
 
-The current 0.3.2a policy is explicit rather than pretending those shapes are equivalent:
+The current 0.3.2 policy is explicit rather than pretending those shapes are equivalent:
 
 ```text
 BSP static clearance        -> compiled hull 1
@@ -310,6 +312,9 @@ level.cell_for_world(x, z)
 BFS next cell
    |
    v
+Pathfinder::Waypoint(x, z)
+   |
+   v
 continuous waypoint displacement
    |
    v
@@ -317,6 +322,8 @@ GroundMove
 ```
 
 NPCs share the same continuous `Position`, `GroundMove`, `GroundBody`, and `GroundMovement` machinery with the player. In the current BSP preview their movement execution now uses BSP29 compiled hull-1 static clearance. BFS topology remains the grid, but candidate center-to-center transitions are checked through the same `BSP29::GroundClearance` instance used by spawned-NPC movement, so planning and execution no longer consult different static BSP sources.
+
+The grid step is not exposed to steering. `Simulation::Pathfinder#next_waypoint` converts the chosen planning cell to a world-space `Pathfinder::Waypoint`, and `RealtimeController` consumes only that world-space target when constructing `GroundMove`.
 
 ## 15. Filtering
 
@@ -352,7 +359,7 @@ For the current BSP preview that mismatch is accepted as a source-format limitat
 
 Zero-radius melee/interaction obstruction now uses `BSP29::PointHull` through model headnode 0. `App` supplies the same BSP point-backed `GroundSpace` to player target selection, NPC melee planning, and executor-side attack validation, so those domains no longer disagree about static obstruction.
 
-For navigation and actor movement, `App` supplies one shared `BSP29::GroundClearance` instance. The Pathfinder keeps the current grid cells, ordering, target-adjacent goals, and dynamic-cell occupancy behavior. During BFS expansion it converts the current and candidate cells to their world-space centers and accepts the transition only when compiled hull 1 is clear for the source actor. The same object also supplies positive-radius BSP traces to the single `GroundMovement` execution path used by bound characters and spawned NPCs. `GroundClearance` caches a radius-bound `GroundHull` adapter per authored `GroundBody` radius; the radius remains a contract check and does not resize the fixed BSP hull.
+For navigation and actor movement, `App` supplies one shared `BSP29::GroundClearance` instance. The Pathfinder keeps the current grid cells, ordering, target-adjacent goals, and dynamic-cell occupancy behavior. During BFS expansion it converts the current and candidate cells to their world-space centers and accepts the transition only when compiled hull 1 is clear for the source actor. Those directed static transition answers are memoized by the Pathfinder per level, body radius, and feet height, while dynamic occupancy is always recomputed. The same `GroundClearance` object also supplies positive-radius BSP traces to the single `GroundMovement` execution path used by bound characters and spawned NPCs. `GroundClearance` caches a radius-bound `GroundHull` adapter per authored `GroundBody` radius; the radius remains a contract check and does not resize the fixed BSP hull.
 
 Collision continues to use BSP collision/partition data rather than reconstructed render triangles.
 
