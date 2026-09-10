@@ -1,6 +1,6 @@
 # BSP29 Reader and Static Preview
 
-Aogera's first Quake map integration begins with a **format Reader** and now includes a static-world preview plus operational BSP collision queries. The v0.3.2 RC keeps parsing, rendering, gameplay collision, and temporary navigation topology deliberately separated.
+Aogera's first Quake map integration begins with a **format Reader** and now includes a static-world preview plus operational BSP collision queries. The v0.3.2a release keeps parsing, rendering, gameplay collision, and temporary navigation topology deliberately separated.
 
 The current path is:
 
@@ -138,7 +138,7 @@ This is intended as the first structural compatibility check for real Quake/Tren
 
 ## Controlled fixture validation
 
-The v0.3.2 RC is validated against a generated BSP29 fixture derived from Aogera's original 44×14 `test_field` and compiled with ericw-tools `qbsp`. The compiler and `BSP29::Reader` agree on the structural counts:
+The v0.3.2a release is validated against a generated BSP29 fixture derived from Aogera's original 44×14 `test_field` and compiled with ericw-tools `qbsp`. The compiler and `BSP29::Reader` agree on the structural counts:
 
 ```text
 models          1
@@ -168,11 +168,11 @@ and `info_player_start` resolves to the expected Aogera position:
 (112.0, 0.0, 112.0)
 ```
 
-`visdata` and `lightdata` are intentionally empty because the fixture currently stops after `qbsp`; `vis` and `light` are not required for the RC preview.
+`visdata` and `lightdata` are intentionally empty because the fixture currently stops after `qbsp`; `vis` and `light` are not required for the current preview.
 
 ## Static-world preview
 
-The current 0.3.2 RC can render world model `0` from a parsed BSP29 map:
+The current 0.3.2a release can render world model `0` from a parsed BSP29 map:
 
 ```bash
 bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp

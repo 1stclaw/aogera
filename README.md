@@ -6,9 +6,9 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.3.2 RC**
+**Version: 0.3.2a**
 
-Aogera 0.3.2 is now at a true release-candidate checkpoint. It keeps the unified continuous runtime introduced in 0.3.1, standardizes Quake-compatible world-unit magnitude, introduces the Reader/Loader authored-data boundary, and advances the validated BSP29 path through static rendering, compiled-hull actor collision, point obstruction traces, and BSP-aware BFS clearance.
+Aogera 0.3.2a is the stabilized BSP29 collision checkpoint built from the 0.3.2 release-candidate line. It keeps the unified continuous runtime introduced in 0.3.1, standardizes Quake-compatible world-unit magnitude, introduces the Reader/Loader authored-data boundary, and advances the validated BSP29 path through static rendering, compiled-hull actor collision, point obstruction traces, and BSP-aware BFS clearance.
 
 Every spatial runtime entity uses:
 
@@ -51,7 +51,7 @@ The current `Level::Readers::Ruby` understands the existing Ruby/grid source for
 
 The first external reader now exists as `BSP29::Reader`. It decodes Quake 1 BSP29 into normalized `BSP29::MapData`, preserving BSP-specific structure while converting vectors, bounds, plane normals, texture axes, model origins, and entity origins to Aogera axes at 1:1 world-unit magnitude.
 
-The Reader has been validated end-to-end with an Aogera-controlled BSP29 fixture compiled by ericw-tools from the original `test_field` layout. The current RC can render BSP world model `0` directly as a static-world preview while gameplay still uses the matching Ruby/grid level.
+The Reader has been validated end-to-end with an Aogera-controlled BSP29 fixture compiled by ericw-tools from the original `test_field` layout. The current release can render BSP world model `0` directly as a static-world preview while gameplay still uses the matching Ruby/grid level.
 
 ### Runtime movement and collision
 
@@ -105,7 +105,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The v0.3.2 RC documentation snapshot corresponds to the playable BSP preview baseline of **239 runs / 727 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The v0.3.2a release snapshot corresponds to the playable BSP preview baseline of **239 runs / 727 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 
@@ -129,7 +129,8 @@ Aogera still has no generic scene/projector/transform layer, no general physics 
 - `docs/bsp_collision_migration.md` — v0.3.2 BSP collision migration history, current authority map, fixed-hull limitation, and incremental pathfinding roadmap;
 - `docs/collision.md` — current ground-space trace, sweep, movement, and obstruction model;
 - `docs/raylib_3d.md` — raylib 3D frontend and first-person presentation path;
-- `docs/3d_migration.md` — cumulative architectural change from the v0.2.3 2D baseline to v0.3.2.
+- `docs/3d_migration.md` — cumulative architectural change from the v0.2.3 2D baseline to the v0.3.2 line;
+- `docs/future.md` — explicitly speculative future runtime, Ruby-version, performance, rendering, and navigation directions.
 
 ## Direction
 
@@ -139,6 +140,6 @@ The first downstream BSP integration now exists as a minimal world-model rendere
 
 The current BSP collision-query boundary consumes compiled clip hull 1 for all current actor static movement and the world-model node/leaf tree for melee/interaction obstruction. BSP-mode dynamic entity rendering no longer consults the Ruby grid for bounds. Grid BFS keeps its existing cell topology and dynamic-cell occupancy rules while validating candidate center-to-center transitions against the same BSP hull-1 static-clearance source used by movement execution.
 
-This is the v0.3.2 RC stopping point for collision/navigation migration: unless a concrete RC bug appears, further BSP navigation/entity-import work belongs after this checkpoint rather than being folded into the release candidate. See `docs/bsp_collision_migration.md` for the detailed migration record and roadmap.
+The v0.3.2a release keeps this collision/navigation stopping point: further BSP navigation/entity-import work belongs after this checkpoint rather than being folded into the maintenance release. See `docs/bsp_collision_migration.md` for the detailed migration record and roadmap.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

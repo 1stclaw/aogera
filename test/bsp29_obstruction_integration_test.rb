@@ -175,7 +175,7 @@ class BSP29ObstructionIntegrationTest < Minitest::Test
       marksurface_count: 0,
       ambient_levels: [0, 0, 0, 0].freeze
     )
-    empty_leaf = solid_leaf.with(contents: -1)
+    empty_leaf = replace_data(solid_leaf, contents: -1)
     plane = Aogera::BSP29::Plane.new(
       normal: vec(1, 0, 0),
       distance: 0.0,

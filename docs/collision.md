@@ -1,8 +1,8 @@
-# Aogera 0.3.2 Collision and Spatial Queries
+# Aogera 0.3.2a Collision and Spatial Queries
 
-This document describes the current Aogera 0.3.2 ground-space collision model.
+This document describes the current Aogera 0.3.2a ground-space collision model.
 
-The system is deliberately narrower than a general physics engine. It provides continuous X/Z spatial facts for current actors and gameplay while keeping the API suitable for a later replacement of static grid collision with BSP collision data.
+The system is deliberately narrower than a general physics engine. It provides continuous X/Z spatial facts for current actors and gameplay while supporting both the normal Ruby/grid fallback and the BSP29 static-collision backend used by the BSP preview.
 
 ## 1. Spatial authority
 
@@ -173,7 +173,7 @@ The BSP preview additionally supplies explicit static-space BSP adapters:
 
 Hull 1 is a fixed collision-source shape with horizontal half-extent 16 and vertical bounds -24..32 around the Quake hull origin; it is not derived from `GroundBody(radius)`. PointHull is shape-free and blocks only `CONTENTS_SOLID` for now; generalized Quake-style contents/masks remain deferred.
 
-The current 0.3.2 policy is explicit rather than pretending those shapes are equivalent:
+The current 0.3.2a policy is explicit rather than pretending those shapes are equivalent:
 
 ```text
 BSP static clearance        -> compiled hull 1

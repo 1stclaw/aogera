@@ -29,8 +29,8 @@ For the v0.3.2 line, the intended minimum Ruby version remains:
 Ruby 3.2+
 ```
 
-Do not raise the minimum version during the v0.3.2 release candidate solely to gain access
-to newer language features.
+The v0.3.2a maintenance release deliberately keeps this compatibility baseline. Raise it only
+in a later development milestone when newer Ruby features provide measured value.
 
 Current development environments may be newer than the supported baseline. At the time this
 document was written:

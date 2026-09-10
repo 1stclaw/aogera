@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.2 runtime and its present boundaries.
+This document describes the current Aogera 0.3.2a runtime and its present boundaries.
 
 ## Design goals
 
@@ -327,9 +327,9 @@ Aogera world-unit magnitude is Quake 1 compatible: one current grid cell is 32 w
 
 `Content::Paths` still centralizes current authored Ruby paths. There is intentionally no general asset manager yet.
 
-## Current v0.3.2 RC boundary
+## Current v0.3.2a boundary
 
-Aogera 0.3.2 has:
+Aogera 0.3.2a has:
 
 - one continuous runtime position model for player, enemies, NPCs, and spatial interactables;
 - one ground movement/collision execution path for current actors;

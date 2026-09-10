@@ -1,4 +1,4 @@
-# Aogera 0.3.2 Raylib 3D Frontend
+# Aogera 0.3.2a Raylib 3D Frontend
 
 Aogera's active 3D frontend consumes the same canonical runtime position used by simulation and collision.
 
@@ -156,7 +156,7 @@ This preserves the useful platform boundary established before the 3D renderer a
 
 ## Still deferred
 
-Aogera 0.3.2 does not introduce:
+Aogera 0.3.2a does not introduce:
 
 - BSP hull/clipnode collision;
 - BSP palette/texture sampling and lightmaps;

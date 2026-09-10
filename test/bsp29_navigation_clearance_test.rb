@@ -160,7 +160,7 @@ class BSP29NavigationClearanceTest < Minitest::Test
       marksurface_count: 0,
       ambient_levels: [0, 0, 0, 0].freeze
     )
-    empty_leaf = solid_leaf.with(contents: -1)
+    empty_leaf = replace_data(solid_leaf, contents: -1)
     plane = plane(1, 0, 0, 0)
     node = Aogera::BSP29::Node.new(
       plane_index: 0,

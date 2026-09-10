@@ -272,9 +272,9 @@ GroundMove
     -> BSP29 ClipHull 1
 ```
 
-This is the v0.3.2 RC checkpoint.
+This became the v0.3.2a release checkpoint.
 
-## 9. Current v0.3.2 RC authority map
+## 9. Current v0.3.2a authority map
 
 The current BSP preview is still hybrid, but static collision authority is no longer split between player and NPC movement.
 
@@ -308,7 +308,7 @@ SPAWNS / ENTRIES / CURRENT LEVEL CONSTRUCTION
     Ruby authored test_field through Level::Readers::Ruby / Level::Loader
 ```
 
-This is the key RC invariant:
+This is the key release invariant:
 
 > BSP29 now answers the static collision questions used by BSP-mode actor movement and obstruction, while the Ruby grid remains a temporary navigation/authored-level scaffold.
 
@@ -369,9 +369,9 @@ This is intentionally a compatibility bridge rather than a new navigation archit
 
 Further navigation work should remain incremental.
 
-### Phase A: preserve the RC
+### Phase A: preserve the release baseline
 
-Do not replace BFS while stabilizing/releasing v0.3.2. Treat regressions in the controlled BSP field as RC bugs rather than opportunities for broad redesign.
+Do not replace BFS while preserving the v0.3.2a baseline. Treat regressions in the controlled BSP field as maintenance bugs rather than opportunities for broad redesign.
 
 ### Phase B: isolate grid topology from `Level::Terrain`
 
@@ -393,7 +393,7 @@ At that point `Level::Terrain` can remain as the normal Ruby-level implementatio
 
 ## 13. Deferred systems
 
-The v0.3.2 RC intentionally does not combine the collision migration with:
+The v0.3.2a release intentionally does not combine the collision migration with:
 
 - gravity;
 - jumping;
@@ -412,7 +412,7 @@ The v0.3.2 RC intentionally does not combine the collision migration with:
 
 These should be introduced only when their own milestone requires them.
 
-## 14. RC test and manual fixture commands
+## 14. Release test and manual fixture commands
 
 The documented automated baseline for this checkpoint is:
 
@@ -433,7 +433,7 @@ bundle exec ruby bin/aogera-bsp29 \
   ~/Downloads/aogera-test-field-bsp29-fixture/test_field.bsp
 ```
 
-Manual RC checks should include:
+Manual release checks should include:
 
 - player movement and wall sliding;
 - goblin movement and rerouting;
@@ -442,8 +442,8 @@ Manual RC checks should include:
 - melee/interaction obstruction by BSP walls;
 - the known blocked 32-unit water pinch, which remains an expected fixed-hull limitation.
 
-## 15. Release-candidate rule
+## 15. Release-baseline rule
 
 For v0.3.2, the migration is now at a coherent stopping point.
 
-Unless a concrete RC bug appears, avoid further collision/navigation feature work before release. The important achievement is not removal of every grid data structure; it is that BSP-mode static collision now has one consistent authority while the remaining grid roles are narrow, visible, and testable.
+After v0.3.2a, avoid folding new collision/navigation features into this release baseline. The important achievement is not removal of every grid data structure; it is that BSP-mode static collision now has one consistent authority while the remaining grid roles are narrow, visible, and testable.

@@ -44,8 +44,8 @@ class BSP29RenderTest < Minitest::Test
 
   def test_rejects_negative_cross_reference_indices
     map = square_map
-    bad_face = map.faces.first.with(texinfo_index: -1)
-    bad_map = map.with(faces: [bad_face].freeze)
+    bad_face = replace_data(map.faces.first, texinfo_index: -1)
+    bad_map = replace_data(map, faces: [bad_face].freeze)
 
     error = assert_raises(Aogera::BSP29::FormatError) do
       Aogera::Render::BSP29World.new(map: bad_map)
@@ -56,8 +56,9 @@ class BSP29RenderTest < Minitest::Test
 
   def test_preserves_missing_texture_directory_entries
     map = square_map
-    bad_texinfo = map.texinfo.first.with(texture_index: 1)
-    map_with_missing_texture = map.with(
+    bad_texinfo = replace_data(map.texinfo.first, texture_index: 1)
+    map_with_missing_texture = replace_data(
+      map,
       texinfo: [bad_texinfo].freeze,
       textures: [map.textures.first, nil].freeze
     )
@@ -68,6 +69,15 @@ class BSP29RenderTest < Minitest::Test
   end
 
   private
+
+  def replace_data(record, **changes)
+    values = record.class.members.to_h do |member|
+      value = changes.key?(member) ? changes.fetch(member) : record.public_send(member)
+      [member, value]
+    end
+
+    record.class.new(**values)
+  end
 
   def square_map(extra_face: false)
     vec = Aogera::BSP29::Vec3
@@ -82,7 +92,7 @@ class BSP29RenderTest < Minitest::Test
     )
     faces = [face]
     if extra_face
-      faces << face.with(first_edge: 0)
+      faces << replace_data(face, first_edge: 0)
     end
 
     Aogera::BSP29::MapData.new(
