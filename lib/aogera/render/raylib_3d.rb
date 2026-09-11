@@ -192,6 +192,9 @@ module Aogera
           ),
           "BSP #{@bsp29_world.triangle_count} tris | " \
             "#{@bsp29_world.batch_count} mesh draws",
+          "Lightmaps #{@bsp29_world.lightmapped_face_count} faces | " \
+            "#{@bsp29_world.lightmap_atlas_width}x" \
+            "#{@bsp29_world.lightmap_atlas_height}",
           "Entities #{world.entity_ids.length}"
         ]
         height = (DIAGNOSTIC_PADDING * 2) +

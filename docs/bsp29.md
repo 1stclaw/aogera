@@ -138,9 +138,10 @@ The same executable can inspect a map without opening raylib:
 ```bash
 bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --bsp-info
 bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --dump-entities
+bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --dump-textures
 ```
 
-`--bsp-info` prints structural counts, world-model bounds, visibility/light byte counts, and normalized `info_player_start` origins. `--dump-entities` prints the parsed source key/value declarations for every entity and also shows the normalized Aogera-space origin when the Reader parsed one. `--help` documents the available options. Exit-style inspection commands are mutually exclusive.
+`--bsp-info` prints structural counts, world-model bounds, visibility/light byte counts, and normalized `info_player_start` origins. `--dump-entities` prints the parsed source key/value declarations for every entity and also shows the normalized Aogera-space origin when the Reader parsed one. `--dump-textures` follows world-model faces through `TexInfo` to the BSP miptexture table and reports texture names, dimensions, face counts, missing referenced slots, and embedded-but-currently-unused textures. This is intended to inventory replacement/debug materials without guessing from map themes. `--help` documents the available options. Exit-style inspection commands are mutually exclusive.
 
 The older helper remains valid:
 
@@ -195,13 +196,13 @@ The current BSP preview can render world model `0` from a parsed BSP29 map:
 bundle exec ruby bin/aogera-bsp29 --spectator /path/to/map.bsp
 ```
 
-The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices`, verifies/corrects polygon winding against the normalized BSP face plane, and triangulates the convex polygon. Since v0.3.4, those triangles are grouped by diagnostic color into persistent raylib mesh/model resources after the window opens, rather than issuing one Ruby/FFI `DrawTriangle3D` call per triangle every frame. The fixture texture names are still mapped only to diagnostic colors; embedded miptexture pixels are not sampled yet.
+The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices`, verifies/corrects polygon winding against the normalized BSP face plane, and triangulates the convex polygon. Since v0.3.4, those triangles are uploaded to persistent raylib mesh/model resources after the window opens, rather than issuing one Ruby/FFI `DrawTriangle3D` call per triangle every frame. The renderer now also reproduces Quake's 16-unit lightmap sampling grid from each face's `TexInfo`, `light_offset`, and styles, packs the first stored baked-light style into a padded grayscale atlas, and assigns lightmap UVs to the persistent mesh. Faces with no baked samples use a fullbright fallback texel. Embedded miptexture pixels and the Quake palette are still not sampled, so the current world is deliberately grayscale rather than textured.
 
 Beginning with the v0.3.4 bring-up line, `bin/aogera-bsp29` no longer imports the Ruby `test_field` as gameplay state. `BSP29::Bootstrap` selects the first `info_player_start`, uses its already-normalized origin as the Aogera player entry, and converts the Quake `angle` property to `FirstPersonView` yaw. BSP mode currently creates only the bound player; it does not import Quake monsters, items, triggers, or other map entities yet.
 
 When launched with `--spectator`, the BSP launcher enters `Mode::Spectator` rather than ordinary `Mode::Play`. The spectator camera begins at that bound player's eye position and then keeps independent camera coordinates. Its fixed-step movement bypasses `GroundMovement`, `GroundSpace`, and actor `Position`, allowing arbitrary vertical inspection before floor following, steps, gravity, and jumping exist. The underlying player entity remains at the BSP start and the configured BSP collision services remain available to the runtime for later gameplay tests.
 
-The spectator also renders a compact top-left diagnostic panel. It reports raylib's measured FPS, camera XYZ, yaw/pitch in degrees, world-model triangle count, persistent diagnostic-color mesh draws per frame, and current runtime entity count. These values are presentation diagnostics only; they do not feed back into simulation timing or collision.
+The spectator also renders a compact top-left diagnostic panel. It reports raylib's measured FPS, camera XYZ, yaw/pitch in degrees, world-model triangle count, persistent mesh draws per frame, baked-lightmapped face count, lightmap-atlas dimensions, and current runtime entity count. These values are presentation diagnostics only; they do not feed back into simulation timing or collision.
 
 Spectator controls are mouse look, WASD/arrows for view-relative flight, Space for world-up, Shift or C for world-down, and Q/Esc to quit. Forward flight follows pitch; combined directions are normalized to one configured speed.
 
@@ -226,7 +227,7 @@ The controlled fixture historically authored `info_player_start` as an Aogera fe
 The BSP path does not yet provide:
 
 - palette conversion or raylib textures;
-- lightmap rendering;
+- animated/multi-style lightmap evaluation beyond the first stored style;
 - PVS traversal;
 - arbitrary authored actor radii for BSP static collision;
 - brush-submodel motion;

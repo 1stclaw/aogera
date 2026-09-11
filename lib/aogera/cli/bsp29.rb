@@ -37,6 +37,8 @@ module Aogera
           print_bsp_info(map, options.path)
         when :dump_entities
           print_entities(map, options.path)
+        when :dump_textures
+          print_textures(map, options.path)
         else
           raise ArgumentError, "unknown BSP29 CLI action: #{options.action.inspect}"
         end
@@ -120,6 +122,13 @@ module Aogera
             select_action!(state, :dump_entities, "--dump-entities")
           end
 
+          parser.on(
+            "--dump-textures",
+            "Print BSP world-model texture usage and exit"
+          ) do
+            select_action!(state, :dump_textures, "--dump-textures")
+          end
+
           parser.on("-h", "--help", "Show this help and exit") do
             state[:action] = :help
           end
@@ -185,6 +194,90 @@ module Aogera
           end
           if entity.origin
             @stdout.puts "  normalized_origin=#{format_vec(entity.origin)}"
+          end
+        end
+      end
+
+      def print_textures(map, path)
+        world = map.world_model
+        faces = if world
+          map.faces.slice(world.first_face, world.face_count) || []
+        else
+          []
+        end
+
+        counts = Hash.new(0)
+        faces.each do |face|
+          index = face.texinfo_index
+          if index.negative? || index >= map.texinfo.length
+            raise Aogera::BSP29::FormatError,
+              "world face references missing texinfo #{index}"
+          end
+
+          counts[map.texinfo[index].texture_index] += 1
+        end
+
+        used = []
+        missing = []
+        counts.each do |texture_index, face_count|
+          texture = if texture_index >= 0 && texture_index < map.textures.length
+            map.textures[texture_index]
+          end
+          if texture
+            used << [texture.name, texture.width, texture.height, face_count, texture_index]
+          else
+            missing << [texture_index, face_count]
+          end
+        end
+
+        used.sort_by! { |name, _width, _height, _faces, _index| name }
+        missing.sort_by!(&:first)
+        used_indices = counts.keys.to_h { |index| [index, true] }
+        unused = map.textures.each_with_index.filter_map do |texture, index|
+          next unless texture
+          next if used_indices[index]
+
+          [texture.name, texture.width, texture.height, index]
+        end
+        unused.sort_by! { |name, _width, _height, _index| name }
+
+        embedded_count = map.textures.count { |texture| texture }
+        @stdout.puts "BSP29 textures: #{File.expand_path(path)}"
+        @stdout.puts "texture slots:       #{map.textures.length}"
+        @stdout.puts "embedded textures:   #{embedded_count}"
+        @stdout.puts "world face refs:      #{faces.length}"
+        @stdout.puts "unique used textures: #{used.length}"
+        @stdout.puts "missing used slots:   #{missing.length}"
+
+        @stdout.puts
+        @stdout.puts "World-model textures:"
+        if used.empty?
+          @stdout.puts "  (none)"
+        else
+          used.each do |name, width, height, face_count, index|
+            @stdout.puts format(
+              "  %-16s %4dx%-4d faces=%-4d index=%d",
+              name, width, height, face_count, index
+            )
+          end
+        end
+
+        unless missing.empty?
+          @stdout.puts
+          @stdout.puts "Missing texture slots referenced by world faces:"
+          missing.each do |index, face_count|
+            @stdout.puts "  index=#{index} faces=#{face_count}"
+          end
+        end
+
+        unless unused.empty?
+          @stdout.puts
+          @stdout.puts "Embedded but unused by world model:"
+          unused.each do |name, width, height, index|
+            @stdout.puts format(
+              "  %-16s %4dx%-4d index=%d",
+              name, width, height, index
+            )
           end
         end
       end

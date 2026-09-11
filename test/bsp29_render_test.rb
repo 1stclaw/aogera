@@ -4,18 +4,31 @@ require_relative "test_helper"
 
 class BSP29RenderTest < Minitest::Test
   class FakeAPI
-    attr_reader :created, :drawn, :unloaded
+    attr_reader :created, :textures, :textured, :drawn, :unloaded, :unloaded_textures
 
     def initialize
       @created = []
+      @textures = []
+      @textured = []
       @drawn = []
       @unloaded = []
+      @unloaded_textures = []
     end
 
-    def create_static_model(vertices:)
+    def create_static_model(vertices:, texcoords: nil)
       handle = [:model, @created.length]
-      @created << {handle: handle, vertices: vertices}
+      @created << {handle: handle, vertices: vertices, texcoords: texcoords}
       handle
+    end
+
+    def create_texture_rgba(width:, height:, pixels:)
+      handle = [:texture, @textures.length]
+      @textures << {handle: handle, width: width, height: height, pixels: pixels}
+      handle
+    end
+
+    def set_model_texture(model:, texture:)
+      @textured << {model: model, texture: texture}
     end
 
     def draw_model(model:, rgba:)
@@ -25,26 +38,31 @@ class BSP29RenderTest < Minitest::Test
     def unload_model(model)
       @unloaded << model
     end
+
+    def unload_texture(texture)
+      @unloaded_textures << texture
+    end
   end
 
-  def test_world_model_faces_are_reconstructed_batched_and_uploaded_once
+  def test_world_model_faces_are_reconstructed_into_one_textured_mesh
     renderer = Aogera::Render::BSP29World.new(map: square_map)
     api = FakeAPI.new
 
     assert_equal 2, renderer.triangle_count
-    assert_equal 1, renderer.batches.length
     assert_equal 1, renderer.batch_count
     assert_equal 18, renderer.batches.first.vertices.length
-    assert_equal [82, 76, 62, 255], renderer.batches.first.rgba
+    assert_equal 12, renderer.batches.first.texcoords.length
+    assert_equal [255, 255, 255, 255], renderer.batches.first.rgba
 
     renderer.prepare(api)
     renderer.draw(api)
     renderer.draw(api)
 
     assert_equal 1, api.created.length
+    assert_equal 1, api.textures.length
+    assert_equal 1, api.textured.length
     assert_equal 2, api.drawn.length
     assert_equal api.created.first.fetch(:handle), api.drawn.first.fetch(:model)
-    assert_equal [82, 76, 62, 255], api.drawn.first.fetch(:rgba)
 
     triangles = api.created.first.fetch(:vertices).each_slice(9).to_a
     triangles.each do |triangle|
@@ -52,7 +70,50 @@ class BSP29RenderTest < Minitest::Test
     end
   end
 
-  def test_prepare_groups_faces_by_diagnostic_color_not_texture_name
+  def test_baked_light_samples_build_grayscale_atlas_and_uvs
+    lighting = [0, 16, 32, 48, 64, 80, 96, 112, 127].pack("C*")
+    renderer = Aogera::Render::BSP29World.new(
+      map: square_map(size: 32.0, light_offset: 0, lighting: lighting)
+    )
+    api = FakeAPI.new
+
+    assert_equal 1, renderer.lightmapped_face_count
+    assert_operator renderer.lightmap_atlas_width, :>=, 8
+    assert_operator renderer.lightmap_atlas_height, :>=, 8
+
+    renderer.prepare(api)
+
+    texture = api.textures.fetch(0)
+    pixels = texture.fetch(:pixels)
+    grayscale_values = pixels.bytes.each_slice(4).map(&:first).uniq
+    assert_includes grayscale_values, 0
+    assert_includes grayscale_values, 32
+    assert_includes grayscale_values, 128
+    assert_includes grayscale_values, 224
+    assert_includes grayscale_values, 254
+
+    texcoords = api.created.fetch(0).fetch(:texcoords)
+    assert_equal 12, texcoords.length
+    texcoords.each do |coordinate|
+      assert_operator coordinate, :>, 0.0
+      assert_operator coordinate, :<, 1.0
+    end
+    assert_operator texcoords.each_slice(2).to_a.uniq.length, :>, 2
+  end
+
+  def test_faces_without_baked_light_use_fullbright_atlas_pixel
+    renderer = Aogera::Render::BSP29World.new(map: square_map)
+    api = FakeAPI.new
+
+    assert_equal 0, renderer.lightmapped_face_count
+    renderer.prepare(api)
+
+    texcoords = api.created.fetch(0).fetch(:texcoords)
+    assert_equal 1, texcoords.each_slice(2).to_a.uniq.length
+    assert_equal 255, api.textures.fetch(0).fetch(:pixels).getbyte(0)
+  end
+
+  def test_faces_with_different_texture_names_share_lightmap_mesh
     map = square_map(extra_face: true, extra_texture_name: "OTHER_TEXTURE")
     map = map.with(models: [map.world_model.with(face_count: 2)].freeze)
     renderer = Aogera::Render::BSP29World.new(map: map)
@@ -61,11 +122,12 @@ class BSP29RenderTest < Minitest::Test
     renderer.prepare(api)
 
     assert_equal 4, renderer.triangle_count
-    assert_equal 2, renderer.batches.length
-    assert_equal 2, api.created.length
+    assert_equal 1, renderer.batch_count
+    assert_equal 1, api.created.length
+    assert_equal 1, api.textures.length
   end
 
-  def test_prepare_is_idempotent_and_close_unloads_once
+  def test_prepare_is_idempotent_and_close_unloads_model_and_texture_once
     renderer = Aogera::Render::BSP29World.new(map: square_map)
     api = FakeAPI.new
 
@@ -75,7 +137,9 @@ class BSP29RenderTest < Minitest::Test
     renderer.close(api)
 
     assert_equal 1, api.created.length
+    assert_equal 1, api.textures.length
     assert_equal 1, api.unloaded.length
+    assert_equal 1, api.unloaded_textures.length
     refute renderer.prepared?
   end
 
@@ -105,23 +169,25 @@ class BSP29RenderTest < Minitest::Test
     assert_match(/texinfo index is out of range: -1/, error.message)
   end
 
-  def test_missing_texture_directory_entry_uses_default_batch_color
-    map = square_map
-    bad_texinfo = map.texinfo.first.with(texture_index: 1)
-    map_with_missing_texture = map.with(
-      texinfo: [bad_texinfo].freeze,
-      textures: [map.textures.first, nil].freeze
-    )
+  def test_rejects_lightmap_data_outside_lighting_lump
+    map = square_map(size: 32.0, light_offset: 2, lighting: "\x01\x02\x03".b)
 
-    renderer = Aogera::Render::BSP29World.new(map: map_with_missing_texture)
+    error = assert_raises(Aogera::BSP29::FormatError) do
+      Aogera::Render::BSP29World.new(map: map)
+    end
 
-    assert_equal Aogera::Render::BSP29World::DEFAULT_COLOR,
-      renderer.batches.first.rgba
+    assert_match(/face lightmap is outside lighting lump/, error.message)
   end
 
   private
 
-  def square_map(extra_face: false, extra_texture_name: nil)
+  def square_map(
+    extra_face: false,
+    extra_texture_name: nil,
+    size: 1.0,
+    light_offset: -1,
+    lighting: "".b
+  )
     vec = Aogera::BSP29::Vec3
     face = Aogera::BSP29::Face.new(
       plane_index: 0,
@@ -130,7 +196,7 @@ class BSP29RenderTest < Minitest::Test
       edge_count: 4,
       texinfo_index: 0,
       styles: [0, 255, 255, 255].freeze,
-      light_offset: -1
+      light_offset: light_offset
     )
     faces = [face]
     texinfo = [
@@ -167,15 +233,15 @@ class BSP29RenderTest < Minitest::Test
       textures: textures.freeze,
       vertices: [
         vec.new(x: 0.0, y: 0.0, z: 0.0),
-        vec.new(x: 1.0, y: 0.0, z: 0.0),
-        vec.new(x: 1.0, y: 0.0, z: 1.0),
-        vec.new(x: 0.0, y: 0.0, z: 1.0)
+        vec.new(x: size, y: 0.0, z: 0.0),
+        vec.new(x: size, y: 0.0, z: size),
+        vec.new(x: 0.0, y: 0.0, z: size)
       ].freeze,
       visibility: "".b.freeze,
       nodes: [].freeze,
       texinfo: texinfo.freeze,
       faces: faces.freeze,
-      lighting: "".b.freeze,
+      lighting: lighting.b.freeze,
       clipnodes: [].freeze,
       leaves: [].freeze,
       marksurfaces: [].freeze,
@@ -190,7 +256,7 @@ class BSP29RenderTest < Minitest::Test
         Aogera::BSP29::Model.new(
           bounds: Aogera::BSP29::Bounds.new(
             mins: vec.new(x: 0.0, y: 0.0, z: 0.0),
-            maxs: vec.new(x: 1.0, y: 0.0, z: 1.0)
+            maxs: vec.new(x: size, y: 0.0, z: size)
           ),
           origin: vec.new(x: 0.0, y: 0.0, z: 0.0),
           headnodes: [0, 0, 0, 0].freeze,

@@ -14,6 +14,7 @@ class BSP29CLITest < Minitest::Test
     :entities,
     :planes,
     :textures,
+    :texinfo,
     :vertices,
     :visibility,
     :nodes,
@@ -34,6 +35,10 @@ class BSP29CLITest < Minitest::Test
       entities.select { |entity| entity.classname == classname }.freeze
     end
   end
+
+  FakeFace = Struct.new(:texinfo_index)
+  FakeTexInfo = Struct.new(:texture_index)
+  FakeTexture = Struct.new(:name, :width, :height)
 
   def test_bare_map_requires_an_explicit_launch_mode
     app = FakeApp.new(0)
@@ -123,6 +128,30 @@ class BSP29CLITest < Minitest::Test
     assert_includes stdout.string, "normalized_origin=(12.0, 24.0, 36.0)"
   end
 
+  def test_dump_textures_prints_world_usage_missing_slots_and_unused_embedded_textures
+    app = FakeApp.new(0)
+    stdout = StringIO.new
+    cli = build_cli(map: texture_map, app: app, stdout: stdout)
+
+    status = cli.run(["map.bsp", "--dump-textures"])
+
+    assert_equal 0, status
+    assert_equal 0, app.runs
+    assert_includes stdout.string, "texture slots:       4"
+    assert_includes stdout.string, "embedded textures:   3"
+    assert_includes stdout.string, "world face refs:      4"
+    assert_includes stdout.string, "unique used textures: 2"
+    assert_includes stdout.string, "BRICKA2_4"
+    assert_includes stdout.string, "64x64"
+    assert_includes stdout.string, "faces=2"
+    assert_includes stdout.string, "METAL1_3"
+    assert_includes stdout.string, "128x64"
+    assert_includes stdout.string, "Missing texture slots referenced by world faces:"
+    assert_includes stdout.string, "index=2 faces=1"
+    assert_includes stdout.string, "Embedded but unused by world model:"
+    assert_includes stdout.string, "UNUSED"
+  end
+
   def test_help_does_not_require_a_path_or_read_a_map
     reader_calls = []
     stdout = StringIO.new
@@ -139,6 +168,7 @@ class BSP29CLITest < Minitest::Test
     assert_includes stdout.string, "Usage: bundle exec ruby bin/aogera-bsp29"
     assert_includes stdout.string, "--bsp-info"
     assert_includes stdout.string, "--dump-entities"
+    assert_includes stdout.string, "--dump-textures"
   end
 
   def test_missing_path_is_a_usage_error
@@ -225,6 +255,7 @@ class BSP29CLITest < Minitest::Test
       ].freeze,
       planes: Array.new(3),
       textures: Array.new(4),
+      texinfo: Array.new(2),
       vertices: Array.new(5),
       visibility: "vis".b.freeze,
       nodes: Array.new(6),
@@ -235,6 +266,42 @@ class BSP29CLITest < Minitest::Test
       surfedges: Array.new(11),
       models: [world].freeze,
       lighting: "light".b.freeze
+    )
+  end
+
+  def texture_map
+    map = fake_map
+    world = Aogera::BSP29::Model.new(
+      bounds: map.world_model.bounds,
+      origin: map.world_model.origin,
+      headnodes: map.world_model.headnodes,
+      visible_leaf_count: map.world_model.visible_leaf_count,
+      first_face: 0,
+      face_count: 4
+    )
+
+    FakeMap.new(
+      **map.to_h.merge(
+        textures: [
+          FakeTexture.new("BRICKA2_4", 64, 64),
+          FakeTexture.new("METAL1_3", 128, 64),
+          nil,
+          FakeTexture.new("UNUSED", 32, 32)
+        ].freeze,
+        texinfo: [
+          FakeTexInfo.new(0),
+          FakeTexInfo.new(1),
+          FakeTexInfo.new(2)
+        ].freeze,
+        faces: [
+          FakeFace.new(0),
+          FakeFace.new(1),
+          FakeFace.new(0),
+          FakeFace.new(2),
+          FakeFace.new(3)
+        ].freeze,
+        models: [world].freeze
+      )
     )
   end
 
