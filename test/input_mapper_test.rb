@@ -49,6 +49,22 @@ class InputMapperTest < Minitest::Test
     assert_equal :quit, @mapper.map(key_event(:q)).kind
   end
 
+  def test_spectator_mapping_reuses_space_for_up_and_adds_two_down_keys
+    mapper = Aogera::Input::Mapper.spectator
+
+    assert_equal :move_up, mapper.map(key_event(:space)).kind
+    assert_equal :move_down, mapper.map(key_event(:c)).kind
+    assert_equal :move_down, mapper.map(key_event(:left_shift)).kind
+    assert_equal :move_forward, mapper.map(key_event(:w)).kind
+    assert_equal :quit, mapper.map(key_event(:q)).kind
+  end
+
+  def test_default_mapping_does_not_gain_spectator_down_controls
+    assert_nil @mapper.map(key_event(:c))
+    assert_nil @mapper.map(key_event(:left_shift))
+    assert_equal :attack, @mapper.map(key_event(:space)).kind
+  end
+
   private
 
   def key_event(key, state: :pressed)

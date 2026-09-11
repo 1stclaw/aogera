@@ -131,22 +131,25 @@ class BSP29ObstructionIntegrationTest < Minitest::Test
     assert_equal(1, space.fetch(:hull).calls.length)
   end
 
-  def test_app_shares_bsp_point_obstruction_space_across_gameplay_consumers
+  def test_bsp_runtime_retains_shared_point_obstruction_space_under_spectator
     app = Aogera::App.new(
       clock: -> { 0.0 },
       raylib_api: Object.new,
       bsp29_map: minimal_bsp_map
     )
-    mode_stack = app.instance_variable_get(:@modes)
-    mode = mode_stack.current
-    ground_space = mode.instance_variable_get(:@ground_space)
-    controller_space = mode.controller.instance_variable_get(:@ground_space)
-    executor = mode.simulation.instance_variable_get(:@executor)
+    mode = app.instance_variable_get(:@modes).current
+    simulation = mode.simulation
+    executor = simulation.instance_variable_get(:@executor)
     executor_space = executor.instance_variable_get(:@ground_space)
+    steering = simulation.instance_variable_get(:@ground_steering)
+    navigation = steering.instance_variable_get(:@ground_navigation)
+    navigation_space = navigation.instance_variable_get(:@ground_space)
+    point_hull = executor_space.instance_variable_get(:@bsp29_point_hull)
 
-    assert_same(ground_space, controller_space)
-    assert_same(ground_space, executor_space)
-    assert_instance_of(Aogera::GroundSpace, ground_space)
+    assert_instance_of Aogera::Mode::Spectator, mode
+    assert_same executor_space, navigation_space
+    assert_instance_of Aogera::GroundSpace, executor_space
+    assert_instance_of Aogera::BSP29::PointHull, point_hull
   end
 
   private
@@ -187,7 +190,7 @@ class BSP29ObstructionIntegrationTest < Minitest::Test
     )
 
     Aogera::BSP29::MapData.new(
-      entities: [].freeze,
+      entities: [player_start_entity].freeze,
       planes: [plane].freeze,
       textures: [].freeze,
       vertices: [].freeze,
@@ -202,6 +205,17 @@ class BSP29ObstructionIntegrationTest < Minitest::Test
       edges: [].freeze,
       surfedges: [].freeze,
       models: [model].freeze
+    )
+  end
+
+  def player_start_entity
+    Aogera::BSP29::Entity.new(
+      properties: {
+        "classname" => "info_player_start",
+        "origin" => "0 0 0",
+        "angle" => "90"
+      }.freeze,
+      origin: Aogera::BSP29::Vec3.new(x: 0.0, y: 0.0, z: 0.0)
     )
   end
 

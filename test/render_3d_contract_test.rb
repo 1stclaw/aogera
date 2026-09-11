@@ -79,6 +79,28 @@ class Render3DContractTest < Minitest::Test
     assert_in_delta 1.75, camera[:target][2]
   end
 
+  def test_explicit_camera_eye_bypasses_entity_eye_origin
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.0, y: 2.0, z: 3.0)
+    )
+    view = Aogera::FirstPersonView.for_direction(:north)
+
+    Aogera::Render::Raylib3D.new(api: api).draw(
+      level: FakeLevel.new(width: 1, height: 1),
+      world: world.view,
+      status: "test",
+      view: view,
+      camera_entity_id: camera_id,
+      camera_eye: [10.0, 20.0, 30.0]
+    )
+
+    camera = api.calls.find { |call| call.first == :begin_mode_3d }.last
+    assert_equal [10.0, 20.0, 30.0], camera[:position]
+    assert_equal [10.0, 20.0, 29.0], camera[:target]
+  end
+
   def test_first_person_view_rotates_camera_target_without_raylib_state
     api = FakeAPI.new
     world = Aogera::World.new

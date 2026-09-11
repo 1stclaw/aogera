@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.3 development runtime and its present boundaries. The BSP/collision architecture is inherited unchanged from the stable 0.3.2a checkpoint; 0.3.3 begins with internal data-model cleanup.
+This document describes the current Aogera 0.3.4 development runtime and its present boundaries. The BSP/collision architecture is inherited unchanged from the stable 0.3.2a checkpoint; 0.3.3 begins with internal data-model cleanup.
 
 ## Design goals
 
@@ -365,9 +365,9 @@ Aogera world-unit magnitude is Quake 1 compatible: one current grid cell is 32 w
 
 `Content::Paths` still centralizes current authored Ruby paths. There is intentionally no general asset manager yet.
 
-## Current v0.3.3 boundary
+## Current v0.3.4 boundary
 
-Aogera 0.3.3 currently has:
+Aogera 0.3.4 currently has:
 
 - one continuous runtime position model for player, enemies, NPCs, and spatial interactables;
 - one ground movement/collision execution path for current actors;
@@ -379,6 +379,7 @@ Aogera 0.3.3 currently has:
 - Quake 1-compatible world-unit magnitude with 32-unit current grid cells;
 - a validated BSP29 Reader preserving geometry, BSP tree, clipnodes, textures, entities, visibility/light blobs, and submodels;
 - a minimal BSP29 world-model renderer used by the controlled test-field preview;
+- a BSP-only `Mode::Spectator` whose camera is detached from gameplay collision for arbitrary-map inspection;
 - BSP29 compiled hull 1 through shared `GroundClearance` as the actor static movement backend;
 - BSP29 world-model node/leaf tracing for melee and interaction obstruction.
 
@@ -390,6 +391,6 @@ It does not yet contain:
 - generic physics, transform, or spatial frameworks;
 - a general asset manager.
 
-In BSP mode, dynamic entity rendering consumes canonical `Position` directly and no longer uses Ruby-grid bounds as a presentation gate. Player/NPC movement execution and active local-navigation probes share the same BSP-backed `GroundSpace` / `BSP29::GroundClearance` static hull-1 source. The remaining grid dependency is primarily authored-level/spawn/entry scaffolding and the normal non-BSP fallback rather than active chase or competing BSP-mode static collision authority. Brush-submodel behavior can continue to evolve independently from the canonical entity-position model.
+In BSP mode, dynamic entity rendering consumes canonical `Position` directly and no longer uses Ruby-grid bounds as a presentation gate. The configured gameplay runtime still shares one BSP-backed `GroundSpace` / `BSP29::GroundClearance` source for actor movement and local-navigation probes, but the v0.3.4 diagnostic `Mode::Spectator` intentionally does not execute those systems: its camera keeps separate view-space coordinates and flies collision-free while the bound player stays at `info_player_start`. BSP launch no longer loads the Ruby `test_field`; `BSP29::Bootstrap` supplies only an inert one-cell terrain because the current `Level`/`Simulation` API still structurally requires one. That terrain has no BSP gameplay authority. Brush-submodel behavior can continue to evolve independently from the canonical entity-position model.
 
 The detailed migration history, fixed-hull constraint, current authority map, and incremental pathfinding roadmap are recorded in `docs/bsp_collision_migration.md`.

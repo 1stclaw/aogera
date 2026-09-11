@@ -2,7 +2,7 @@
 
 This document records Aogera's migration away from the temporary grid-BFS chase model toward continuous world-space local navigation with an optional future global route graph.
 
-As of the current v0.3.3 development line, the **runtime chase cutover is active** and the obsolete `Simulation::Pathfinder` implementation has been removed. Historical BFS behavior is retained in this document rather than as executable compatibility code.
+As of the stable v0.3.3 release, the **runtime chase cutover is active** and the obsolete `Simulation::Pathfinder` implementation has been removed. Historical BFS behavior is retained in this document rather than as executable compatibility code.
 
 The active navigation stack is intentionally small:
 

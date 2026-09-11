@@ -78,6 +78,19 @@ class RaylibFrontendTest < Minitest::Test
     assert_equal([:close_window], api.calls[-1])
   end
 
+  def test_raylib_host_polls_spectator_vertical_keys
+    api = FakeAPI.new
+    api.press(:c)
+    api.press(:left_shift)
+    host = Aogera::Host::Raylib.new(api: api)
+
+    events = host.poll_events
+    keys = events.grep(Aogera::Host::KeyEvent).map(&:key)
+
+    assert_includes keys, :c
+    assert_includes keys, :left_shift
+  end
+
   def test_raylib_host_emits_key_and_mouse_events
     api = FakeAPI.new
     api.press(:w)

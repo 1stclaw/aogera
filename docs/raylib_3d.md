@@ -127,7 +127,7 @@ BSP29::MapData
     -> RaylibAPI
 ```
 
-Dynamic renderable entities are still drawn at canonical `Position` values. For the controlled preview, the matching Ruby `test_field` remains the authored gameplay/spawn/entry bridge while BSP29 supplies visible static geometry and collision queries. Active NPC chase no longer consumes the grid as navigation topology.
+Dynamic renderable entities are still drawn at canonical `Position` values. In the v0.3.4 BSP preview, the bound player position comes directly from the map's `info_player_start`; the Ruby `test_field` is no longer loaded by the BSP launcher. `Mode::Spectator` starts its camera at that player's eye position and then supplies an explicit camera position to `Render::Raylib3D`, leaving actor `Position` untouched while it flies through geometry. The current one-cell `Level` terrain is inert structural scaffolding only, while BSP29 supplies visible static geometry and configured collision queries.
 
 This is intentionally a simple RC bridge. There is no `Scene3D`, `Projector3D`, model/material framework, or generic transform hierarchy.
 
@@ -153,9 +153,8 @@ This preserves the useful platform boundary established before the 3D renderer a
 
 ## Still deferred
 
-Aogera 0.3.2a does not introduce:
+Aogera 0.3.4 still defers:
 
-- BSP hull/clipnode collision;
 - BSP palette/texture sampling and lightmaps;
 - PVS-driven BSP visibility;
 - vertical actor physics;

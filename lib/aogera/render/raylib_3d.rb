@@ -37,14 +37,17 @@ module Aogera
         @bsp29_world = bsp29_map && BSP29World.new(map: bsp29_map)
       end
 
-      def draw(level:, world:, status:, view:, camera_entity_id:)
+      def draw(
+        level:, world:, status:, view:, camera_entity_id:, camera_eye: nil
+      )
         @api.begin_drawing
         @api.clear(BACKGROUND)
         @api.begin_mode_3d(
           **camera_for(
             world: world,
             view: view,
-            camera_entity_id: camera_entity_id
+            camera_entity_id: camera_entity_id,
+            camera_eye: camera_eye
           )
         )
 
@@ -132,13 +135,17 @@ module Aogera
         level.inside?(grid_x, grid_z)
       end
 
-      def camera_for(world:, view:, camera_entity_id:)
-        position = world.component(camera_entity_id, :position)
-        raise ArgumentError, "camera entity has no position" unless position
+      def camera_for(world:, view:, camera_entity_id:, camera_eye:)
+        if camera_eye
+          x, eye_y, z = camera_eye
+        else
+          position = world.component(camera_entity_id, :position)
+          raise ArgumentError, "camera entity has no position" unless position
 
-        x = position.x
-        z = position.z
-        eye_y = position.y + view.eye_height
+          x = position.x
+          z = position.z
+          eye_y = position.y + view.eye_height
+        end
         eye = [x, eye_y, z]
         forward_x, forward_y, forward_z = view.forward_vector
 

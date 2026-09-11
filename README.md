@@ -6,9 +6,9 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.3.3 (development)**
+**Version: 0.3.4 (development)**
 
-Aogera 0.3.3 is an internal cleanup line built on the stable 0.3.2a BSP29 collision checkpoint. The cleanup line raises the project baseline to Ruby 3.4+, normalizes persistent `Character` state as immutable `Data`, narrows `Session` mutation to validated persistent-effect batches, and replaces active grid-BFS chase with continuous collision-driven local navigation. BSP rendering and collision semantics remain inherited from 0.3.2a.
+Aogera 0.3.4 begins the real-BSP bring-up line on top of the stable 0.3.3 continuous-navigation release. BSP mode now bootstraps its runtime player entry directly from the map's normalized `info_player_start` instead of importing the Ruby `test_field` as gameplay scaffolding. It launches into a collision-free diagnostic spectator camera so arbitrary BSP geometry can be inspected before vertical Quake-style actor physics exists. The ordinary Ruby-authored launch remains unchanged.
 
 Every spatial runtime entity uses:
 
@@ -51,7 +51,7 @@ The current `Level::Readers::Ruby` understands the existing Ruby/grid source for
 
 The first external reader now exists as `BSP29::Reader`. It decodes Quake 1 BSP29 into normalized `BSP29::MapData`, preserving BSP-specific structure while converting vectors, bounds, plane normals, texture axes, model origins, and entity origins to Aogera axes at 1:1 world-unit magnitude.
 
-The Reader has been validated end-to-end with an Aogera-controlled BSP29 fixture compiled by ericw-tools from the original `test_field` layout. The current release renders BSP world model `0` directly while the matching Ruby level remains only for current authored level/spawn/entry scaffolding and the normal non-BSP fallback.
+The Reader has been validated end-to-end with an Aogera-controlled BSP29 fixture compiled by ericw-tools from the original `test_field` layout. BSP mode now renders world model `0` directly and bootstraps the player from the BSP entity lump; the matching Ruby `test_field` is no longer loaded by `bin/aogera-bsp29`. The Ruby level path remains the normal non-BSP fallback.
 
 ### Runtime movement and collision
 
@@ -59,10 +59,12 @@ Player and NPC locomotion both use `Simulation::Commands::GroundMove` and the sa
 
 Melee and interaction keep their own authored reach/arc profiles while using shared spatial and obstruction queries. Defeated actors enter an explicit retired lifecycle state: they may retain runtime identity and descriptive state, but they no longer act or participate in ordinary active collision queries.
 
-The remaining grid has deliberately limited jobs in the BSP preview:
+The remaining grid has deliberately limited jobs:
 
-- current Ruby-authored level/spawn/entry scaffolding;
+- an inert one-cell `Level` terrain scaffold required by the current `Simulation` container in BSP mode;
 - the normal non-BSP Ruby rendering/collision fallback.
+
+The BSP scaffold is not consulted by BSP rendering or static collision and carries no test-field spawns, relations, or dialogue.
 
 Active chase no longer uses grid cells. `RealtimeController` now stores only a high-level world-space `Component::SteeringTarget`; for entity pursuit that target carries `goal_entity_id`, allowing `Simulation::GroundSteering` to resolve the goal entity's live position on every fixed 30 Hz simulation tick. `Simulation::GroundNavigation` then probes the actor's actual continuous `Position`/`GroundBody` through `GroundSpace` and returns `direct`, `local_avoidance`, `route_needed`, or `arrived` together with a normalized `GroundHeading`. `GroundSteering` converts that heading into the ordinary `GroundMove` command used by the existing sweep-and-slide collision path.
 
@@ -70,7 +72,7 @@ The obsolete grid `Simulation::Pathfinder` implementation has been removed from 
 
 ## Running
 
-Aogera 0.3.3 requires **Ruby 3.4+**. The repository currently pins Ruby 3.4.10 for development through `.ruby-version`.
+Aogera 0.3.4 requires **Ruby 3.4+**. The repository currently pins Ruby 3.4.10 for development through `.ruby-version`.
 
 ```bash
 bundle install
@@ -79,15 +81,33 @@ bundle exec ruby bin/aogera
 
 The raylib window captures the mouse for first-person look. `Q` or `Esc` exits and the host releases the cursor during shutdown.
 
-For the controlled BSP29 test-field preview:
+For the controlled BSP29 test-field preview, a convenient sibling-workspace layout is:
 
 ```bash
-bundle exec ruby bin/aogera-bsp29 /path/to/test_field.bsp
+bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp
 ```
 
-That preview uses BSP29 world-model faces for static rendering and the matching Ruby `test_field` as the remaining authored-content bridge. Bound-player and spawned-NPC static movement use BSP29 compiled hull 1, melee/interaction obstruction uses the BSP world-model node/leaf tree, and active NPC chase uses continuous `GroundNavigation` probes through the same `GroundSpace` collision authority. The Ruby grid remains for current level/spawn/entry scaffolding and the normal non-BSP fallback, not for active BSP chase selection.
+`bin/aogera-bsp29` now has a deliberately small development CLI. Spectator launch remains the default and can also be requested explicitly:
+
+```bash
+bundle exec ruby bin/aogera-bsp29 --spectator ../bsp29-test-field/test_field.bsp
+```
+
+Structural and entity inspection can be performed without opening raylib:
+
+```bash
+bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp --bsp-info
+bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp --dump-entities
+bundle exec ruby bin/aogera-bsp29 --help
+```
+
+`--bsp-info` prints BSP counts, world bounds, visibility/light byte counts, and normalized player starts. `--dump-entities` prints the original entity key/value declarations and, where available, the Reader's normalized Aogera-space origin. Only one exit-style inspection command may be selected per invocation. The older `bin/aogera-bsp29-info` executable remains as a compatibility wrapper around `--bsp-info`. This is a launch/inspection CLI, not an interactive developer console or a game-command system.
+
+BSP mode reads the first `info_player_start` from the map entity lump, uses its normalized origin as the initial Aogera player position, and converts its Quake `angle` to the initial first-person yaw. It no longer imports the Ruby `test_field`, its NPCs, relations, or dialogue. The preview now starts in `Mode::Spectator`: the camera begins at the spawned player's eye position but then flies independently without changing the player entity or consulting collision. BSP world-model faces provide static rendering; the compiled collision backends remain configured in the dormant runtime for later actor testing. The current one-cell `Level` terrain in BSP mode is only structural scaffolding for `Simulation`.
 
 ## Controls
+
+Normal Ruby-authored launch:
 
 ```text
 Mouse        look
@@ -100,6 +120,19 @@ Enter        interact / advance dialogue
 Q / Esc      quit
 ```
 
+BSP diagnostic spectator:
+
+```text
+Mouse        look
+W / Up       fly forward
+S / Down     fly backward
+A / Left     strafe left
+D / Right    strafe right
+Space        fly up
+Shift / C    fly down
+Q / Esc      quit
+```
+
 ## Testing
 
 Aogera uses Minitest directly. Run the complete suite with:
@@ -108,7 +141,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The stable v0.3.2a BSP baseline was **239 runs / 727 assertions / 0 failures / 0 errors / 0 skips**. After removing the obsolete grid Pathfinder and its BFS-only tests, the current 0.3.3 cleanup baseline is **268 runs / 848 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The stable v0.3.3 release baseline is **268 runs / 848 assertions / 0 failures / 0 errors / 0 skips**. The v0.3.4 BSP-native bootstrap, diagnostic spectator, and BSP CLI patches raise the suite to **293 runs / 971 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 

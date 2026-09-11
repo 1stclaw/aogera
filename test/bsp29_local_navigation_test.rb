@@ -63,14 +63,13 @@ class BSP29LocalNavigationTest < Minitest::Test
     assert_instance_of Aogera::GroundHeading,
       simulation.world_view.component(hunter_id, :ground_heading)
   end
-  def test_app_shares_bsp_ground_space_between_local_navigation_and_actor_movement
+  def test_bsp_app_uses_spectator_while_retaining_bsp_ground_space_for_runtime
     app = Aogera::App.new(
       clock: -> { 0.0 },
       raylib_api: Object.new,
       bsp29_map: app_bsp_map
     )
     mode = app.instance_variable_get(:@modes).current
-    controller_space = mode.controller.instance_variable_get(:@ground_space)
     simulation = mode.simulation
     steering = simulation.instance_variable_get(:@ground_steering)
     navigation = steering.instance_variable_get(:@ground_navigation)
@@ -80,10 +79,25 @@ class BSP29LocalNavigationTest < Minitest::Test
     movement_space = movement.instance_variable_get(:@ground_space)
     clearance = movement_space.instance_variable_get(:@bsp29_ground_hull)
 
+    assert_instance_of Aogera::Mode::Spectator, mode
     assert_instance_of Aogera::BSP29::GroundClearance, clearance
     assert_same movement_space, navigation_space
-    assert_same movement_space, controller_space
-    assert_same mode.instance_variable_get(:@ground_space), movement_space
+    assert_equal :bsp29, simulation.level.name
+    assert_equal 1, simulation.world_view.entity_ids.length
+
+    player_position = simulation.world_view.component(
+      mode.camera_entity_id,
+      :position
+    )
+    assert_equal Aogera::Component::Position.new(x: 0.0, y: 0.0, z: 0.0),
+      player_position
+    assert_equal [0.0, mode.view.eye_height, 0.0], mode.camera_eye
+
+    mapper = app.instance_variable_get(:@mapper)
+    action = mapper.map(
+      Aogera::Host::KeyEvent.new(key: :space, state: :pressed)
+    )
+    assert_equal :move_up, action.kind
     refute Aogera::Simulation.const_defined?(:Pathfinder, false)
   end
   private
@@ -130,7 +144,7 @@ class BSP29LocalNavigationTest < Minitest::Test
     )
 
     Aogera::BSP29::MapData.new(
-      entities: [].freeze,
+      entities: [player_start_entity].freeze,
       planes: [plane].freeze,
       textures: [].freeze,
       vertices: [].freeze,
@@ -145,6 +159,17 @@ class BSP29LocalNavigationTest < Minitest::Test
       edges: [].freeze,
       surfedges: [].freeze,
       models: [model_with_headnodes([0, 0, -1, -1])].freeze
+    )
+  end
+
+  def player_start_entity
+    Aogera::BSP29::Entity.new(
+      properties: {
+        "classname" => "info_player_start",
+        "origin" => "0 0 0",
+        "angle" => "90"
+      }.freeze,
+      origin: Aogera::BSP29::Vec3.new(x: 0.0, y: 0.0, z: 0.0)
     )
   end
 

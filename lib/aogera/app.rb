@@ -11,14 +11,7 @@ module Aogera
       bsp29_map: nil
     )
       prototypes = Prototype::Loader.load(Content::Paths.prototype(:actors))
-      authored_level = Level::Readers::Ruby.read(
-        Content::Paths.level(:test_field)
-      )
-      level = Level::Loader.load(
-        authored_level,
-        prototypes: prototypes
-      )
-      dialogues = Dialogue::Loader.load(Content::Paths.dialogue(:test_field))
+      level, dialogues, initial_view = runtime_content(bsp29_map, prototypes)
       @session = Session.new(
         characters: {
           PLAYER_KEY => Character.new(
@@ -46,27 +39,18 @@ module Aogera
         prototype: :player,
         entry: level.default_entry
       )
-      facing = simulation.world_view.component(
-        simulation.entity_id_for_character(PLAYER_KEY),
-        :facing
-      )
-      @view = FirstPersonView.for_direction(facing.direction)
+      @view = initial_view || default_view(simulation)
 
       @modes = ModeStack.new
       @modes.push(
-        Mode::Play.new(
+        initial_mode(
+          bsp29_map: bsp29_map,
           simulation: simulation,
-          session: @session,
-          player_key: PLAYER_KEY,
           dialogues: dialogues,
-          controller: RealtimeController.new(
-            ground_space: ground_space
-          ),
-          view: @view,
           ground_space: ground_space
         )
       )
-      @mapper = Input::Mapper.new
+      @mapper = bsp29_map ? Input::Mapper.spectator : Input::Mapper.new
       @handoff = Input::Handoff.new
       @input_tracker = Input::Tracker.new
 
@@ -95,6 +79,57 @@ module Aogera
     end
 
     private
+
+    def runtime_content(bsp29_map, prototypes)
+      if bsp29_map
+        bootstrap = BSP29::Bootstrap.build(bsp29_map)
+        return [
+          bootstrap.level,
+          Dialogue::Catalog.new({}),
+          bootstrap.view
+        ]
+      end
+
+      authored_level = Level::Readers::Ruby.read(
+        Content::Paths.level(:test_field)
+      )
+      level = Level::Loader.load(
+        authored_level,
+        prototypes: prototypes
+      )
+      dialogues = Dialogue::Loader.load(Content::Paths.dialogue(:test_field))
+      [level, dialogues, nil]
+    end
+
+    def initial_mode(bsp29_map:, simulation:, dialogues:, ground_space:)
+      if bsp29_map
+        return Mode::Spectator.new(
+          simulation: simulation,
+          view: @view,
+          camera_entity_id: simulation.entity_id_for_character(PLAYER_KEY)
+        )
+      end
+
+      Mode::Play.new(
+        simulation: simulation,
+        session: @session,
+        player_key: PLAYER_KEY,
+        dialogues: dialogues,
+        controller: RealtimeController.new(
+          ground_space: ground_space
+        ),
+        view: @view,
+        ground_space: ground_space
+      )
+    end
+
+    def default_view(simulation)
+      facing = simulation.world_view.component(
+        simulation.entity_id_for_character(PLAYER_KEY),
+        :facing
+      )
+      FirstPersonView.for_direction(facing.direction)
+    end
 
     def ground_clearance_for(bsp29_map)
       return unless bsp29_map
@@ -160,7 +195,9 @@ module Aogera
         world: mode.world_view,
         status: status_text(mode),
         view: @view,
-        camera_entity_id: mode.camera_entity_id
+        camera_entity_id: mode.camera_entity_id,
+        camera_eye: mode.respond_to?(:camera_eye) ?
+          mode.camera_eye : nil
       )
     end
 
