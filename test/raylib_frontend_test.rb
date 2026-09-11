@@ -41,8 +41,16 @@ class RaylibFrontendTest < Minitest::Test
     def begin_mode_3d(**options) = @calls << [:begin_mode_3d, options]
     def end_mode_3d = @calls << [:end_mode_3d]
     def draw_cube(**options) = @calls << [:draw_cube, options]
+    def create_static_model(vertices:)
+      handle = [:model, @calls.count { |call| call.first == :create_static_model }]
+      @calls << [:create_static_model, {vertices: vertices, handle: handle}]
+      handle
+    end
+    def draw_model(model:, rgba:) = @calls << [:draw_model, {model: model, rgba: rgba}]
+    def unload_model(model) = @calls << [:unload_model, model]
     def draw_rectangle(**options) = @calls << [:draw_rectangle, options]
     def draw_text(**options) = @calls << [:draw_text, options]
+    def fps = 60
     def screen_width = 1024
     def screen_height = 768
   end

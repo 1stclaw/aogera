@@ -56,7 +56,7 @@ module Aogera
       def parse(argv)
         args = argv.dup
         state = {
-          mode: :spectator,
+          mode: nil,
           action: :run
         }
         parser = option_parser(state)
@@ -74,6 +74,11 @@ module Aogera
         unless args.empty?
           raise OptionParser::InvalidArgument,
             "unexpected arguments: #{args.join(' ')}"
+        end
+
+        if state[:action] == :run && state[:mode].nil?
+          raise OptionParser::InvalidArgument,
+            "launch mode required; use --spectator"
         end
 
         [
@@ -96,7 +101,7 @@ module Aogera
 
           parser.on(
             "--spectator",
-            "Launch the collision-free BSP spectator (default)"
+            "Launch the collision-free BSP spectator"
           ) do
             state[:mode] = :spectator
           end

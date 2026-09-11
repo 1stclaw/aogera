@@ -35,24 +35,23 @@ class BSP29CLITest < Minitest::Test
     end
   end
 
-  def test_launches_spectator_by_default
-    map = fake_map
+  def test_bare_map_requires_an_explicit_launch_mode
     app = FakeApp.new(0)
     reader_paths = []
-    modes = []
+    stderr = StringIO.new
     cli = build_cli(
-      map: map,
+      map: fake_map,
       app: app,
       reader_paths: reader_paths,
-      modes: modes
+      stderr: stderr
     )
 
     status = cli.run(["map.bsp"])
 
-    assert_equal 0, status
-    assert_equal ["map.bsp"], reader_paths
-    assert_equal [:spectator], modes
-    assert_equal 1, app.runs
+    assert_equal 64, status
+    assert_empty reader_paths
+    assert_equal 0, app.runs
+    assert_includes stderr.string, "launch mode required; use --spectator"
   end
 
   def test_explicit_spectator_is_supported
@@ -83,7 +82,7 @@ class BSP29CLITest < Minitest::Test
     end
 
     Aogera::App.stub(:new, factory) do
-      status = cli.run(["map.bsp"])
+      status = cli.run(["--spectator", "map.bsp"])
 
       assert_equal 0, status
     end
@@ -172,7 +171,7 @@ class BSP29CLITest < Minitest::Test
       stderr: stderr
     )
 
-    status = cli.run(["broken.bsp"])
+    status = cli.run(["--spectator", "broken.bsp"])
 
     assert_equal 65, status
     assert_includes stderr.string, "aogera-bsp29: bad BSP"

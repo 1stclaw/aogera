@@ -32,9 +32,25 @@ module Aogera
       STATUS_FONT_SIZE = 20
       STATUS_HEIGHT = 48
 
+      DIAGNOSTIC_MARGIN = 16
+      DIAGNOSTIC_PADDING = 10
+      DIAGNOSTIC_WIDTH = 360
+      DIAGNOSTIC_FONT_SIZE = 18
+      DIAGNOSTIC_LINE_HEIGHT = 22
+      DIAGNOSTIC_BACKGROUND = [11, 12, 15, 205].freeze
+      DIAGNOSTIC_TEXT = [224, 226, 230, 255].freeze
+
       def initialize(api:, bsp29_map: nil)
         @api = api
         @bsp29_world = bsp29_map && BSP29World.new(map: bsp29_map)
+      end
+
+      def prepare
+        @bsp29_world&.prepare(@api)
+      end
+
+      def close
+        @bsp29_world&.close(@api)
       end
 
       def draw(
@@ -55,6 +71,7 @@ module Aogera
         draw_entities(level, world, hidden_entity_id: camera_entity_id)
 
         @api.end_mode_3d
+        draw_diagnostics(world: world, view: view, camera_eye: camera_eye)
         draw_status(status)
       ensure
         @api.end_drawing
@@ -159,6 +176,48 @@ module Aogera
           up: [0.0, 1.0, 0.0],
           fovy: view.fovy
         }
+      end
+
+      def draw_diagnostics(world:, view:, camera_eye:)
+        return unless @bsp29_world && camera_eye
+
+        x, y, z = camera_eye
+        lines = [
+          "FPS #{@api.fps}",
+          format("Camera XYZ %.2f  %.2f  %.2f", x, y, z),
+          format(
+            "View yaw %.1f deg | pitch %.1f deg",
+            radians_to_degrees(view.yaw),
+            radians_to_degrees(view.pitch)
+          ),
+          "BSP #{@bsp29_world.triangle_count} tris | " \
+            "#{@bsp29_world.batch_count} mesh draws",
+          "Entities #{world.entity_ids.length}"
+        ]
+        height = (DIAGNOSTIC_PADDING * 2) +
+          (lines.length * DIAGNOSTIC_LINE_HEIGHT)
+
+        @api.draw_rectangle(
+          x: DIAGNOSTIC_MARGIN,
+          y: DIAGNOSTIC_MARGIN,
+          width: DIAGNOSTIC_WIDTH,
+          height: height,
+          rgba: DIAGNOSTIC_BACKGROUND
+        )
+        lines.each_with_index do |line, index|
+          @api.draw_text(
+            text: line,
+            x: DIAGNOSTIC_MARGIN + DIAGNOSTIC_PADDING,
+            y: DIAGNOSTIC_MARGIN + DIAGNOSTIC_PADDING +
+              (index * DIAGNOSTIC_LINE_HEIGHT),
+            size: DIAGNOSTIC_FONT_SIZE,
+            rgba: DIAGNOSTIC_TEXT
+          )
+        end
+      end
+
+      def radians_to_degrees(value)
+        value * 180.0 / Math::PI
       end
 
       def draw_status(status)

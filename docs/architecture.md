@@ -332,7 +332,7 @@ raylib
 
 ```text
 Ruby/grid Level -> primitive floor/wall extrusion
-BSP29::MapData -> Render::BSP29World -> reconstructed world-model triangles
+BSP29::MapData -> Render::BSP29World -> reconstructed world-model batches -> persistent raylib meshes
 ```
 
 The controlled player is omitted from the first-person entity pass. The BSP preview renders world model `0` only and intentionally bypasses any generic scene representation.

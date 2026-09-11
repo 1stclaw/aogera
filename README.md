@@ -51,7 +51,7 @@ The current `Level::Readers::Ruby` understands the existing Ruby/grid source for
 
 The first external reader now exists as `BSP29::Reader`. It decodes Quake 1 BSP29 into normalized `BSP29::MapData`, preserving BSP-specific structure while converting vectors, bounds, plane normals, texture axes, model origins, and entity origins to Aogera axes at 1:1 world-unit magnitude.
 
-The Reader has been validated end-to-end with an Aogera-controlled BSP29 fixture compiled by ericw-tools from the original `test_field` layout. BSP mode now renders world model `0` directly and bootstraps the player from the BSP entity lump; the matching Ruby `test_field` is no longer loaded by `bin/aogera-bsp29`. The Ruby level path remains the normal non-BSP fallback.
+The Reader has been validated end-to-end with an Aogera-controlled BSP29 fixture compiled by ericw-tools from the original `test_field` layout. BSP mode now renders world model `0` directly and bootstraps the player from the BSP entity lump; the matching Ruby `test_field` is no longer loaded by `bin/aogera-bsp29`. BSP world geometry is reconstructed once into diagnostic-color batches and uploaded to persistent raylib mesh/model resources after the graphics context opens, replacing the former per-triangle Ruby/FFI draw loop. The spectator also draws a compact diagnostic overlay with measured FPS, camera position/orientation, BSP triangle count, persistent mesh-draw count, and runtime entity count. The Ruby level path remains the normal non-BSP fallback.
 
 ### Runtime movement and collision
 
@@ -81,17 +81,13 @@ bundle exec ruby bin/aogera
 
 The raylib window captures the mouse for first-person look. `Q` or `Esc` exits and the host releases the cursor during shutdown.
 
-For the controlled BSP29 test-field preview, a convenient sibling-workspace layout is:
-
-```bash
-bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp
-```
-
-`bin/aogera-bsp29` now has a deliberately small development CLI. Spectator launch remains the default and can also be requested explicitly:
+For the controlled BSP29 test-field preview, launch the diagnostic spectator explicitly:
 
 ```bash
 bundle exec ruby bin/aogera-bsp29 --spectator ../bsp29-test-field/test_field.bsp
 ```
+
+`bin/aogera-bsp29` has a deliberately small development CLI. No runtime launch mode is implicit: a bare BSP path is a usage error until a playable BSP mode exists.
 
 Structural and entity inspection can be performed without opening raylib:
 
@@ -101,9 +97,9 @@ bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp --dump-enti
 bundle exec ruby bin/aogera-bsp29 --help
 ```
 
-`--bsp-info` prints BSP counts, world bounds, visibility/light byte counts, and normalized player starts. `--dump-entities` prints the original entity key/value declarations and, where available, the Reader's normalized Aogera-space origin. Only one exit-style inspection command may be selected per invocation. The older `bin/aogera-bsp29-info` executable remains as a compatibility wrapper around `--bsp-info`. This is a launch/inspection CLI, not an interactive developer console or a game-command system.
+`--bsp-info` prints BSP counts, world bounds, visibility/light byte counts, and normalized player starts. `--dump-entities` prints the original entity key/value declarations and, where available, the Reader's normalized Aogera-space origin. Only one exit-style inspection command may be selected per invocation. `--spectator` is currently the only runtime launch mode and must be explicit. The older `bin/aogera-bsp29-info` executable remains as a compatibility wrapper around `--bsp-info`. This is a launch/inspection CLI, not an interactive developer console or a game-command system.
 
-BSP mode reads the first `info_player_start` from the map entity lump, uses its normalized origin as the initial Aogera player position, and converts its Quake `angle` to the initial first-person yaw. It no longer imports the Ruby `test_field`, its NPCs, relations, or dialogue. The preview now starts in `Mode::Spectator`: the camera begins at the spawned player's eye position but then flies independently without changing the player entity or consulting collision. BSP world-model faces provide static rendering; the compiled collision backends remain configured in the dormant runtime for later actor testing. The current one-cell `Level` terrain in BSP mode is only structural scaffolding for `Simulation`.
+BSP mode reads the first `info_player_start` from the map entity lump, uses its normalized origin as the initial Aogera player position, and converts its Quake `angle` to the initial first-person yaw. It no longer imports the Ruby `test_field`, its NPCs, relations, or dialogue. The preview now starts in `Mode::Spectator`: the camera begins at the spawned player's eye position but then flies independently without changing the player entity or consulting collision. A top-left diagnostic panel reports actual raylib FPS, camera XYZ, yaw/pitch, BSP triangle and mesh-draw counts, and runtime entity count; the bottom bar remains the spectator controls/tick readout. BSP world-model faces provide static rendering; the compiled collision backends remain configured in the dormant runtime for later actor testing. The current one-cell `Level` terrain in BSP mode is only structural scaffolding for `Simulation`.
 
 ## Controls
 
@@ -141,7 +137,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The stable v0.3.3 release baseline is **268 runs / 848 assertions / 0 failures / 0 errors / 0 skips**. The v0.3.4 BSP-native bootstrap, diagnostic spectator, and BSP CLI patches raise the suite to **293 runs / 971 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The stable v0.3.3 release baseline is **268 runs / 848 assertions / 0 failures / 0 errors / 0 skips**. The current v0.3.4 real-BSP bring-up line, including BSP-native bootstrap, spectator/CLI work, persistent mesh rendering, and the diagnostic overlay, is **298 runs / 1002 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 

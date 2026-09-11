@@ -141,6 +141,10 @@ The obsolete grid `Simulation::Pathfinder` has been removed. Active chase uses c
 
 ## Combat and interaction
 
+BSP static rendering now has an explicit GPU-resource lifecycle. `Render::BSP29World` reconstructs and groups world-model triangles on the Ruby side, `Render::Raylib3D#prepare` uploads those batches only after the raylib window/context opens, and `#close` unloads the persistent models before the context closes. Drawing a BSP frame therefore issues one model draw per diagnostic-color batch rather than one Ruby/FFI draw call per BSP triangle.
+
+In BSP spectator mode, `Render::Raylib3D` also draws a small diagnostic overlay after leaving 3D mode. It shows measured raylib FPS, the spectator camera position, yaw/pitch, BSP triangle count, mesh-draw count, and runtime entity count. FPS is observational only: simulation still runs at the independent fixed 30 Hz cadence while the host targets 60 rendered frames per second.
+
 The renderer does not define combat geometry.
 
 `MeleeAttack(reach, arc_degrees)` and `Interactor(reach, arc_degrees)` remain authored gameplay data. Player and NPC melee validation use continuous body separation and segment obstruction traces; interaction uses the same spatial foundation with separate eligibility semantics.

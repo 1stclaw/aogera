@@ -63,6 +63,7 @@ module Aogera
 
     def run
       @host.open
+      @renderer.prepare
       @fixed_step.start(@clock.call)
 
       until @host.window_should_close?
@@ -75,6 +76,7 @@ module Aogera
         draw
       end
     ensure
+      @renderer.close
       @host.close
     end
 

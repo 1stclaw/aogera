@@ -44,8 +44,16 @@ class Render3DContractTest < Minitest::Test
     def begin_mode_3d(**options) = @calls << [:begin_mode_3d, options]
     def end_mode_3d = @calls << [:end_mode_3d]
     def draw_cube(**options) = @calls << [:draw_cube, options]
+    def create_static_model(vertices:)
+      handle = [:model, @calls.count { |call| call.first == :create_static_model }]
+      @calls << [:create_static_model, {vertices: vertices, handle: handle}]
+      handle
+    end
+    def draw_model(model:, rgba:) = @calls << [:draw_model, {model: model, rgba: rgba}]
+    def unload_model(model) = @calls << [:unload_model, model]
     def draw_rectangle(**options) = @calls << [:draw_rectangle, options]
     def draw_text(**options) = @calls << [:draw_text, options]
+    def fps = 57
     def screen_width = 1024
     def screen_height = 768
   end
@@ -238,7 +246,9 @@ class Render3DContractTest < Minitest::Test
     bsp29_map = Object.new
     bsp29_map.define_singleton_method(:world_model) { nil }
 
-    Aogera::Render::Raylib3D.new(api: api, bsp29_map: bsp29_map).draw(
+    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
+    renderer.prepare
+    renderer.draw(
       level: Object.new,
       world: world.view,
       status: "test",
@@ -254,6 +264,40 @@ class Render3DContractTest < Minitest::Test
     assert_equal 1, entity_cubes.length
     assert_in_delta 2048.0, entity_cubes.first[:x]
     assert_in_delta 2048.0, entity_cubes.first[:z]
+  end
+
+  def test_bsp_spectator_draws_compact_diagnostic_overlay
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.0, y: 2.0, z: 3.0)
+    )
+    world.spawn(position: Aogera::Component::Position.new(x: 4.0, y: 5.0, z: 6.0))
+    bsp29_map = Object.new
+    bsp29_map.define_singleton_method(:world_model) { nil }
+    view = Aogera::FirstPersonView.for_direction(:east)
+    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
+    renderer.prepare
+
+    renderer.draw(
+      level: Object.new,
+      world: world.view,
+      status: "test",
+      view: view,
+      camera_entity_id: camera_id,
+      camera_eye: [10.0, 20.0, 30.0]
+    )
+
+    texts = api.calls
+      .select { |call| call.first == :draw_text }
+      .map { |call| call.last[:text] }
+
+    assert_includes texts, "FPS 57"
+    assert_includes texts, "Camera XYZ 10.00  20.00  30.00"
+    assert_includes texts, "View yaw 90.0 deg | pitch 0.0 deg"
+    assert_includes texts, "BSP 0 tris | 0 mesh draws"
+    assert_includes texts, "Entities 2"
+    assert_equal 2, api.calls.count { |call| call.first == :draw_rectangle }
   end
 
   def test_entities_without_renderable_component_are_not_drawn

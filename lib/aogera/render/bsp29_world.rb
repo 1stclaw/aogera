@@ -2,11 +2,13 @@
 
 module Aogera
   module Render
-    # Minimal BSP29 static-world renderer used by the controlled test-field
-    # fixture. It draws only world model 0. Navigation and authored gameplay
-    # still use the current Level; BSP movement collision is handled elsewhere.
+    # Static BSP29 world-model renderer. BSP face polygons are reconstructed on
+    # the Ruby side once, grouped into a small number of diagnostic-color
+    # batches, then uploaded to persistent raylib model/mesh resources after the
+    # graphics context opens. Only world model 0 is rendered here.
     class BSP29World
-      Triangle = Data.define(:a, :b, :c, :texture_name)
+      Batch = Data.define(:vertices, :rgba)
+      PreparedBatch = Data.define(:model, :rgba)
 
       DEFAULT_COLOR = [92, 88, 80, 255].freeze
       TEXTURE_COLORS = {
@@ -16,47 +18,81 @@ module Aogera
         "AOG_WALL" => [102, 102, 110, 255]
       }.freeze
 
-      attr_reader :triangles
+      attr_reader :batches, :triangle_count
+
+      def batch_count = batches.length
 
       def initialize(map:)
         @map = map
-        @triangles = build_triangles.freeze
+        @batches = build_batches.freeze
+        @triangle_count = batches.sum { |batch| batch.vertices.length / 9 }
+        @prepared_batches = nil
+      end
+
+      def prepare(api)
+        return if prepared?
+
+        prepared = []
+        begin
+          batches.each do |batch|
+            next if batch.vertices.empty?
+
+            prepared << PreparedBatch.new(
+              model: api.create_static_model(vertices: batch.vertices),
+              rgba: batch.rgba
+            )
+          end
+          @prepared_batches = prepared.freeze
+        rescue StandardError
+          prepared.each { |batch| api.unload_model(batch.model) }
+          raise
+        end
       end
 
       def draw(api)
-        triangles.each do |triangle|
-          api.draw_triangle_3d(
-            a: vector(triangle.a),
-            b: vector(triangle.b),
-            c: vector(triangle.c),
-            rgba: TEXTURE_COLORS.fetch(triangle.texture_name, DEFAULT_COLOR)
-          )
+        raise "BSP29 world renderer is not prepared" unless prepared?
+
+        @prepared_batches.each do |batch|
+          api.draw_model(model: batch.model, rgba: batch.rgba)
         end
+      end
+
+      def close(api)
+        return unless prepared?
+
+        @prepared_batches.each { |batch| api.unload_model(batch.model) }
+        @prepared_batches = nil
+      end
+
+      def prepared?
+        !@prepared_batches.nil?
       end
 
       private
 
-      def build_triangles
+      def build_batches
+        vertices_by_color = Hash.new { |groups, rgba| groups[rgba] = [] }
         model = @map.world_model
         return [] unless model
 
         faces = @map.faces.slice(model.first_face, model.face_count) || []
-        faces.flat_map do |face|
+        faces.each do |face|
           polygon = face_vertices(face)
-          next [] if polygon.length < 3
+          next if polygon.length < 3
 
           polygon = oriented_polygon(face, polygon)
-          texture_name = texture_name(face)
+          rgba = TEXTURE_COLORS.fetch(texture_name(face), DEFAULT_COLOR)
           anchor = polygon.first
 
-          (1...(polygon.length - 1)).map do |index|
-            Triangle.new(
-              a: anchor,
-              b: polygon[index],
-              c: polygon[index + 1],
-              texture_name: texture_name
-            )
+          (1...(polygon.length - 1)).each do |index|
+            append_vertex(vertices_by_color[rgba], anchor)
+            append_vertex(vertices_by_color[rgba], polygon[index])
+            append_vertex(vertices_by_color[rgba], polygon[index + 1])
           end
+        end
+
+        vertices_by_color.map do |rgba, vertices|
+          Batch.new(vertices: vertices.freeze, rgba: rgba)
         end
       end
 
@@ -75,9 +111,9 @@ module Aogera
         end
       end
 
-      # DrawTriangle3D expects counter-clockwise vertices. The reader's axis
-      # conversion preserves handedness, so compare the reconstructed winding
-      # against the BSP face plane and reverse only when required.
+      # The reader's axis conversion preserves handedness. Compare the
+      # reconstructed winding against the normalized BSP face plane and reverse
+      # only when required so the uploaded mesh faces the correct direction.
       def oriented_polygon(face, polygon)
         return polygon if polygon.length < 3
 
@@ -128,8 +164,8 @@ module Aogera
         (a.x * b.x) + (a.y * b.y) + (a.z * b.z)
       end
 
-      def vector(value)
-        [value.x, value.y, value.z]
+      def append_vertex(vertices, value)
+        vertices << value.x << value.y << value.z
       end
     end
   end

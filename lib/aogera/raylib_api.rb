@@ -97,13 +97,58 @@ module Aogera
       )
     end
 
-    def draw_triangle_3d(a:, b:, c:, rgba:)
-      ::Raylib.DrawTriangle3D(
-        ::Raylib::Vector3.create(*a),
-        ::Raylib::Vector3.create(*b),
-        ::Raylib::Vector3.create(*c),
+    def create_static_model(vertices:)
+      unless vertices.length.positive? && (vertices.length % 9).zero?
+        raise ArgumentError, "static model vertices must contain complete triangles"
+      end
+
+      vertex_count = vertices.length / 3
+      vertex_data = nil
+      texcoord_data = nil
+      mesh = nil
+      uploaded = false
+
+      vertex_data = ::Raylib.MemAlloc(vertices.length * FFI.type_size(:float))
+      texcoord_data = ::Raylib.MemAlloc(vertex_count * 2 * FFI.type_size(:float))
+      raise NoMemoryError, "raylib vertex allocation failed" if vertex_data.null?
+      raise NoMemoryError, "raylib texcoord allocation failed" if texcoord_data.null?
+
+      vertex_data.write_array_of_float(vertices)
+      texcoord_data.write_array_of_float(Array.new(vertex_count * 2, 0.0))
+
+      mesh = ::Raylib::Mesh.new
+      mesh.vertexCount = vertex_count
+      mesh.triangleCount = vertex_count / 3
+      mesh.vertices = vertex_data
+      mesh.texcoords = texcoord_data
+      ::Raylib.UploadMesh(mesh.pointer, false)
+      uploaded = true
+      ::Raylib.LoadModelFromMesh(mesh)
+    rescue StandardError, NoMemoryError
+      if uploaded && mesh
+        ::Raylib.UnloadMesh(mesh)
+      else
+        ::Raylib.MemFree(vertex_data) if vertex_data && !vertex_data.null?
+        ::Raylib.MemFree(texcoord_data) if texcoord_data && !texcoord_data.null?
+      end
+      raise
+    end
+
+    def draw_model(model:, rgba:)
+      ::Raylib.DrawModel(
+        model,
+        ::Raylib::Vector3.create(0.0, 0.0, 0.0),
+        1.0,
         color(rgba)
       )
+    end
+
+    def unload_model(model)
+      ::Raylib.UnloadModel(model)
+    end
+
+    def fps
+      ::Raylib.GetFPS
     end
 
     def screen_width
