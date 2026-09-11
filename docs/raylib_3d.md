@@ -137,7 +137,7 @@ Active chase navigation is a simulation concern and does not depend on renderer 
 
 `Simulation::GroundNavigation` consumes continuous runtime positions and probes short candidate movements through `GroundSpace`. In BSP mode those positive-radius probes reach the same `BSP29::GroundClearance` backend used by actual `GroundMovement`. `GroundSteering` stores/uses a normalized local `GroundHeading` and emits ordinary fixed-step `GroundMove` commands.
 
-The old `Simulation::Pathfinder` still exists as dormant/reference code, but its grid cells are not used by the renderer and are no longer used by normal production chase behavior.
+The obsolete grid `Simulation::Pathfinder` has been removed. Active chase uses continuous local navigation and does not expose navigation cells to the renderer.
 
 ## Combat and interaction
 

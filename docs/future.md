@@ -131,13 +131,13 @@ GroundMovement
 
 Measure:
 
-- BFS expansion;
-- BSP-aware transition validation;
-- dynamic occupancy checks;
-- repeated chase replanning.
+- local-navigation probe count and collision-query cost;
+- heading changes around static and dynamic blockers;
+- `route_needed` frequency on representative encounter geometry;
+- future global-route searches if a collision-certified graph is introduced.
 
-The current grid BFS is deliberately simple and should remain a useful baseline even if
-navigation changes later.
+The old grid BFS has been removed from the active source tree. Historical behavior remains
+documented in the migration notes rather than retained as executable compatibility code.
 
 ## ECS iteration
 
@@ -445,7 +445,7 @@ SteeringTarget(goal)
     -> GroundMove / GroundSpace
 ```
 
-The old grid `Simulation::Pathfinder` remains only as reference/rollback code. Its BFS tests can still serve as a historical comparison, but new BSP chase behavior should not be designed around cell centers.
+The old grid `Simulation::Pathfinder` has been removed after the continuous local-navigation cutover was validated. Historical BFS behavior remains documented, but new BSP chase behavior should not be designed around cell centers.
 
 The next navigation question is whether real levels need a larger-scale route fallback at all. Local pursuit should remain the cheap/common path.
 

@@ -2,38 +2,8 @@
 
 require_relative "test_helper"
 
-class BSP29NavigationClearanceTest < Minitest::Test
+class BSP29LocalNavigationTest < Minitest::Test
   include AogeraTestSupport
-  def test_bsp_clearance_routes_grid_bfs_around_compiled_hull_blocker
-    level = open_level
-    world = Aogera::World.new
-    source = world.spawn(
-      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 2.5),
-      collision: Aogera::Component::Collision.new(blocks_movement: true),
-      ground_body: Aogera::Component::GroundBody.new(radius: 0.28)
-    )
-    target = world.spawn(
-      position: Aogera::Component::Position.new(x: 3.5, y: 0.0, z: 2.5),
-      collision: Aogera::Component::Collision.new(blocks_movement: true)
-    )
-    pathfinder = Aogera::Simulation::Pathfinder.new(
-      ground_clearance: Aogera::BSP29::GroundClearance.for_world(
-        map_data: bsp_map_with_solid_box
-      )
-    )
-
-    waypoint = pathfinder.next_waypoint(
-      level: level,
-      world: world.view,
-      source_id: source,
-      target_id: target
-    )
-
-    assert_instance_of Aogera::Simulation::Pathfinder::Waypoint, waypoint
-    assert_in_delta 1.5, waypoint.x
-    assert_includes [1.5, 3.5], waypoint.z
-  end
-
   def test_bsp_local_navigation_avoids_compiled_hull_blocker
     level = level_with(
       width: 5,
@@ -114,19 +84,9 @@ class BSP29NavigationClearanceTest < Minitest::Test
     assert_same movement_space, navigation_space
     assert_same movement_space, controller_space
     assert_same mode.instance_variable_get(:@ground_space), movement_space
-    refute mode.controller.instance_variable_defined?(:@pathfinder)
+    refute Aogera::Simulation.const_defined?(:Pathfinder, false)
   end
   private
-
-  def open_level
-    Aogera::Level.new(
-      name: :test,
-      terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 5, height: 5),
-      spawns: [],
-      entries: [],
-      relations: []
-    )
-  end
 
   def bsp_map_with_solid_box
     planes = [

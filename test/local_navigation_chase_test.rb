@@ -2,7 +2,7 @@
 
 require_relative "test_helper"
 
-class PathfindingChaseTest < Minitest::Test
+class LocalNavigationChaseTest < Minitest::Test
   include AogeraTestSupport
 
   def test_chaser_locally_avoids_blocking_entity_without_grid_pathfinding
@@ -60,6 +60,6 @@ class PathfindingChaseTest < Minitest::Test
     assert_operator (position.z - 2.5).abs, :>, 0.1
     assert_instance_of Aogera::GroundHeading,
       simulation.world_view.component(hunter_id, :ground_heading)
-    refute controller.instance_variable_defined?(:@pathfinder)
+    refute Aogera::Simulation.const_defined?(:Pathfinder, false)
   end
 end

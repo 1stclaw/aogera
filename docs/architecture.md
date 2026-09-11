@@ -237,7 +237,7 @@ Direct pursuit is preferred. When direct movement is blocked, the query may reus
 
 The active `GroundHeading` is stored in runtime component data so local movement has limited directional memory without keeping a global path. `GroundMovement` remains authoritative for actual sweep-and-slide resolution; navigation only proposes a heading worth trying.
 
-`Simulation::Pathfinder` still exists in the repository as dormant/reference code with its tests and old BSP edge-clearance cache. It is not part of normal production chase execution and should not receive further gameplay fixes unless explicitly restored as a backend.
+The obsolete grid `Simulation::Pathfinder` implementation and its cell-edge cache have been removed from the source tree. Their historical role is documented in `docs/navigation_migration.md`; active navigation code should not reintroduce cell-center routing as a compatibility layer.
 
 The Ruby grid still exists for authored level/spawn/entry scaffolding and the normal non-BSP fallback. It is no longer required to choose active BSP goblin chase directions. See `docs/navigation_migration.md` for the migration history and future GoldSrc-like collision-certified route-graph direction.
 
@@ -374,7 +374,7 @@ Aogera 0.3.3 currently has:
 - one trace-result contract for movement and obstruction;
 - continuous player/NPC melee validation;
 - explicit retired-entity lifecycle state;
-- continuous local NPC navigation through `GroundNavigation`, with the old grid Pathfinder retained only as dormant/reference code;
+- continuous local NPC navigation through `GroundNavigation`, with the obsolete grid Pathfinder removed after cutover validation;
 - a Reader -> normalized authored data -> Loader map boundary;
 - Quake 1-compatible world-unit magnitude with 32-unit current grid cells;
 - a validated BSP29 Reader preserving geometry, BSP tree, clipnodes, textures, entities, visibility/light blobs, and submodels;

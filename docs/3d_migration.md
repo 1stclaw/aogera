@@ -206,7 +206,7 @@ GroundMove
 
 `GroundNavigation` reasons from the actor's actual continuous `Position`, `GroundBody`, current world-space goal, previous local heading, and `GroundSpace`. It does not consume navigation cells or BSP-format records directly. Direct pursuit is preferred; when blocked, local alternatives are probed through the same collision service that actual movement uses.
 
-`Simulation::Pathfinder` remains in the repository as dormant/reference code while the local-navigation cutover is validated. Its grid cells and cell-edge clearance cache are no longer part of normal production chase execution. A future global route graph, if real maps require one, should be a fallback from the local navigator rather than a replacement for fixed-step locomotion.
+The obsolete `Simulation::Pathfinder` was removed after the local-navigation cutover was validated. Its grid cells and cell-edge clearance cache are no longer part of the source tree. A future global route graph, if real maps require one, should be a fallback from the local navigator rather than a replacement for fixed-step locomotion.
 
 ## Boundaries retained from v0.2.3
 
@@ -230,7 +230,6 @@ In the current BSP preview it still provides:
 
 ```text
 Ruby-authored level/spawn/entry scaffolding
-dormant/reference Pathfinder data and tests
 ```
 
 The normal non-BSP Ruby launch also continues to use grid terrain for its own static rendering and collision fallback.
@@ -291,4 +290,4 @@ Aogera v0.3.2 does not yet contain:
 
 The v0.3.2 RC therefore established **one continuous world-space runtime, one shared actor movement/collision path, explicit lifecycle state, one continuous spatial basis for combat/interaction, a Reader/Loader authored-data boundary, Quake-compatible world-unit magnitude, a validated BSP29 Reader, BSP world-model rendering, compiled-hull actor static collision, point-hull obstruction, and BSP-aware clearance validation inside the then-active grid BFS.**
 
-The controlled BSP29 fixture remains paired with the matching Ruby-authored level for current spawn/entry scaffolding. In v0.3.3, active chase no longer consumes that grid topology: local navigation now operates on continuous positions through `GroundSpace`, while the old Pathfinder remains only as a reference implementation.
+The controlled BSP29 fixture remains paired with the matching Ruby-authored level for current spawn/entry scaffolding. In v0.3.3, active chase no longer consumes that grid topology: local navigation now operates on continuous positions through `GroundSpace`, and the obsolete grid Pathfinder has been removed.

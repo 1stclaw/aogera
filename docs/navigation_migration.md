@@ -2,7 +2,7 @@
 
 This document records Aogera's migration away from the temporary grid-BFS chase model toward continuous world-space local navigation with an optional future global route graph.
 
-As of the current v0.3.3 development line, the **runtime chase cutover is active**. `Simulation::Pathfinder` still exists as dormant/reference code and retains its tests, but normal chase behavior no longer calls it.
+As of the current v0.3.3 development line, the **runtime chase cutover is active** and the obsolete `Simulation::Pathfinder` implementation has been removed. Historical BFS behavior is retained in this document rather than as executable compatibility code.
 
 The active navigation stack is intentionally small:
 
@@ -355,19 +355,15 @@ This prevents the old execution-order stall where attack intent could erase loco
 
 ## 12. Status of the old `Simulation::Pathfinder`
 
-`Simulation::Pathfinder` remains in the repository for now.
+`Simulation::Pathfinder` has been removed from the source tree after the continuous local-navigation cutover was manually validated.
 
-It is **not used by active production chase behavior**.
+Its historical value remains documented here:
 
-Its remaining value is:
+- it provided the temporary global grid route during the 0.3.1/0.3.2 transition;
+- it exposed several cell-center/continuous-position mismatches that motivated the cutover;
+- its BSP edge-clearance cache demonstrated the value of certifying navigation decisions against the real collision system.
 
-- historical/reference behavior;
-- regression comparison during the migration;
-- a clean rollback point while local navigation is proven in the controlled BSP field.
-
-Its grid-cell topology, cell-center waypoints, BSP edge-clearance cache, and dynamic-cell occupancy logic should not receive further gameplay fixes unless the project explicitly restores it as an active backend.
-
-Removal can happen in a later cleanup patch after the local-navigation cutover has been manually validated.
+The removed implementation should not be restored merely as a compatibility fallback. If real maps require global routing, the intended replacement is a world-space graph reached through `GroundNavigation::ROUTE_NEEDED`, with static links certified by `GroundSpace`.
 
 ## 13. Remaining grid roles
 
@@ -377,8 +373,7 @@ The grid still participates in:
 
 - current Ruby level authoring;
 - spawn and entry declarations/validation;
-- normal non-BSP rendering and static-collision fallback;
-- dormant `Pathfinder` reference/tests.
+- normal non-BSP rendering and static-collision fallback.
 
 It is no longer required to choose active BSP goblin chase directions.
 

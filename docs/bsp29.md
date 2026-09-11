@@ -91,7 +91,7 @@ No Quake palette or raylib texture conversion is performed yet.
 
 Brush model `0` remains the static world model. Additional BSP submodels remain separate in `MapData#models`; the Reader does not flatten doors/platforms/moving brush candidates into world geometry.
 
-Clipnodes and model headnodes are preserved as first-class collision data. The current preview uses `BSP29::GroundClearance` over compiled hull 1 for player/NPC static movement and for the positive-radius probes issued by continuous local navigation through `GroundSpace`. The old grid Pathfinder remains only as dormant/reference code.
+Clipnodes and model headnodes are preserved as first-class collision data. The current preview uses `BSP29::GroundClearance` over compiled hull 1 for player/NPC static movement and for the positive-radius probes issued by continuous local navigation through `GroundSpace`. The obsolete grid Pathfinder has been removed after the local-navigation cutover.
 
 ## Entity lump
 

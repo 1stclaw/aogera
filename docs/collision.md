@@ -326,7 +326,7 @@ GroundMovement
 
 The active `GroundHeading` is stored as runtime component data under `:ground_heading` so local navigation can retain limited directional memory without maintaining a global route. `GroundSteering` resolves `SteeringTarget#goal_entity_id` to the goal entity's live `Position` every fixed tick, so movement does not wait for the low-frequency behavior cadence to react to target motion or nearby geometry.
 
-`Simulation::Pathfinder` and its cell/BFS clearance cache remain in the repository as dormant/reference code only. Grid topology is no longer collision authority or active BSP chase authority. A future global route graph, if required, should enter through the `GroundNavigation::ROUTE_NEEDED` outcome and should certify static links using the same collision service rather than inventing another walkability model.
+The obsolete `Simulation::Pathfinder` and its cell/BFS clearance cache have been removed. Grid topology is no longer collision authority or active BSP chase authority. A future global route graph, if required, should enter through the `GroundNavigation::ROUTE_NEEDED` outcome and should certify static links using the same collision service rather than inventing another walkability model.
 
 ## 15. Filtering
 
@@ -362,7 +362,7 @@ For the current BSP preview that mismatch is accepted as a source-format limitat
 
 Zero-radius melee/interaction obstruction now uses `BSP29::PointHull` through model headnode 0. `App` supplies the same BSP point-backed `GroundSpace` to player target selection, NPC melee planning, and executor-side attack validation, so those domains no longer disagree about static obstruction.
 
-For active local navigation and actor movement, `App` supplies one shared BSP-backed `GroundSpace`. `GroundNavigation` probes that service from the actor's actual continuous position, and `GroundMovement` uses the same service to resolve the resulting displacement. `BSP29::GroundClearance` remains the positive-radius BSP backend behind those queries and caches a radius-bound `GroundHull` adapter per authored `GroundBody` radius; the radius remains a contract check and does not resize the fixed BSP hull. The old Pathfinder's cell-edge cache remains dormant with the reference implementation and is not consulted by active chase.
+For active local navigation and actor movement, `App` supplies one shared BSP-backed `GroundSpace`. `GroundNavigation` probes that service from the actor's actual continuous position, and `GroundMovement` uses the same service to resolve the resulting displacement. `BSP29::GroundClearance` remains the positive-radius BSP backend behind those queries and caches a radius-bound `GroundHull` adapter per authored `GroundBody` radius; the radius remains a contract check and does not resize the fixed BSP hull. No cell-edge navigation cache remains in the active source tree.
 
 Collision continues to use BSP collision/partition data rather than reconstructed render triangles.
 

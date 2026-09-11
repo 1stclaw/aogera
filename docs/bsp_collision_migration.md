@@ -317,12 +317,11 @@ It still provides:
 
 - the current authored `test_field` terrain representation loaded by `Level::Loader`;
 - authored spawn/entry declarations and their current validation;
-- the complete static collision/rendering fallback for the normal non-BSP Ruby launch;
-- dormant/reference `Simulation::Pathfinder` behavior and tests.
+- the complete static collision/rendering fallback for the normal non-BSP Ruby launch.
 
 The controlled BSP launch still loads the matching Ruby level because BSP entity declarations have not yet replaced the current gameplay spawn/entry path.
 
-The old Pathfinder's cells, dynamic occupancy projection, cell-center waypoints, and static edge-clearance cache remain implementation history/reference rather than active BSP chase logic.
+The old Pathfinder's cells, dynamic occupancy projection, cell-center waypoints, and static edge-clearance cache are now implementation history only; the executable Pathfinder and its BFS-only tests have been removed.
 
 ## 11. v0.3.3 local-navigation follow-on
 
