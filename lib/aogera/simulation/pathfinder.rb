@@ -28,7 +28,18 @@ module Aogera
           target_cell: target_cell
         )
         return if goals.empty?
-        return waypoint_for(level, start) if goals.key?(start)
+
+        if goals.key?(start) && final_approach_clear?(
+          source: source,
+          target: target,
+          ground_body: world.component(source_id, :ground_body)
+        )
+          return Waypoint.new(x: target.x, z: target.z)
+        end
+
+        search_goals = goals.dup
+        search_goals.delete(start)
+        return if search_goals.empty?
 
         first_step = search(
           level: level,
@@ -37,7 +48,7 @@ module Aogera
           source: source,
           start: start,
           target_cell: target_cell,
-          goals: goals
+          goals: search_goals
         )
         return unless first_step
 
@@ -46,6 +57,21 @@ module Aogera
 
       private
 
+
+
+      def final_approach_clear?(source:, target:, ground_body:)
+        return true unless @ground_clearance
+        return false unless ground_body&.radius&.positive?
+
+        @ground_clearance.clear?(
+          start_x: source.x,
+          start_z: source.z,
+          end_x: target.x,
+          end_z: target.z,
+          feet_y: source.y,
+          ground_body_radius: ground_body.radius
+        )
+      end
 
       def waypoint_for(level, cell)
         x, z = level.cell_center(cell[0], cell[1])

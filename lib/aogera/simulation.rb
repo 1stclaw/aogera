@@ -9,7 +9,8 @@ module Aogera
     def initialize(
       level:,
       prototypes:,
-      ground_space: GroundSpace.new
+      ground_space: GroundSpace.new,
+      ground_steering: nil
     )
       @level = level
       @prototypes = prototypes
@@ -17,6 +18,7 @@ module Aogera
       @bindings = Bindings.new
       @step_number = 0
       @executor = Executor.new(ground_space: ground_space)
+      @ground_steering = ground_steering || GroundSteering.new
       @reference_ids = {}
 
       instantiate_spawns
@@ -31,8 +33,18 @@ module Aogera
         bindings: @bindings
       )
 
+      steering_effects = @executor.execute(
+        level: level,
+        world: @world,
+        commands: @ground_steering.build(world: @world.view),
+        bindings: @bindings
+      )
+
       @step_number += 1
-      StepResult.new(number: @step_number, effects: effects)
+      StepResult.new(
+        number: @step_number,
+        effects: (effects + steering_effects).freeze
+      )
     end
 
     def spawn_character(character_key:, prototype:, entry: level.default_entry)

@@ -64,7 +64,8 @@ class BSP29NavigationClearanceTest < Minitest::Test
       prototypes: prototype_catalog,
       ground_space: Aogera::GroundSpace.new(
         bsp29_ground_hull: clearance
-      )
+      ),
+      ground_steering: Aogera::Simulation::GroundSteering.new(speed: 2.0)
     )
     hero_id = simulation.spawn_character(
       character_key: :hero,
@@ -75,8 +76,7 @@ class BSP29NavigationClearanceTest < Minitest::Test
       pathfinder: Aogera::Simulation::Pathfinder.new(
         ground_clearance: clearance
       ),
-      npc_interval: 1,
-      npc_speed: 2.0
+      npc_interval: 1
     )
 
     commands = controller.build(

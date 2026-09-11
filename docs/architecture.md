@@ -109,10 +109,11 @@ Simulation
 ├── World
 ├── Bindings
 ├── Executor
+├── GroundSteering
 └── step_number
 ```
 
-Its mutation boundary is `Simulation#step(commands:)`. Command producers build `Simulation::Commands::Buffer` values; `Simulation::Executor` validates and applies them. Persistent effects are emitted separately and applied by `Session`.
+Its mutation boundary is `Simulation#step(commands:)`. Command producers build `Simulation::Commands::Buffer` values; `Simulation::Executor` validates and applies them. After those decision/input commands are applied, `Simulation::GroundSteering` reads current `SteeringTarget` components and builds the per-tick locomotion commands, which are also executed through the same `Executor`. Persistent effects are emitted separately and applied by `Session`.
 
 Current command types include:
 
@@ -129,13 +130,13 @@ Gameplay producers request changes; `Executor` remains the authoritative mutatio
 
 ## Movement and collision
 
-All current actor locomotion uses:
+All current actor locomotion ultimately uses:
 
 ```text
 GroundMove(entity_id, dx, dz)
 ```
 
-The player produces view-relative continuous displacement every fixed simulation tick. NPC behavior still produces continuous ground displacement at the NPC decision cadence. Both are executed by the same `GroundMovement` and the same `GroundSpace#sweep_circle` collision path.
+The player produces view-relative displacement directly every fixed simulation tick. NPC behavior instead updates persistent `SteeringTarget` intent on the existing low-frequency decision cadence. `Simulation::GroundSteering` consumes that target every fixed simulation tick and produces capped `GroundMove` displacement at `NPC_SPEED / TICK_HZ`. Player and NPC movement are therefore both resolved by the same `GroundMovement` and the same `GroundSpace#sweep_circle` collision path, while NPC decision timing no longer controls physical movement cadence.
 
 NPC navigation/behavior decisions can additionally persist:
 
@@ -143,7 +144,7 @@ NPC navigation/behavior decisions can additionally persist:
 SteeringTarget(x, z)
 ```
 
-`SteeringTarget` is runtime intent data, not a second position and not velocity. In the current 0.3.3 preparation stage, a decision that chooses a steering target also emits the same `GroundMove` it emitted before, so movement timing has not changed yet. Attack/idle/no-route decisions clear an existing target, and retirement strips it with other active-behavior components. A later patch may consume this target every simulation tick to separate locomotion cadence from AI/navigation cadence.
+`SteeringTarget` is runtime intent data, not a second position and not velocity. A decision chooses or clears this target; physical NPC locomotion is a separate fixed-step phase. `GroundSteering` reads the current target after decision commands have been applied, so a newly chosen target can move on the same tick while attack/idle/no-route/retirement clearing suppresses movement before steering runs. Retirement strips steering intent with the other active-behavior components.
 
 ### Current body model
 
@@ -209,7 +210,7 @@ SteeringTarget(x, z)
       +--> persisted runtime movement intent
       |
       v
-continuous waypoint displacement
+GroundSteering @ 30 Hz
       |
       v
 GroundMove
@@ -217,11 +218,28 @@ GroundMove
 
 The Pathfinder checks terrain passability and projects active blocking entities into navigation cells. Navigation cells are temporary planning values and are never synchronized back into entity state.
 
-The cell representation is also private to the Pathfinder boundary. `next_waypoint` returns an immutable world-space `Pathfinder::Waypoint(x, z)` at the selected cell center. `RealtimeController` consumes that waypoint without calling `cell_for_world` or `cell_center`, then records the world-space destination as `Component::SteeringTarget`. This keeps both the grid topology and the transient `Pathfinder::Waypoint` behind the navigation/behavior boundary. The current controller still computes the same capped `GroundMove` from that waypoint on the same decision tick; persistent steering data is preparation for separating locomotion timing in a later patch.
+The cell representation is also private to the Pathfinder boundary. `next_waypoint` normally returns an immutable world-space `Pathfinder::Waypoint(x, z)` at the selected cell center. If the source is already in a target-adjacent BFS goal cell, the Pathfinder instead returns the target's current world-space X/Z for a continuous final approach when static ground clearance allows it; this prevents the old adjacent-cell goal from becoming a dead zone outside true melee reach. `RealtimeController` consumes the waypoint without calling `cell_for_world` or `cell_center`, then records the world-space destination as `Component::SteeringTarget`. This keeps grid topology behind the navigation boundary while allowing the final approach to use continuous runtime coordinates. `GroundSteering` independently converts the persisted target into fixed-step displacement, so replacing the Pathfinder or changing NPC think cadence no longer requires changing locomotion cadence.
 
 In BSP mode the grid remains the BFS topology, but each candidate cell-center transition is also checked through `BSP29::GroundClearance`, which traces compiled hull 1 using the source actor's authored `GroundBody` radius as the existing fixed-hull contract check. Dynamic entities are still handled by the established cell-occupancy rule; the BSP query is static-world clearance only.
 
 This preserves the useful current BFS while making its planned transitions use the same static BSP clearance source as spawned-NPC movement execution. The Pathfinder memoizes the directed static result for each level/radius/feet-height/cell-edge combination, because that answer cannot change while the loaded BSP is unchanged. Dynamic cell occupancy is deliberately outside that cache and is evaluated on every search.
+
+### Staged world-space local navigation
+
+The grid Pathfinder is now frozen as a temporary compatibility implementation rather than the intended long-term BSP chase model. A staged `Simulation::GroundNavigation` query introduces the replacement boundary without changing active gameplay yet.
+
+It consumes the source actor's actual continuous `Position`, authored `GroundBody`, a world-space goal, optional previous heading, and `GroundSpace`. It returns a normalized `GroundHeading(dx, dz)` together with one of four outcomes:
+
+```text
+arrived
+direct
+local_avoidance
+route_needed
+```
+
+`GroundNavigation` has no cell/BFS/BSP-format knowledge. It probes short candidate movement through `GroundSpace#sweep_circle`, accepting direct pursuit when possible and otherwise trying local alternatives derived from previous heading, blocking-plane tangents, and rotated headings. `route_needed` means only that local navigation cannot currently produce a usable heading; it is the explicit future hook for a larger-scale route graph.
+
+This staged query is not yet called by `RealtimeController`. Active chase still uses `Simulation::Pathfinder` until the next explicit cutover. See `docs/navigation_migration.md` for the migration plan and the intended future collision-certified node-graph fallback.
 
 ## Combat
 

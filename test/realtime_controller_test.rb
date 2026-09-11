@@ -144,8 +144,7 @@ class RealtimeControllerTest < Minitest::Test
     end.new(waypoint)
     controller = Aogera::RealtimeController.new(
       pathfinder: pathfinder,
-      npc_interval: 1,
-      npc_speed: 2.0
+      npc_interval: 1
     )
 
     commands = controller.build(
@@ -156,18 +155,47 @@ class RealtimeControllerTest < Minitest::Test
       tick_number: 1
     ).to_a
 
+    assert_equal 1, commands.length
     target_command = commands.fetch(0)
-    move_command = commands.fetch(1)
 
     assert_instance_of Aogera::Simulation::Commands::SetSteeringTarget, target_command
     assert_equal goblin_id, target_command.entity_id
     assert_in_delta waypoint.x, target_command.x
     assert_in_delta waypoint.z, target_command.z
+    refute commands.any? { |command| command.is_a?(Aogera::Simulation::Commands::GroundMove) }
+  end
 
-    assert_instance_of Aogera::Simulation::Commands::GroundMove, move_command
-    assert_equal goblin_id, move_command.entity_id
-    assert_in_delta 2.0 / Aogera::Realtime::TICK_HZ, Math.hypot(move_command.dx, move_command.dz)
-    assert_in_delta move_command.dx, move_command.dz
+
+  def test_adjacent_chaser_outside_melee_range_keeps_continuous_final_approach
+    world = Aogera::World.new
+    goblin_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
+      melee_attack: Aogera::Component::MeleeAttack.new(reach: 0.65, arc_degrees: 110.0),
+      behavior: Aogera::Component::Behavior.new(kind: :chase),
+      combatant: Aogera::Component::Combatant.new(attack: 1)
+    )
+    hero_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 2.9, y: 0.0, z: 2.5),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.22),
+      collision: Aogera::Component::Collision.new(blocks_movement: true)
+    )
+    world.add_relation(kind: :targets, source_id: goblin_id, target_id: hero_id)
+
+    commands = Aogera::RealtimeController.new(npc_interval: 1).build(
+      input: Aogera::Input::Snapshot.empty,
+      level: level_with(spawns: []),
+      world: world.view,
+      controlled_id: hero_id,
+      tick_number: 1
+    ).to_a
+
+    assert_equal 1, commands.length
+    command = commands.fetch(0)
+    assert_instance_of Aogera::Simulation::Commands::SetSteeringTarget, command
+    assert_equal goblin_id, command.entity_id
+    assert_in_delta 2.9, command.x
+    assert_in_delta 2.5, command.z
   end
 
   def test_existing_steering_target_is_cleared_before_melee_attack

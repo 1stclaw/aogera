@@ -60,7 +60,7 @@ class SpatialNormalizationTest < Minitest::Test
     assert_in_delta 2.5, goblin.z
   end
 
-  def test_nonadjacent_npc_navigation_produces_same_ground_move_command_as_player
+  def test_nonadjacent_npc_navigation_produces_world_space_steering_target
     level = level_with(
       spawns: [
         Aogera::Level::Spawn.new(
@@ -97,10 +97,13 @@ class SpatialNormalizationTest < Minitest::Test
       controlled_id: player_id,
       tick_number: 1
     ).to_a
-    command = commands.find { |candidate| candidate.is_a?(Aogera::Simulation::Commands::GroundMove) }
+    command = commands.find do |candidate|
+      candidate.is_a?(Aogera::Simulation::Commands::SetSteeringTarget)
+    end
 
-    assert_instance_of Aogera::Simulation::Commands::GroundMove, command
+    assert_instance_of Aogera::Simulation::Commands::SetSteeringTarget, command
     assert_equal hunter_id, command.entity_id
-    assert_operator Math.hypot(command.dx, command.dz), :>, 0.0
+    assert_in_delta 2.5, command.x
+    assert_in_delta 2.5, command.z
   end
 end

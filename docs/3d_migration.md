@@ -92,11 +92,13 @@ Render::Raylib2D
 
 ## Unified actor movement
 
-Player and NPC locomotion both use:
+Player and NPC locomotion both resolve through:
 
 ```text
 Simulation::Commands::GroundMove(entity_id, dx, dz)
 ```
+
+Player input produces this displacement directly each fixed tick. NPC decisions persist `SteeringTarget(x, z)`, and `Simulation::GroundSteering` produces the NPC `GroundMove` every fixed 30 Hz tick until the target is reached or cleared.
 
 Current ground actors can carry:
 

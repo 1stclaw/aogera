@@ -42,7 +42,7 @@ class PathfinderTest < Minitest::Test
     assert_includes [1.5, 3.5], waypoint.z
   end
 
-  def test_returns_current_cell_center_waypoint_when_source_is_already_in_goal_cell
+  def test_returns_target_position_for_continuous_final_approach_when_source_is_already_in_goal_cell
     level = Aogera::Level.new(
       name: :test,
       terrain: Aogera::Level::Terrain.new(cell_size: 1.0, width: 5, height: 5),
@@ -64,7 +64,42 @@ class PathfinderTest < Minitest::Test
       source_id: source, target_id: target
     )
 
-    assert_equal Aogera::Simulation::Pathfinder::Waypoint.new(x: 1.5, z: 1.5), waypoint
+    assert_equal Aogera::Simulation::Pathfinder::Waypoint.new(x: 2.5, z: 1.5), waypoint
+  end
+
+  def test_blocked_final_approach_searches_for_another_adjacent_goal
+    level = open_level
+    world = Aogera::World.new
+    source = world.spawn(
+      position: Aogera::Component::Position.new(x: 1.5, y: 0.0, z: 2.5),
+      collision: Aogera::Component::Collision.new(blocks_movement: true),
+      ground_body: Aogera::Component::GroundBody.new(radius: 0.28)
+    )
+    target = world.spawn(
+      position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
+      collision: Aogera::Component::Collision.new(blocks_movement: true)
+    )
+    clearance = RecordingGroundClearance.new(
+      [[1.5, 2.5, 2.5, 2.5]],
+      []
+    )
+
+    waypoint = Aogera::Simulation::Pathfinder.new(
+      ground_clearance: clearance
+    ).next_waypoint(
+      level: level,
+      world: world.view,
+      source_id: source,
+      target_id: target
+    )
+
+    refute_nil waypoint
+    refute_equal Aogera::Simulation::Pathfinder::Waypoint.new(x: 2.5, z: 2.5), waypoint
+    assert_includes [1.5, 2.5], waypoint.x
+    assert_includes [1.5, 3.5], waypoint.z
+    assert clearance.calls.any? { |call|
+      call.values_at(:start_x, :start_z, :end_x, :end_z) == [1.5, 2.5, 2.5, 2.5]
+    }
   end
 
   def test_bsp_ground_clearance_can_reject_direct_grid_transition

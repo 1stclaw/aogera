@@ -9,14 +9,12 @@ module Aogera
     }.freeze
 
     DEFAULT_PLAYER_SPEED = Realtime::PLAYER_SPEED
-    DEFAULT_NPC_SPEED = Realtime::NPC_SPEED
     DEFAULT_NPC_INTERVAL = Realtime::NPC_ACTION_INTERVAL
 
     def initialize(
       pathfinder: Simulation::Pathfinder.new,
       ground_space: GroundSpace.new,
       player_speed: DEFAULT_PLAYER_SPEED,
-      npc_speed: DEFAULT_NPC_SPEED,
       npc_interval: DEFAULT_NPC_INTERVAL
     )
       @pathfinder = pathfinder
@@ -24,8 +22,6 @@ module Aogera
       @player_step = validate_positive_number(player_speed, :player_speed) /
         Realtime::TICK_HZ
       @npc_interval = validate_interval(npc_interval, :npc_interval)
-      @npc_step = validate_positive_number(npc_speed, :npc_speed) *
-        (@npc_interval.to_f / Realtime::TICK_HZ)
     end
 
     def build(input:, level:, world:, controlled_id:, tick_number:, view: nil)
@@ -101,14 +97,15 @@ module Aogera
       return clear_steering_target(world, entity_id) unless source
 
       dx, dz = Direction::VECTORS.sample
-      move_dx = dx * @npc_step
-      move_dz = dz * @npc_step
-      target_x = source.x + move_dx
-      target_z = source.z + move_dz
+      distance = Realtime::NPC_SPEED *
+        (@npc_interval.to_f / Realtime::TICK_HZ)
 
       [
-        set_steering_target(entity_id, target_x, target_z),
-        ground_move(entity_id, move_dx, move_dz)
+        set_steering_target(
+          entity_id,
+          source.x + (dx * distance),
+          source.z + (dz * distance)
+        )
       ]
     end
 
@@ -148,14 +145,9 @@ module Aogera
 
       dx = waypoint.x - source.x
       dz = waypoint.z - source.z
-      distance = Math.hypot(dx, dz)
-      return clear_steering_target(world, entity_id) if distance.zero?
+      return clear_steering_target(world, entity_id) if Math.hypot(dx, dz).zero?
 
-      scale = [@npc_step / distance, 1.0].min
-      [
-        set_steering_target(entity_id, waypoint.x, waypoint.z),
-        ground_move(entity_id, dx * scale, dz * scale)
-      ]
+      [set_steering_target(entity_id, waypoint.x, waypoint.z)]
     end
 
     def melee_reachable?(level, world, source_id, target_id, profile)

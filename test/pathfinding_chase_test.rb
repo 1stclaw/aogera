@@ -33,11 +33,15 @@ class PathfindingChaseTest < Minitest::Test
         )
       ]
     )
-    simulation = Aogera::Simulation.new(level: level, prototypes: prototype_catalog)
+    simulation = Aogera::Simulation.new(
+      level: level,
+      prototypes: prototype_catalog,
+      ground_steering: Aogera::Simulation::GroundSteering.new(speed: 2.0)
+    )
     hero_id = simulation.spawn_character(character_key: :hero, prototype: :player)
     hunter_id = simulation.entity_id_for_spawn(:hunter)
 
-    controller = Aogera::RealtimeController.new(npc_interval: 1, npc_speed: 2.0)
+    controller = Aogera::RealtimeController.new(npc_interval: 1)
     commands = controller.build(
       input: Aogera::Input::Snapshot.empty,
       level: level,

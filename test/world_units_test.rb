@@ -36,10 +36,17 @@ class WorldUnitsTest < Minitest::Test
       tick_number: Aogera::Realtime::NPC_ACTION_INTERVAL
     ).to_a
 
-    moves = commands.grep(Aogera::Simulation::Commands::GroundMove)
-    refute_empty moves
-    moves.each do |move|
-      assert_operator Math.hypot(move.dx, move.dz), :<=, Aogera::WorldUnits::GRID_CELL_SIZE
+    targets = commands.grep(Aogera::Simulation::Commands::SetSteeringTarget)
+    refute_empty targets
+    targets.each do |target|
+      assert_in_delta(
+        Aogera::WorldUnits.grid_center(Aogera::WorldUnits.grid_cell(target.x)),
+        target.x
+      )
+      assert_in_delta(
+        Aogera::WorldUnits.grid_center(Aogera::WorldUnits.grid_cell(target.z)),
+        target.z
+      )
     end
   end
 

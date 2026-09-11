@@ -363,7 +363,7 @@ accept BFS transition
 
 Planning and movement execution therefore consult the same compiled static collision source even though route topology is still cell-based. The Pathfinder caches the result of each directed static cell-center transition, keyed by loaded level, authored body radius, feet height, and the two cells. Repeated NPC planning therefore does not recursively traverse the same immutable BSP hull for the same edge every half-second. Dynamic occupancy remains uncached and is checked before static transition clearance on every BFS expansion.
 
-As of the 0.3.3 cleanup line, that cell topology is no longer part of the controller contract. The Pathfinder exposes `next_waypoint`, returning immutable world-space `Pathfinder::Waypoint(x, z)` data. `RealtimeController` no longer converts a cardinal BFS step back into a grid cell and then into a cell center.
+As of the 0.3.3 cleanup line, that cell topology is no longer part of the controller contract. The Pathfinder exposes `next_waypoint`, returning immutable world-space `Pathfinder::Waypoint(x, z)` data. `RealtimeController` no longer converts a cardinal BFS step back into a grid cell and then into a cell center. The remaining target-adjacent grid goal is now only a coarse navigation milestone: when the source is already in such a goal but is still outside continuous melee reach, Pathfinder can return the target's current X/Z for a final continuous approach if the BSP ground hull reports that direct static segment clear. This prevents adjacency in the temporary topology from being mistaken for physical attack reach.
 
 The next preparation seam is explicit runtime steering intent:
 
@@ -374,10 +374,13 @@ Pathfinder::Waypoint(x, z)
 Component::SteeringTarget(x, z)
         |
         v
+Simulation::GroundSteering @ 30 Hz
+        |
+        v
 GroundMove
 ```
 
-`SteeringTarget` is persisted on the NPC so navigation decisions and locomotion no longer need to share a transient local variable. This patch deliberately does **not** change movement cadence: the same 2 Hz NPC decision still stores the target and emits the same capped `GroundMove` immediately. Existing targets are cleared when the actor attacks, idles, loses a route/target, or retires. The following migration step can therefore move physical steering to the 30 Hz simulation cadence without changing the Pathfinder API or reintroducing grid knowledge into the controller.
+`SteeringTarget` is persisted on the NPC so navigation decisions and locomotion no longer share either a transient local variable or a cadence. The existing low-frequency NPC decision stores or clears world-space intent. After decision commands execute, `Simulation::GroundSteering` consumes that intent on every 30 Hz simulation tick and emits ordinary capped `GroundMove` commands. Existing targets are cleared when the actor attacks, idles, loses a route/target, arrives, or retires. Grid/BFS cadence can now change independently from physical locomotion without changing the Pathfinder API or reintroducing grid knowledge into the controller.
 
 This is intentionally a compatibility bridge rather than a new navigation architecture.
 

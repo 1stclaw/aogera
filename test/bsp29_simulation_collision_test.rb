@@ -187,6 +187,9 @@ class BSP29SimulationCollisionTest < Minitest::Test
       prototypes: catalog_with_dead_blocker,
       ground_space: Aogera::GroundSpace.new(
         bsp29_ground_hull: clearance
+      ),
+      ground_steering: Aogera::Simulation::GroundSteering.new(
+        speed: Aogera::Realtime::TICK_HZ
       )
     )
     player_id = simulation.spawn_character(character_key: :hero, prototype: :player)
@@ -204,8 +207,7 @@ class BSP29SimulationCollisionTest < Minitest::Test
       pathfinder: Aogera::Simulation::Pathfinder.new(
         ground_clearance: clearance
       ),
-      npc_interval: 1,
-      npc_speed: Aogera::Realtime::TICK_HZ
+      npc_interval: 1
     )
     planned = controller.build(
       input: Aogera::Input::Snapshot.empty,
@@ -214,14 +216,14 @@ class BSP29SimulationCollisionTest < Minitest::Test
       controlled_id: player_id,
       tick_number: simulation.step_number + 1
     )
-    hunter_move = planned.to_a.find do |command|
-      command.is_a?(Aogera::Simulation::Commands::GroundMove) &&
+    hunter_target = planned.to_a.find do |command|
+      command.is_a?(Aogera::Simulation::Commands::SetSteeringTarget) &&
         command.entity_id == hunter_id
     end
 
-    refute_nil(hunter_move)
-    assert_in_delta(-1.0, hunter_move.dx)
-    assert_in_delta(0.0, hunter_move.dz)
+    refute_nil(hunter_target)
+    assert_in_delta(3.5, hunter_target.x)
+    assert_in_delta(2.5, hunter_target.z)
 
     simulation.step(commands: planned)
 
