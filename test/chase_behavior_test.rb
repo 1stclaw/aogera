@@ -16,6 +16,10 @@ class ChaseBehaviorTest < Minitest::Test
 
     assert_equal 9, session.character(:hero).hp
     assert_nil simulation.world_view.component(hero_id, :health)
+
+    goblin_id = entity_id_for(simulation, :goblin)
+    assert_nil simulation.world_view.component(goblin_id, :steering_target)
+    assert_nil simulation.world_view.component(goblin_id, :ground_heading)
   end
 
   def test_chaser_moves_toward_non_adjacent_target_on_npc_tick

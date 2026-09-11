@@ -12,12 +12,10 @@ module Aogera
     DEFAULT_NPC_INTERVAL = Realtime::NPC_ACTION_INTERVAL
 
     def initialize(
-      pathfinder: Simulation::Pathfinder.new,
       ground_space: GroundSpace.new,
       player_speed: DEFAULT_PLAYER_SPEED,
       npc_interval: DEFAULT_NPC_INTERVAL
     )
-      @pathfinder = pathfinder
       @ground_space = ground_space
       @player_step = validate_positive_number(player_speed, :player_speed) /
         Realtime::TICK_HZ
@@ -119,11 +117,22 @@ module Aogera
         return clear_steering_target(world, entity_id)
       end
 
+      target = world.component(target_id, :position)
+      return clear_steering_target(world, entity_id) unless target
+
+      target_command = set_steering_target(
+        entity_id,
+        target.x,
+        target.z,
+        goal_entity_id: target_id
+      )
+
       combatant = world.component(entity_id, :combatant)
       melee = world.component(entity_id, :melee_attack)
       if combatant&.attack&.positive? && melee &&
           melee_reachable?(level, world, entity_id, target_id, melee)
-        return clear_steering_target(world, entity_id) + [
+        return [
+          target_command,
           Simulation::Commands::Attack.new(
             attacker_id: entity_id,
             target_id: target_id,
@@ -132,22 +141,7 @@ module Aogera
         ]
       end
 
-      waypoint = @pathfinder.next_waypoint(
-        level: level,
-        world: world,
-        source_id: entity_id,
-        target_id: target_id
-      )
-      return clear_steering_target(world, entity_id) unless waypoint
-
-      source = world.component(entity_id, :position)
-      return clear_steering_target(world, entity_id) unless source
-
-      dx = waypoint.x - source.x
-      dz = waypoint.z - source.z
-      return clear_steering_target(world, entity_id) if Math.hypot(dx, dz).zero?
-
-      [set_steering_target(entity_id, waypoint.x, waypoint.z)]
+      [target_command]
     end
 
     def melee_reachable?(level, world, source_id, target_id, profile)
@@ -166,11 +160,12 @@ module Aogera
       )
     end
 
-    def set_steering_target(entity_id, x, z)
+    def set_steering_target(entity_id, x, z, goal_entity_id: nil)
       Simulation::Commands::SetSteeringTarget.new(
         entity_id: entity_id,
         x: x,
-        z: z
+        z: z,
+        goal_entity_id: goal_entity_id
       )
     end
 

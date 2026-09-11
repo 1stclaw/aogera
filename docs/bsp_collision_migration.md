@@ -2,7 +2,7 @@
 
 This document records the v0.3.2 migration from Aogera's original grid-backed static gameplay space toward BSP29 collision, while preserving the continuous runtime introduced in v0.3.1.
 
-It is both a checkpoint description and a constraint for later work. The current implementation is intentionally hybrid. The remaining grid data is still useful for authored-level scaffolding and BFS topology, but BSP29 is now authoritative for the static collision questions used by actor movement and ground-style obstruction queries in the BSP preview.
+It is both a checkpoint description and a constraint for later work. The v0.3.2 implementation was intentionally hybrid: the grid still supplied authored-level/BFS scaffolding while BSP29 became authoritative for the static collision questions used by actor movement and ground-style obstruction queries. The current v0.3.3 cleanup line has since retired that BFS from active chase while preserving the collision boundary described here.
 
 ## 1. Why the migration is incremental
 
@@ -274,9 +274,9 @@ GroundMove
 
 This is the v0.3.2 RC checkpoint.
 
-## 9. Current v0.3.2 RC authority map
+## 9. v0.3.2 RC authority map (historical)
 
-The current BSP preview is still hybrid, but static collision authority is no longer split between player and NPC movement.
+The v0.3.2 BSP preview reached the following stable collision boundary:
 
 ```text
 STATIC RENDERING
@@ -295,120 +295,94 @@ MELEE / INTERACTION STATIC OBSTRUCTION
       -> BSP29::PointHull
       -> hull-0 node/leaf tree
 
-BFS TOPOLOGY
-    Ruby Level::Terrain cells
+NAVIGATION AT THAT CHECKPOINT
+    Ruby grid BFS
+      -> candidate static edges validated by GroundClearance
 
-BFS STATIC STEP CLEARANCE
-    same BSP29::GroundClearance used by movement
-
-BFS DYNAMIC OCCUPANCY
-    active blocking actors projected into cells
-
-SPAWNS / ENTRIES / CURRENT LEVEL CONSTRUCTION
+SPAWNS / ENTRIES / LEVEL CONSTRUCTION
     Ruby authored test_field through Level::Readers::Ruby / Level::Loader
 ```
 
-This is the key RC invariant:
+The important v0.3.2 invariant was:
 
-> BSP29 now answers the static collision questions used by BSP-mode actor movement and obstruction, while the Ruby grid remains a temporary navigation/authored-level scaffold.
+> BSP29 answered the static collision questions used by BSP-mode actor movement and obstruction, even though route topology was still temporarily grid-based.
 
-## 10. What the grid still does
+That collision boundary survives unchanged into v0.3.3.
 
-The grid is not runtime actor position authority, and it is no longer BSP-mode static actor collision authority.
+## 10. What the grid still does after the v0.3.3 chase cutover
 
-It still provides several concrete services in v0.3.2:
+The grid is not runtime actor-position authority, BSP-mode static collision authority, or active chase-navigation authority.
 
-- the authored `test_field` terrain representation loaded by the current `Level::Loader` path;
-- authored spawn/entry declarations and their current level validation;
-- BFS cell topology;
-- BFS dynamic occupancy projection;
-- cell-center waypoint generation internal to the current Pathfinder;
-- the complete static collision/rendering fallback for the normal non-BSP Ruby launch.
+It still provides:
 
-The controlled BSP launch intentionally continues loading the matching Ruby level because gameplay entity import from the BSP entity lump has not yet replaced it.
+- the current authored `test_field` terrain representation loaded by `Level::Loader`;
+- authored spawn/entry declarations and their current validation;
+- the complete static collision/rendering fallback for the normal non-BSP Ruby launch;
+- dormant/reference `Simulation::Pathfinder` behavior and tests.
 
-## 11. What "BSP-aware pathfinding" means today
+The controlled BSP launch still loads the matching Ruby level because BSP entity declarations have not yet replaced the current gameplay spawn/entry path.
 
-Aogera does not yet have BSP-native navigation.
+The old Pathfinder's cells, dynamic occupancy projection, cell-center waypoints, and static edge-clearance cache remain implementation history/reference rather than active BSP chase logic.
 
-The current Pathfinder still performs ordinary grid BFS:
+## 11. v0.3.3 local-navigation follow-on
 
-```text
-continuous Position
-    -> temporary grid cell
-    -> BFS over grid neighbors
-    -> world-space Pathfinder::Waypoint at the next cell center
-    -> continuous GroundMove
-```
+The 0.3.3 cleanup line removed grid BFS from normal chase behavior without changing the collision solver.
 
-The important v0.3.2 change is that static eligibility of each candidate transition is no longer based on the grid alone.
-
-In BSP mode:
+The active chase path is now:
 
 ```text
-neighbor exists in grid topology?
-        |
-        v
-grid terrain passable?
-        |
-        v
-not dynamically occupied?
-        |
-        v
-BSP hull-1 center-to-center clearance?
-        |
-        v
-accept BFS transition
-```
-
-Planning and movement execution therefore consult the same compiled static collision source even though route topology is still cell-based. The Pathfinder caches the result of each directed static cell-center transition, keyed by loaded level, authored body radius, feet height, and the two cells. Repeated NPC planning therefore does not recursively traverse the same immutable BSP hull for the same edge every half-second. Dynamic occupancy remains uncached and is checked before static transition clearance on every BFS expansion.
-
-As of the 0.3.3 cleanup line, that cell topology is no longer part of the controller contract. The Pathfinder exposes `next_waypoint`, returning immutable world-space `Pathfinder::Waypoint(x, z)` data. `RealtimeController` no longer converts a cardinal BFS step back into a grid cell and then into a cell center. The remaining target-adjacent grid goal is now only a coarse navigation milestone: when the source is already in such a goal but is still outside continuous melee reach, Pathfinder can return the target's current X/Z for a final continuous approach if the BSP ground hull reports that direct static segment clear. This prevents adjacency in the temporary topology from being mistaken for physical attack reach.
-
-The next preparation seam is explicit runtime steering intent:
-
-```text
-Pathfinder::Waypoint(x, z)
-        |
-        v
-Component::SteeringTarget(x, z)
-        |
-        v
-Simulation::GroundSteering @ 30 Hz
-        |
-        v
+Behavior(:chase)
+      |
+      v
+SteeringTarget(goal entity)
+      |
+      v
+GroundNavigation
+      |
+      | short sweep_circle probes
+      v
+GroundHeading
+      |
+      v
+GroundSteering @ 30 Hz
+      |
+      v
 GroundMove
+      |
+      v
+GroundMovement / GroundSpace
 ```
 
-`SteeringTarget` is persisted on the NPC so navigation decisions and locomotion no longer share either a transient local variable or a cadence. The existing low-frequency NPC decision stores or clears world-space intent. After decision commands execute, `Simulation::GroundSteering` consumes that intent on every 30 Hz simulation tick and emits ordinary capped `GroundMove` commands. Existing targets are cleared when the actor attacks, idles, loses a route/target, arrives, or retires. Grid/BFS cadence can now change independently from physical locomotion without changing the Pathfinder API or reintroducing grid knowledge into the controller.
+`GroundNavigation` operates on actual continuous actor positions and asks `GroundSpace` whether candidate local headings are physically usable. In BSP mode those positive-radius queries reach the same `BSP29::GroundClearance` / compiled-hull path as actual actor movement. Dynamic blockers participate through the same `GroundSpace` query rather than through projected navigation cells.
 
-This is intentionally a compatibility bridge rather than a new navigation architecture.
+For an entity goal, `SteeringTarget` stores `goal_entity_id`. `GroundSteering` resolves that entity's current `Position` every simulation tick, so local pursuit reacts between the existing low-frequency behavior updates. The previous chosen `GroundHeading` is kept as limited local movement memory.
 
-## 12. Recommended post-v0.3.2 navigation migration
+The local query prefers direct pursuit, then can use a previous non-reversing heading, blocking-plane tangents, and deterministic rotated alternatives. If no candidate is usable it returns `route_needed`; the current runtime keeps the goal and retries on the next fixed tick.
 
-Further navigation work should remain incremental.
+This removes the cell-center/off-center mismatch that caused the late grid-era freeze and obstacle-border behaviors. It does not claim to solve global routing.
 
-### Phase A: preserve the RC
+## 12. Future larger-scale routing
 
-Do not replace BFS while stabilizing/releasing v0.3.2. Treat regressions in the controlled BSP field as RC bugs rather than opportunities for broad redesign.
+If real Aogera maps demonstrate that local pursuit cannot solve their topology, `GroundNavigation::ROUTE_NEEDED` is the intended fallback seam for a larger-scale route system.
 
-### Phase B: isolate grid topology from `Level::Terrain`
+The preferred direction is a compact world-space graph inspired by the GoldSrc lineage rather than a revival of the gameplay grid. Candidate links should be certified by the same static collision system used at runtime:
 
-When a real BSP-authored gameplay level requires it, define a small navigation-topology source instead of having `Pathfinder` directly assume that gameplay terrain and navigation topology are the same object.
+```text
+node A
+   |
+   | candidate link
+   v
+GroundSpace / actor-hull static probe
+   |
+   +-- clear   -> keep link
+   +-- blocked -> reject link
+```
 
-The first replacement can still be a grid or coarse cell graph. The goal is dependency separation, not algorithm novelty.
+Dynamic actors must remain runtime obstacles rather than permanent graph properties.
 
-### Phase C: derive or author navigation for BSP worlds
+The exact node authoring/generation scheme, sidecar format, and search algorithm are intentionally deferred until local navigation has been tested on real BSP levels. BSP-leaf adjacency is not assumed to be a navigation graph.
 
-Only then choose how BSP levels provide navigation nodes/edges. Possibilities include an offline generated graph, authored navigation hints, or another compact representation appropriate to Aogera's maps.
-
-The collision service should remain the final static-clearance validator even if the topology source changes.
-
-### Phase D: remove Ruby-level dependency from BSP launch
-
-After BSP map entities/spawns and BSP navigation data exist, the BSP launch no longer needs to load the matching Ruby `test_field` as gameplay scaffolding.
-
-At that point `Level::Terrain` can remain as the normal Ruby-level implementation without being a required BSP runtime dependency.
+Removing the remaining Ruby-level spawn/entry bridge is a separate authored-data milestone from navigation.
 
 ## 13. Deferred systems
 

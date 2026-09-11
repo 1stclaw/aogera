@@ -60,9 +60,6 @@ module Aogera
           player_key: PLAYER_KEY,
           dialogues: dialogues,
           controller: RealtimeController.new(
-            pathfinder: pathfinder_for(
-              ground_clearance: ground_clearance
-            ),
             ground_space: ground_space
           ),
           view: @view,
@@ -103,10 +100,6 @@ module Aogera
       return unless bsp29_map
 
       BSP29::GroundClearance.for_world(map_data: bsp29_map)
-    end
-
-    def pathfinder_for(ground_clearance:)
-      Simulation::Pathfinder.new(ground_clearance: ground_clearance)
     end
 
     def ground_space_for(bsp29_map, ground_clearance:)

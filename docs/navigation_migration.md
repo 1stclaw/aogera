@@ -1,93 +1,158 @@
 # Navigation Migration
 
-This document records Aogera's transition away from the temporary grid-BFS chase model toward world-space local navigation with an optional future global route graph.
+This document records Aogera's migration away from the temporary grid-BFS chase model toward continuous world-space local navigation with an optional future global route graph.
 
-It describes the intended migration surface. It does **not** make the staged local-navigation code authoritative for gameplay until the runtime cutover is explicitly made.
+As of the current v0.3.3 development line, the **runtime chase cutover is active**. `Simulation::Pathfinder` still exists as dormant/reference code and retains its tests, but normal chase behavior no longer calls it.
 
-## 1. Why the grid navigator is being retired
+The active navigation stack is intentionally small:
+
+```text
+high-level behavior
+      |
+      | chooses/refreshes a goal
+      v
+SteeringTarget
+      |
+      | live goal position
+      v
+GroundNavigation
+      |
+      | GroundHeading
+      v
+GroundSteering @ 30 Hz
+      |
+      | GroundMove
+      v
+GroundMovement
+      |
+      v
+GroundSpace
+```
+
+No navmesh, BSP-leaf graph, route table, gravity, stairs, doors, or moving-brush navigation has been introduced.
+
+## 1. Why the grid navigator was retired from active chase
 
 Aogera's original chase logic was built around a grid-era identity:
 
 ```text
 2 Hz NPC decision
     = one BFS decision
-    = one 32-unit cell step
+    = one grid step
 ```
 
-The 0.3.3 cleanup line has already separated those responsibilities:
+The 0.3.3 cleanup line separated those responsibilities incrementally:
 
 ```text
-Pathfinder
-    -> world-space waypoint
-
-SteeringTarget
-    -> persistent movement intent
-
-GroundSteering
-    -> 30 Hz locomotion
-
-GroundMovement
-    -> collision-constrained displacement
+world-space waypoint boundary
+        |
+        v
+persistent SteeringTarget
+        |
+        v
+30 Hz GroundSteering
+        |
+        v
+world-space local navigation
 ```
 
-That separation exposed the remaining mismatch: the Pathfinder still reasons in cell centers while actors now occupy arbitrary continuous positions and move against BSP collision.
+Once actors moved continuously, the remaining cell-center assumptions produced structural failures rather than isolated arithmetic bugs:
 
-The resulting bugs are structural rather than isolated arithmetic mistakes:
+- a target-adjacent cell could still be outside true melee reach;
+- a center-to-center grid edge could be clear while the actor's actual off-center route was blocked;
+- continuous collision could deflect an actor away from the theoretical cell-center route;
+- a 90-degree obstacle corner could receive the same locally unreachable waypoint repeatedly;
+- retiring a dynamic blocker could legitimately change the BFS route and expose another off-center route mismatch;
+- straight obstacle borders could also trap an actor when the graph edge was valid only from a theoretical cell center.
 
-- an actor can be in a target-adjacent cell but outside true melee reach;
-- a center-to-center edge can be clear while the actor's actual off-center route to the waypoint is blocked;
-- a continuous actor can be deflected by collision while the next BFS decision still assumes the old cell-center route;
-- a 90-degree obstacle corner can repeatedly receive the same theoretically valid but locally unreachable waypoint.
+Those failures were evidence that the grid graph was no longer the right active pursuit representation.
 
-The project should therefore stop extending the cell model and replace the active chase mechanism incrementally.
+The project therefore stops extending the cell-BFS chase model here.
 
 ## 2. Historical direction
 
 The replacement is inspired by the Quake/GoldSrc lineage without copying either engine literally.
 
-Quake-style local pursuit provides the useful common-case structure:
+The useful Quake-style common-case model is:
 
 ```text
 current position + current goal
           |
           v
-try useful local movement direction
+try direct local movement
           |
           +-- clear -> move
           |
-          +-- blocked -> try local alternatives
+          +-- blocked -> try useful local alternatives
 ```
 
-The important architectural lesson is that game/AI policy chooses a goal while the movement/collision layer answers whether a proposed local step is possible.
+The important architectural lesson is that gameplay policy chooses a goal while the movement/collision layer answers whether a proposed local step is possible.
 
-GoldSrc adds the useful larger-scale fallback idea: when local movement cannot solve the topology, consult a precomputed world-space node graph whose links were certified against real collision hulls rather than inferred from visual adjacency alone.
+The useful GoldSrc-style extension is a later larger-scale fallback: when local movement cannot solve map topology, consult a world-space graph whose links were certified using the real collision system rather than inferred from visual or BSP-partition adjacency.
 
-Aogera should combine those ideas with its own current runtime:
+Aogera combines those ideas with its own current runtime:
 
 - continuous `Position`;
-- `GroundBody`;
+- authored `GroundBody`;
 - BSP-backed `GroundSpace`;
 - continuous sweep-and-slide `GroundMovement`;
 - fixed-step `GroundSteering`;
-- immutable runtime data.
+- immutable runtime data;
+- explicit high-level behavior state.
 
-## 3. Staged local-navigation surface
+## 3. `SteeringTarget`: high-level movement goal
 
-0.3.3 now stages two values without switching gameplay yet:
+NPC behavior persists movement intent as:
+
+```text
+Component::SteeringTarget(x, z, goal_entity_id)
+```
+
+The coordinates are a world-space fallback/static goal.
+
+`goal_entity_id` is optional. When present, `GroundSteering` resolves that entity's **current** `Position` every simulation tick instead of chasing the stale coordinates stored when the behavior decision was made.
+
+This creates a useful distinction:
+
+```text
+behavior decision @ low frequency
+    "chase entity N"
+
+local navigation @ fixed simulation cadence
+    "where is entity N now, and which way can I move this tick?"
+```
+
+Wander/static goals can continue to use `x/z` without a goal entity.
+
+If a goal entity disappears or becomes retired, steering intent is cleared.
+
+## 4. `GroundHeading`: local navigation state
+
+Local movement direction is represented by:
 
 ```text
 GroundHeading(dx, dz)
 ```
 
-and:
+`GroundHeading` is normalized on construction.
 
-```text
-Simulation::GroundNavigation
-```
+It is not:
 
-`GroundHeading` is a normalized world-space X/Z direction. It is not a grid direction, waypoint, velocity, or facing state.
+- a grid direction;
+- a waypoint;
+- velocity;
+- actor facing;
+- canonical position.
 
-`GroundNavigation#query` consumes:
+The active heading is stored in the runtime world under the `:ground_heading` component key. Keeping the previous successful heading gives local navigation a small amount of movement memory without introducing a remembered global path.
+
+Clearing `SteeringTarget`, retiring an entity, or completing a valid attack also clears `ground_heading`.
+
+## 5. `Simulation::GroundNavigation`
+
+`Simulation::GroundNavigation` is a stateless local-navigation query.
+
+It consumes:
 
 ```text
 source entity
@@ -95,7 +160,7 @@ source continuous Position
 source GroundBody
 goal world-space X/Z
 optional goal entity
-optional previous heading
+optional previous GroundHeading
 GroundSpace
 ```
 
@@ -104,16 +169,17 @@ It deliberately does **not** consume:
 ```text
 Level::Terrain cells
 Pathfinder::Waypoint
-BSP nodes
-BSP leaves
+BSP nodes/leaves directly
 clipnodes directly
 ```
 
 All geometry questions pass through `GroundSpace`.
 
-## 4. Local-navigation outcomes
+This is the main replacement boundary for the old active grid Pathfinder.
 
-The staged query returns one of four explicit outcomes:
+## 6. Navigation outcomes
+
+`GroundNavigation#query` returns one of four explicit outcomes:
 
 ```text
 :arrived
@@ -124,7 +190,9 @@ The staged query returns one of four explicit outcomes:
 
 ### `:arrived`
 
-The source is already at the requested ground-space goal within movement epsilon.
+The source is already at the requested static ground-space goal within movement epsilon.
+
+For an entity goal, ordinary body collision normally prevents the two centers from becoming identical; combat behavior is responsible for deciding when true melee reach has been achieved.
 
 ### `:direct`
 
@@ -132,112 +200,203 @@ A short movement probe in the normalized direction toward the goal is currently 
 
 ### `:local_avoidance`
 
-The direct probe is blocked, but a local alternative is usable. The staged implementation may reuse a previous non-reversing heading, use a tangent derived from the blocking plane, or probe rotated alternatives around the desired direction.
+Direct pursuit is blocked, but another local heading is usable.
+
+The current implementation can:
+
+- reuse a previous non-reversing heading;
+- derive tangent alternatives from the blocking trace normal;
+- test deterministic rotated alternatives around the desired direction.
 
 ### `:route_needed`
 
 No tested local heading is currently usable.
 
-This does **not** mean the destination is globally unreachable. It is intentionally the seam where a future larger-scale route graph can be consulted.
+This does **not** mean the goal is globally unreachable.
 
-## 5. Probe semantics
+In the current cutover, it means:
 
-The local query uses the actor's actual continuous position and actual authored `GroundBody` radius.
+```text
+keep the high-level goal
+clear unusable local heading
+retry local navigation on the next simulation tick
+```
 
-Conceptually:
+This status is the future hook for a larger-scale GoldSrc-like route graph.
+
+## 7. Probe semantics
+
+Every local candidate uses the actor's actual continuous runtime state:
 
 ```text
 actual Position
       |
-      | short candidate movement
+      | one short candidate movement
       v
 GroundSpace#sweep_circle
       |
-      +-- static BSP world
-      +-- current dynamic blockers
+      +-- static BSP hull collision in BSP mode
+      +-- current dynamic GroundBody blockers
       |
       v
 usable / blocked
 ```
 
-This is a live runtime query. It is intentionally not cached as a cell edge because its answer depends on the actor's current continuous position and current dynamic occupancy.
+The query is live and deliberately uncached because its answer depends on:
 
-A goal entity may be accepted as the terminal dynamic hit for direct pursuit; other movement-blocking entities remain obstacles.
+- the actor's exact current position;
+- dynamic actor occupancy;
+- the current goal position;
+- the previous heading.
 
-## 6. Local heading policy
+A goal entity is accepted as a terminal dynamic hit for pursuit. Other movement-blocking actors remain obstacles.
 
-The staged implementation is deliberately small and deterministic.
-
-Current candidate ordering is conceptually:
-
-1. direct normalized heading toward the goal;
-2. previous heading when it is useful and not an immediate turnaround;
-3. wall-tangent alternatives derived from the blocking trace normal;
-4. rotated local alternatives around the desired direction;
-5. reverse direction only as a late fallback;
-6. otherwise return `:route_needed`.
-
-This is Quake-like in spirit, but Aogera keeps continuous vectors rather than permanently quantizing movement to eight compass headings.
-
-`GroundMovement` remains authoritative for actual sweep-and-slide resolution. `GroundNavigation` only chooses a direction worth trying.
-
-## 7. Current gameplay remains unchanged in this preparation patch
-
-The active chase path is still:
+The default probe distance matches one NPC locomotion step:
 
 ```text
-RealtimeController
-      |
-      v
-Simulation::Pathfinder
-      |
-      v
-world-space Waypoint
-      |
-      v
-SteeringTarget
-      |
-      v
-GroundSteering @ 30 Hz
+NPC_SPEED / TICK_HZ
 ```
 
-`Simulation::GroundNavigation` is staged and tested alongside that path but is not yet called by `RealtimeController`.
+This keeps local obstacle response on the same spatial scale as actual movement.
 
-This is intentional. The patch establishes one clean rollback/checkpoint surface before the behavioral cutover.
+## 8. Local heading policy
 
-## 8. Immediate next cutover
+The active candidate order is deliberately small and deterministic.
 
-Unless a concrete blocker appears, the next navigation patch should switch chase behavior from the old Pathfinder to the staged local-navigation surface.
+Conceptually:
 
-The intended first cutover is:
+1. direct normalized heading toward the goal;
+2. previous heading when useful and not an immediate turnaround;
+3. wall tangents from the direct blocking plane normal;
+4. rotated alternatives around the desired direction;
+5. reverse direction only as a late fallback;
+6. otherwise `:route_needed`.
+
+The rotated fallback currently uses angles around the direct heading, but movement itself remains continuous. Aogera is not restoring a permanent eight-direction locomotion model.
+
+`GroundNavigation` chooses a heading worth trying. `GroundMovement` remains authoritative for the actual sweep-and-slide displacement.
+
+## 9. Fixed-step local navigation and locomotion
+
+`Simulation::GroundSteering` now runs local navigation every simulation tick.
+
+For each active entity with a `SteeringTarget` it:
+
+1. resolves the live goal;
+2. passes the previous `ground_heading` to `GroundNavigation`;
+3. stores a new heading when one is chosen;
+4. emits a normal one-tick `GroundMove`;
+5. clears only the heading when local navigation reports `route_needed`;
+6. clears the target when a static goal is reached or a dynamic goal disappears.
+
+At the default rate:
+
+```text
+TICK_HZ   = 30
+NPC_SPEED = 64 world units/sec
+
+NPC locomotion step = 64 / 30
+                    ~= 2.133 world units/tick
+```
+
+Local navigation and collision therefore react every fixed simulation tick instead of waiting for the old 2 Hz behavior cadence.
+
+## 10. Behavior cadence after the cutover
+
+`RealtimeController` still has the existing low-frequency NPC behavior cadence.
+
+That cadence now decides and refreshes **intent**, not obstacle response or physical movement.
+
+For chase:
 
 ```text
 Behavior(:chase)
       |
-      | target entity / position
+      | resolve relation target
       v
-GroundNavigation
-      |
-      +-- direct
-      +-- local avoidance
-      +-- route needed
-      |
-      v
-GroundHeading
-      |
-      v
-fixed-step steering / GroundMove
+SetSteeringTarget(goal_entity_id: target)
 ```
 
-The first runtime version does not need a global node graph immediately. `:route_needed` can initially mean that local navigation has no solution and the actor should keep/reconsider its local state on subsequent navigation updates.
+Because `GroundSteering` resolves `goal_entity_id` every fixed tick, pursuit follows the target's live position between behavior updates.
 
-The important change is that the active BSP chase path should stop asking `Simulation::Pathfinder` for grid-cell waypoints.
+The low-frequency cadence still controls decisions such as melee attack attempts. It can be revisited later without changing locomotion or local-navigation architecture.
 
-## 9. Future GoldSrc-like route graph
+## 11. Attack sequencing
 
-A later global route system should be a fallback for topology that local movement cannot solve, not the common-case locomotion mechanism.
+A melee decision no longer clears steering before the attack has actually been validated.
 
-A minimal future graph could contain immutable records such as:
+The controller now preserves pursuit intent and emits:
+
+```text
+SetSteeringTarget(goal entity)
+Attack
+```
+
+The executor evaluates commands in order against the current world.
+
+If an earlier player movement makes the attack invalid:
+
+```text
+Attack rejected
+      |
+      v
+SteeringTarget survives
+      |
+      v
+GroundSteering runs later in the same Simulation#step
+      |
+      v
+pursuit continues
+```
+
+If the attack succeeds, `Executor` clears both `steering_target` and `ground_heading` before the steering phase.
+
+This prevents the old execution-order stall where attack intent could erase locomotion even though no attack actually happened.
+
+## 12. Status of the old `Simulation::Pathfinder`
+
+`Simulation::Pathfinder` remains in the repository for now.
+
+It is **not used by active production chase behavior**.
+
+Its remaining value is:
+
+- historical/reference behavior;
+- regression comparison during the migration;
+- a clean rollback point while local navigation is proven in the controlled BSP field.
+
+Its grid-cell topology, cell-center waypoints, BSP edge-clearance cache, and dynamic-cell occupancy logic should not receive further gameplay fixes unless the project explicitly restores it as an active backend.
+
+Removal can happen in a later cleanup patch after the local-navigation cutover has been manually validated.
+
+## 13. Remaining grid roles
+
+Removing active BFS chase does not yet remove the Ruby-authored level.
+
+The grid still participates in:
+
+- current Ruby level authoring;
+- spawn and entry declarations/validation;
+- normal non-BSP rendering and static-collision fallback;
+- dormant `Pathfinder` reference/tests.
+
+It is no longer required to choose active BSP goblin chase directions.
+
+This is an important boundary:
+
+```text
+BSP-mode chase/navigation
+    -> continuous world-space queries
+
+Ruby level scaffolding
+    -> still present for current authored content
+```
+
+## 14. Future GoldSrc-like route graph
+
+A later global route mechanism should be a fallback for topology that local movement cannot solve, not the common-case locomotion mechanism.
+
+A minimal graph could eventually contain immutable records such as:
 
 ```text
 NavNode
@@ -252,28 +411,28 @@ NavLink
     distance
 ```
 
-Nodes may be authored or generated by a dedicated offline tool. The exact authoring policy is deliberately undecided.
+The important invariant is not how nodes are generated. It is how links are accepted.
 
-The important invariant is link certification:
+Candidate links should be certified by the same static collision system used at runtime:
 
 ```text
 candidate node A
       |
-      | static movement probe
+      | actor-hull movement probe
       v
-GroundSpace / BSP hull collision
+GroundSpace / BSP ground collision
       |
-      +-- traversable -> keep link
-      +-- blocked     -> reject link
+      +-- clear -> keep link
+      +-- blocked -> reject link
 ```
 
-The global graph must not invent a second, approximate walkability model that disagrees with runtime collision.
+Dynamic actors must not become permanent graph-link properties.
 
-Dynamic entities should not be baked into static links. They remain runtime obstacles.
+This prevents a future graph from repeating the old grid/BSP disagreement in a different representation.
 
-## 10. Sidecar direction
+## 15. Possible sidecar direction
 
-If a graph becomes necessary, a per-map sidecar is preferable to rebuilding large route data every gameplay launch.
+If a global graph becomes necessary, a per-map sidecar is preferable to rebuilding large route data on every normal gameplay launch.
 
 Conceptually:
 
@@ -282,83 +441,61 @@ map.bsp
 map.<future-nav-extension>
 ```
 
-The extension, binary/text representation, graph compiler, and node authoring format are intentionally deferred until local navigation has been proven insufficient on real Aogera levels.
+The extension, encoding, graph compiler, node authoring policy, and search algorithm remain deliberately undecided.
 
-Do not derive a graph from BSP leaf adjacency merely because the map is BSP. BSP partitions space for visibility/collision structure; navigation connectivity must still be validated against actor movement rules.
+Do not derive a graph from BSP leaf adjacency merely because the map is BSP. BSP partitions world space; traversable actor connectivity must still be validated against movement rules.
 
-## 11. AI timing after the cutover
+## 16. What is deliberately absent
 
-The current `NPC_ACTION_HZ = 2` remains a temporary behavior-decision cadence.
-
-It should no longer own physical locomotion; 0.3.3 already moved locomotion to 30 Hz.
-
-After local navigation replaces BFS, timing can be separated further if necessary:
-
-```text
-behavior decisions        low frequency
-local navigation probes   higher frequency / when blocked
-GroundSteering            30 Hz
-GroundMovement            30 Hz command resolution
-```
-
-Do not raise AI frequency merely to hide a navigation-state bug. Timing changes should be measured independently.
-
-## 12. What survives the migration
-
-The navigation replacement should preserve:
-
-```text
-Position(x, y, z)
-GroundBody(radius)
-SteeringTarget / world-space goal intent during transition
-GroundSpace
-GroundTrace
-GroundMovement
-30 Hz fixed-step simulation
-component/prototype model
-retirement lifecycle
-BSP static collision
-continuous dynamic actor collision
-```
-
-The old grid Pathfinder is a temporary implementation, not the foundation of the replacement.
-
-## 13. Explicit non-goals
-
-This migration does not require:
+This migration does not add:
 
 - navmesh generation;
-- BSP-leaf pathfinding;
+- active BSP-leaf routing;
+- A* or Dijkstra route search;
+- a GoldSrc-style `.nod` implementation yet;
 - gravity;
 - jumping;
-- stairs;
-- ledge logic;
-- flying/swimming navigation;
-- doors or moving brush route negotiation;
-- GoldSrc capability masks;
-- a generic navigation-backend hierarchy;
-- a general physics engine.
+- stairs/step movement;
+- ledge/floor reasoning;
+- doors or moving brush navigation;
+- true water navigation;
+- flying/swimming movement classes;
+- generalized hull capability masks.
 
-Those features should only appear when a concrete Aogera requirement justifies them.
+Those should only appear when actual Aogera gameplay requires them.
 
-## 14. Guiding rule
+## 17. Current checkpoint
 
-The intended long-term split is:
+The active chase stack is now:
 
 ```text
-behavior chooses a goal
-        |
-        v
-local navigation chooses a useful heading
-        |
-        +-- if local navigation fails,
-        |   optional global routing chooses a coarse route
-        |
-        v
-fixed-step locomotion requests movement
-        |
-        v
-GroundMovement + GroundSpace decide what actually happens
+Behavior(:chase)
+      |
+      v
+SteeringTarget(goal entity)
+      |
+      v
+GroundNavigation @ simulation cadence
+      |
+      v
+GroundHeading
+      |
+      v
+GroundSteering
+      |
+      v
+GroundMove
+      |
+      v
+GroundMovement
+      |
+      v
+GroundSpace
+      |
+      +-- BSP static collision
+      +-- dynamic GroundBody collision
 ```
 
-Navigation should consume collision facts, not duplicate collision geometry.
+This is the first Aogera chase path in the 3D line whose active movement decisions no longer require grid cells.
+
+The next navigation work should be driven by manual behavior in real BSP geometry. If local navigation proves insufficient for larger map topology, `:route_needed` is the explicit place to add a collision-certified world-space route graph.

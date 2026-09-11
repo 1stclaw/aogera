@@ -18,7 +18,9 @@ module Aogera
       @bindings = Bindings.new
       @step_number = 0
       @executor = Executor.new(ground_space: ground_space)
-      @ground_steering = ground_steering || GroundSteering.new
+      @ground_steering = ground_steering || GroundSteering.new(
+        ground_space: ground_space
+      )
       @reference_ids = {}
 
       instantiate_spawns
@@ -36,7 +38,7 @@ module Aogera
       steering_effects = @executor.execute(
         level: level,
         world: @world,
-        commands: @ground_steering.build(world: @world.view),
+        commands: @ground_steering.build(level: level, world: @world.view),
         bindings: @bindings
       )
 

@@ -5,6 +5,7 @@ module Aogera
     class Executor
       RETIRED_COMPONENTS = %i[
         behavior collision renderable combatant interactable steering_target
+        ground_heading
       ].freeze
 
       def initialize(
@@ -27,6 +28,10 @@ module Aogera
             execute_set_steering_target(world, command)
           in Commands::ClearSteeringTarget
             execute_clear_steering_target(world, command)
+          in Commands::SetGroundHeading
+            execute_set_ground_heading(world, command)
+          in Commands::ClearGroundHeading
+            execute_clear_ground_heading(world, command)
           in Commands::Attack
             execute_attack(world, level, command, bindings)
           in Commands::Defeat
@@ -70,8 +75,9 @@ module Aogera
           command.entity_id,
           :steering_target,
           Component::SteeringTarget.new(
-            x: Float(command.x),
-            z: Float(command.z)
+            x: command.x,
+            z: command.z,
+            goal_entity_id: command.goal_entity_id
           )
         )
         nil
@@ -81,6 +87,25 @@ module Aogera
         return unless active_entity?(world, command.entity_id)
 
         world.remove_component(command.entity_id, :steering_target)
+        world.remove_component(command.entity_id, :ground_heading)
+        nil
+      end
+
+      def execute_set_ground_heading(world, command)
+        return unless active_entity?(world, command.entity_id)
+
+        world.set_component(
+          command.entity_id,
+          :ground_heading,
+          GroundHeading.new(dx: command.dx, dz: command.dz)
+        )
+        nil
+      end
+
+      def execute_clear_ground_heading(world, command)
+        return unless active_entity?(world, command.entity_id)
+
+        world.remove_component(command.entity_id, :ground_heading)
         nil
       end
 
@@ -89,6 +114,7 @@ module Aogera
 
         health = world.component(command.target_id, :health)
         if health
+          clear_navigation_intent(world, command.attacker_id)
           current = [health.current - command.damage, 0].max
           world.set_component(
             command.target_id,
@@ -102,6 +128,7 @@ module Aogera
         character_key = bindings.character_for(command.target_id)
         return unless character_key
 
+        clear_navigation_intent(world, command.attacker_id)
         Effect::DamageCharacter.new(
           character_key: character_key,
           amount: command.damage
@@ -151,6 +178,11 @@ module Aogera
         RETIRED_COMPONENTS.each do |name|
           world.remove_component(entity_id, name)
         end
+      end
+
+      def clear_navigation_intent(world, entity_id)
+        world.remove_component(entity_id, :steering_target)
+        world.remove_component(entity_id, :ground_heading)
       end
 
       def active_entity?(world, entity_id)

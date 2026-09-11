@@ -8,7 +8,7 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 **Version: 0.3.3 (development)**
 
-Aogera 0.3.3 is an internal cleanup line built on the stable 0.3.2a BSP29 collision checkpoint. The cleanup line raises the project baseline to Ruby 3.4+, normalizes persistent `Character` state as immutable `Data`, narrows `Session` mutation to validated persistent-effect batches, and separates legacy grid navigation decisions from fixed-step locomotion in small controlled steps. BSP rendering and collision semantics remain inherited from 0.3.2a.
+Aogera 0.3.3 is an internal cleanup line built on the stable 0.3.2a BSP29 collision checkpoint. The cleanup line raises the project baseline to Ruby 3.4+, normalizes persistent `Character` state as immutable `Data`, narrows `Session` mutation to validated persistent-effect batches, and replaces active grid-BFS chase with continuous collision-driven local navigation. BSP rendering and collision semantics remain inherited from 0.3.2a.
 
 Every spatial runtime entity uses:
 
@@ -62,12 +62,12 @@ Melee and interaction keep their own authored reach/arc profiles while using sha
 The remaining grid has deliberately limited jobs in the BSP preview:
 
 - current Ruby-authored level/spawn/entry scaffolding;
-- temporary BFS navigation topology and dynamic cell occupancy;
+- the dormant/reference grid `Simulation::Pathfinder` and its tests;
 - the normal non-BSP Ruby rendering/collision fallback.
 
-Navigation cells are derived from world-space positions and are not runtime entity state. In BSP mode, BFS still searches those cells, but candidate center-to-center transitions are additionally validated against the same BSP29 compiled hull-1 clearance used by actor movement execution. Because BSP static geometry is immutable for the loaded level, the Pathfinder memoizes those directed static transition results per level, actor radius, and feet height; dynamic entity occupancy is still recomputed on every search. The grid is now internal to `Simulation::Pathfinder`: its public chase result is a world-space `Pathfinder::Waypoint(x, z)`, so `RealtimeController` no longer converts grid directions or cells into movement targets. NPC decisions persist their chosen world-space destination as `Component::SteeringTarget(x, z)`. When BFS has already reached a target-adjacent goal cell but continuous melee reach has not yet been achieved, `Simulation::Pathfinder` returns the target's current world-space X/Z as a final-approach waypoint instead of the current cell center; BSP mode only accepts that shortcut when static ground-hull clearance is clear. `Simulation::GroundSteering` consumes steering intent every fixed 30 Hz simulation tick and emits ordinary `GroundMove` commands capped to `NPC_SPEED / TICK_HZ`; the controller therefore decides only on its existing low-frequency cadence while locomotion continues between decision ticks.
+Active chase no longer uses grid cells. `RealtimeController` now stores only a high-level world-space `Component::SteeringTarget`; for entity pursuit that target carries `goal_entity_id`, allowing `Simulation::GroundSteering` to resolve the goal entity's live position on every fixed 30 Hz simulation tick. `Simulation::GroundNavigation` then probes the actor's actual continuous `Position`/`GroundBody` through `GroundSpace` and returns `direct`, `local_avoidance`, `route_needed`, or `arrived` together with a normalized `GroundHeading`. `GroundSteering` converts that heading into the ordinary `GroundMove` command used by the existing sweep-and-slide collision path.
 
-The grid Pathfinder is now explicitly frozen as a temporary compatibility implementation. A staged `Simulation::GroundNavigation` surface operates only on continuous positions, `GroundBody`, `GroundSpace`, and normalized `GroundHeading` values, returning `direct`, `local_avoidance`, `route_needed`, or `arrived`. It is not yet wired into gameplay in this preparation patch; the next navigation milestone can replace active BFS chase without changing the movement/collision layers again.
+`Simulation::Pathfinder` remains in the tree only as dormant/reference code. Its grid topology and static edge-clearance cache are no longer consulted by normal chase behavior. The future larger-scale fallback is intentionally separate: if local navigation proves insufficient, `route_needed` is the seam for a GoldSrc-like world-space route graph whose links are certified by the real collision system.
 
 ## Running
 
@@ -86,7 +86,7 @@ For the controlled BSP29 test-field preview:
 bundle exec ruby bin/aogera-bsp29 /path/to/test_field.bsp
 ```
 
-That preview uses BSP29 world-model faces for static rendering and the matching Ruby `test_field` as the remaining authored/navigation bridge. Bound-player and spawned-NPC static movement use BSP29 compiled hull 1, melee/interaction obstruction uses the BSP world-model node/leaf tree, and BFS still uses the Ruby grid as its topology. In BSP mode each candidate center-to-center BFS step and spawned-NPC movement execution share the same `BSP29::GroundClearance` source. This is an intentional incremental migration boundary.
+That preview uses BSP29 world-model faces for static rendering and the matching Ruby `test_field` as the remaining authored-content bridge. Bound-player and spawned-NPC static movement use BSP29 compiled hull 1, melee/interaction obstruction uses the BSP world-model node/leaf tree, and active NPC chase uses continuous `GroundNavigation` probes through the same `GroundSpace` collision authority. The Ruby grid remains for current level/spawn/entry scaffolding and the normal non-BSP fallback, not for active BSP chase selection.
 
 ## Controls
 
@@ -109,7 +109,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The stable v0.3.2a BSP baseline was **239 runs / 727 assertions / 0 failures / 0 errors / 0 skips**. After the current 0.3.3 local-navigation staging work, the known cleanup baseline is **274 runs / 860 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The stable v0.3.2a BSP baseline was **239 runs / 727 assertions / 0 failures / 0 errors / 0 skips**. After the current 0.3.3 local-navigation cutover, the known cleanup baseline is **276 runs / 886 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 
@@ -123,7 +123,7 @@ Position + FirstPersonView
         -> Render::Raylib3D -> RaylibAPI -> raylib
 ```
 
-Aogera still has no generic scene/projector/transform layer, no general physics system, and no general asset manager. The normal path directly extrudes the authored grid; the BSP29 preview reconstructs and triangulates world-model faces without routing them through a generic scene representation. Collision remains deliberately hybrid during the migration: actor static movement uses BSP29 compiled hull 1 through one shared `GroundClearance` backend, melee/interaction obstruction uses the BSP node/leaf point hull, BFS keeps grid topology while validating candidate transitions against the same BSP hull-1 clearance source, and dynamic actor collision remains continuous `GroundBody` collision. Vertical actor collision, gravity, jumping, and projectile/hitscan systems remain future work.
+Aogera still has no generic scene/projector/transform layer, no general physics system, and no general asset manager. The normal path directly extrudes the authored grid; the BSP29 preview reconstructs and triangulates world-model faces without routing them through a generic scene representation. Collision remains deliberately hybrid during the migration: actor static movement uses BSP29 compiled hull 1 through one shared `GroundClearance` backend, melee/interaction obstruction uses the BSP node/leaf point hull, active local navigation probes that same `GroundSpace`, and dynamic actor collision remains continuous `GroundBody` collision. Vertical actor collision, gravity, jumping, and projectile/hitscan systems remain future work.
 
 ## Documentation
 
@@ -131,7 +131,7 @@ Aogera still has no generic scene/projector/transform layer, no general physics 
 - `docs/authored_data.md` — Reader/normalized-data/Loader boundary and world-unit convention;
 - `docs/bsp29.md` — current BSP29 binary Reader, normalization, records, and inspection tool;
 - `docs/bsp_collision_migration.md` — v0.3.2 BSP collision migration history, current authority map, fixed-hull limitation, and incremental pathfinding roadmap;
-- `docs/navigation_migration.md` — staged migration from grid BFS toward Quake-like local navigation with a future collision-certified route-graph fallback;
+- `docs/navigation_migration.md` — active migration from grid BFS to Quake-like local navigation with a future collision-certified route-graph fallback;
 - `docs/collision.md` — current ground-space trace, sweep, movement, and obstruction model;
 - `docs/raylib_3d.md` — raylib 3D frontend and first-person presentation path;
 - `docs/3d_migration.md` — cumulative architectural change from the v0.2.3 2D baseline to the v0.3.2 line;
@@ -143,8 +143,8 @@ The 0.3.2 runtime now includes the first BSP29 **Reader**. BSP29 binary structur
 
 The first downstream BSP integration now exists as a minimal world-model renderer. A controlled 44×14 test-field fixture compiled as BSP29 has matching structural counts between ericw-tools and `BSP29::Reader`, and its normalized player start resolves to `(112, 0, 112)` as expected.
 
-The current BSP collision-query boundary consumes compiled clip hull 1 for all current actor static movement and the world-model node/leaf tree for melee/interaction obstruction. BSP-mode dynamic entity rendering no longer consults the Ruby grid for bounds. Grid BFS keeps its existing cell topology and dynamic-cell occupancy rules while validating candidate center-to-center transitions against the same BSP hull-1 static-clearance source used by movement execution.
+The current BSP collision-query boundary consumes compiled clip hull 1 for all current actor static movement and the world-model node/leaf tree for melee/interaction obstruction. BSP-mode dynamic entity rendering no longer consults the Ruby grid for bounds. Active NPC chase now operates directly on continuous world-space goals and probes movement through `GroundSpace`; grid BFS is no longer part of the production chase path.
 
-The stable v0.3.2a release remains the collision checkpoint. The 0.3.3 line is cleanup-focused but now also stages the final navigation boundary needed to retire active cell-BFS chase: world-space `GroundHeading` plus collision-driven `GroundNavigation`, with the old Pathfinder still active until the explicit cutover. See `docs/bsp_collision_migration.md` for the detailed migration record and roadmap.
+The stable v0.3.2a release remains the collision checkpoint. The 0.3.3 line is cleanup-focused and now includes the explicit navigation cutover: world-space `SteeringTarget`, collision-driven `GroundNavigation`, persistent local `GroundHeading`, and 30 Hz `GroundSteering`. The old Pathfinder remains only as dormant/reference code. See `docs/bsp_collision_migration.md` for the detailed migration record and roadmap.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

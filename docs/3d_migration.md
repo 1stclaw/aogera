@@ -98,7 +98,7 @@ Player and NPC locomotion both resolve through:
 Simulation::Commands::GroundMove(entity_id, dx, dz)
 ```
 
-Player input produces this displacement directly each fixed tick. NPC decisions persist `SteeringTarget(x, z)`, and `Simulation::GroundSteering` produces the NPC `GroundMove` every fixed 30 Hz tick until the target is reached or cleared.
+Player input produces this displacement directly each fixed tick. NPC behavior persists `SteeringTarget(x, z, goal_entity_id)`. `Simulation::GroundSteering` resolves that goal every fixed 30 Hz tick, asks `Simulation::GroundNavigation` for a continuous local `GroundHeading`, and produces the NPC `GroundMove` until the target is cleared or local navigation cannot currently provide a usable heading.
 
 Current ground actors can carry:
 
@@ -179,30 +179,34 @@ This makes lifecycle independent from health and prevents already-buffered actor
 
 ## Navigation
 
-The current Pathfinder remains a temporary BFS over the authored grid because the current levels are still grid-authored.
+The original v0.3 navigation bridge used BFS over the authored grid, converting continuous runtime positions to cells only while planning. During the v0.3.2 collision migration that Pathfinder was progressively hardened so its static candidate edges consulted BSP hull clearance, and during early v0.3.3 cleanup it was separated from locomotion through world-space waypoints and persistent steering targets.
 
-It derives temporary cells from canonical positions only while planning:
+That grid Pathfinder is no longer the active chase mechanism.
+
+Current v0.3.3 chase uses:
 
 ```text
-Position(x, y, z)
+Behavior(:chase)
       |
       v
-level.cell_for_world(x, z)
+SteeringTarget(goal entity)
       |
       v
-BFS next cell
+GroundNavigation @ fixed simulation cadence
       |
       v
-Pathfinder::Waypoint(x, z)
+GroundHeading
       |
       v
-continuous waypoint displacement
+GroundSteering
       |
       v
 GroundMove
 ```
 
-Navigation cells are not stored as entity state. This isolates the remaining grid dependency to terrain and route planning.
+`GroundNavigation` reasons from the actor's actual continuous `Position`, `GroundBody`, current world-space goal, previous local heading, and `GroundSpace`. It does not consume navigation cells or BSP-format records directly. Direct pursuit is preferred; when blocked, local alternatives are probed through the same collision service that actual movement uses.
+
+`Simulation::Pathfinder` remains in the repository as dormant/reference code while the local-navigation cutover is validated. Its grid cells and cell-edge clearance cache are no longer part of normal production chase execution. A future global route graph, if real maps require one, should be a fallback from the local navigator rather than a replacement for fixed-step locomotion.
 
 ## Boundaries retained from v0.2.3
 
@@ -222,13 +226,11 @@ Several v0.2.3 design decisions survived the migration and now support the 3D ru
 
 The grid is now a compatibility/authored-navigation scaffold rather than BSP-mode static collision authority.
 
-In the BSP preview it still provides:
+In the current BSP preview it still provides:
 
 ```text
 Ruby-authored level/spawn/entry scaffolding
-BFS cell topology
-BFS dynamic occupancy projection
-cell-center waypoint generation inside Pathfinder
+dormant/reference Pathfinder data and tests
 ```
 
 The normal non-BSP Ruby launch also continues to use grid terrain for its own static rendering and collision fallback.
@@ -270,7 +272,7 @@ runtime entities
 
 All current actor `GroundMove` execution in BSP mode now uses the same `GroundMovement`/`GroundSpace` path and the same `BSP29::GroundClearance` source. Melee and interaction obstruction use `BSP29::PointHull`. The movement solver and `GroundTrace` contract remain Aogera-owned.
 
-Navigation is intentionally only partially migrated. `Simulation::Pathfinder` still performs BFS over the Ruby grid and projects dynamic blocking actors into cells, but each BSP-mode candidate center-to-center transition is additionally checked through the same `GroundClearance` source used by movement execution. This prevents planning from accepting a static BSP transition that the actor movement backend would reject.
+At the v0.3.2 checkpoint, navigation was intentionally only partially migrated: `Simulation::Pathfinder` still performed BFS over the Ruby grid and projected dynamic blocking actors into cells, while each BSP-mode candidate center-to-center transition was checked through the same `GroundClearance` source used by movement execution. That historical bridge has since been retired from active chase in the v0.3.3 cleanup line.
 
 The controlled fixture also exposes the fixed compiled-hull limitation: standard hull 1 has a 16-unit horizontal half-extent, while Aogera authors smaller `GroundBody` radii. The 32-unit water pinch therefore has zero nominal hull-1 slack even though the old player circle fit. v0.3.2 records this mismatch instead of hiding it by resizing the map or pretending `GroundBody` can resize a compiled BSP hull.
 
@@ -287,6 +289,6 @@ Aogera v0.3.2 does not yet contain:
 - generic asset management;
 - generic `Transform`, `PhysicsBody`, or `Spatial` frameworks.
 
-The v0.3.2 RC therefore establishes **one continuous world-space runtime, one shared actor movement/collision path, explicit lifecycle state, one continuous spatial basis for combat/interaction, a Reader/Loader authored-data boundary, Quake-compatible world-unit magnitude, a validated BSP29 Reader, BSP world-model rendering, compiled-hull actor static collision, point-hull obstruction, and BSP-aware clearance validation inside the existing grid BFS.**
+The v0.3.2 RC therefore established **one continuous world-space runtime, one shared actor movement/collision path, explicit lifecycle state, one continuous spatial basis for combat/interaction, a Reader/Loader authored-data boundary, Quake-compatible world-unit magnitude, a validated BSP29 Reader, BSP world-model rendering, compiled-hull actor static collision, point-hull obstruction, and BSP-aware clearance validation inside the then-active grid BFS.**
 
-The controlled BSP29 fixture is intentionally still paired with the matching Ruby-authored level for spawns, entries, and BFS topology. That remaining bridge is explicit and is no longer the BSP-mode static collision authority.
+The controlled BSP29 fixture remains paired with the matching Ruby-authored level for current spawn/entry scaffolding. In v0.3.3, active chase no longer consumes that grid topology: local navigation now operates on continuous positions through `GroundSpace`, while the old Pathfinder remains only as a reference implementation.

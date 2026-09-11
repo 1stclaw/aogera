@@ -5,7 +5,7 @@ require_relative "test_helper"
 class PathfindingChaseTest < Minitest::Test
   include AogeraTestSupport
 
-  def test_chaser_routes_around_blocking_entity_on_npc_tick
+  def test_chaser_locally_avoids_blocking_entity_without_grid_pathfinding
     level = level_with(
       width: 8,
       height: 6,
@@ -40,21 +40,26 @@ class PathfindingChaseTest < Minitest::Test
     )
     hero_id = simulation.spawn_character(character_key: :hero, prototype: :player)
     hunter_id = simulation.entity_id_for_spawn(:hunter)
-
     controller = Aogera::RealtimeController.new(npc_interval: 1)
-    commands = controller.build(
+
+    decision = controller.build(
       input: Aogera::Input::Snapshot.empty,
       level: level,
       world: simulation.world_view,
       controlled_id: hero_id,
       tick_number: 1
     )
-    simulation.step(commands: commands)
+    simulation.step(commands: decision)
+
+    14.times do
+      simulation.step(commands: Aogera::Simulation::Commands::Buffer.new([]))
+    end
 
     position = simulation.world_view.component(hunter_id, :position)
-    assert_in_delta 1.5, position.x
-    assert_in_delta 0.0, position.y
-    assert_operator (position.z - 2.5).abs, :>, 0.0
-    assert_in_delta (2.0 / Aogera::Realtime::TICK_HZ), (position.z - 2.5).abs
+    assert_operator position.x, :>, 1.9
+    assert_operator (position.z - 2.5).abs, :>, 0.1
+    assert_instance_of Aogera::GroundHeading,
+      simulation.world_view.component(hunter_id, :ground_heading)
+    refute controller.instance_variable_defined?(:@pathfinder)
   end
 end

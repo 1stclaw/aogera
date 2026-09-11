@@ -435,36 +435,34 @@ until the game genuinely requires them.
 
 # 13. Navigation future
 
-Current BSP-mode navigation intentionally remains hybrid:
+Active v0.3.3 chase now uses continuous local navigation rather than grid BFS:
 
 ```text
-topology
-    -> Ruby grid BFS
-
-candidate-step static clearance
-    -> BSP29 compiled hull collision
+SteeringTarget(goal)
+    -> GroundNavigation
+    -> GroundHeading
+    -> GroundSteering
+    -> GroundMove / GroundSpace
 ```
 
-This is a useful intermediate design.
+The old grid `Simulation::Pathfinder` remains only as reference/rollback code. Its BFS tests can still serve as a historical comparison, but new BSP chase behavior should not be designed around cell centers.
 
-Do not replace BFS simply because BSP collision now exists.
+The next navigation question is whether real levels need a larger-scale route fallback at all. Local pursuit should remain the cheap/common path.
 
-A future navigation migration should proceed incrementally.
-
-Possible stages:
+If global routing becomes necessary, prefer a small world-space graph whose links are certified against the real actor collision system. A possible sequence is:
 
 ```text
-1. retain grid BFS as reference behavior
-2. isolate authored-grid topology from collision authority
-3. introduce BSP-derived navigation data only when needed
-4. compare behavior against controlled test maps
-5. migrate one NPC/navigation consumer at a time
-6. remove old topology only after replacement is proven
+1. keep local GroundNavigation as the common case
+2. observe real `route_needed` failures in authored BSP levels
+3. author or generate candidate world-space nodes
+4. validate static links through GroundSpace / actor hulls
+5. add a compact graph search only as the fallback
+6. store precomputed map route data in a sidecar if useful
 ```
 
-Navigation should remain a separate problem from collision.
+Do not derive traversability solely from BSP leaf adjacency. BSP partitions space; navigation links must still agree with actor collision.
 
----
+Navigation should remain separate from collision policy even though collision certifies what movement is possible.
 
 # 14. BSP format future
 

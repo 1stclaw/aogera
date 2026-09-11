@@ -21,6 +21,7 @@ class RetirementLifecycleTest < Minitest::Test
       position: Aogera::Component::Position.new(x: 2.5, y: 0.0, z: 2.5),
       ground_body: Aogera::Component::GroundBody.new(radius: 0.28),
       steering_target: Aogera::Component::SteeringTarget.new(x: 3.5, z: 2.5),
+      ground_heading: Aogera::GroundHeading.new(dx: 1.0, dz: 0.0),
       collision: Aogera::Component::Collision.new(blocks_movement: true)
     )
 
@@ -39,6 +40,7 @@ class RetirementLifecycleTest < Minitest::Test
     assert world.component(entity_id, :ground_body)
     assert_nil world.component(entity_id, :collision)
     assert_nil world.component(entity_id, :steering_target)
+    assert_nil world.component(entity_id, :ground_heading)
   end
 
   def test_retired_entity_can_be_explicitly_despawned

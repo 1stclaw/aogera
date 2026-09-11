@@ -34,7 +34,7 @@ class BSP29NavigationClearanceTest < Minitest::Test
     assert_includes [1.5, 3.5], waypoint.z
   end
 
-  def test_bsp_aware_bfs_reroute_executes_with_same_bsp_clearance_backend
+  def test_bsp_local_navigation_avoids_compiled_hull_blocker
     level = level_with(
       width: 5,
       height: 5,
@@ -59,66 +59,63 @@ class BSP29NavigationClearanceTest < Minitest::Test
     clearance = Aogera::BSP29::GroundClearance.for_world(
       map_data: bsp_map_with_solid_box
     )
+    ground_space = Aogera::GroundSpace.new(bsp29_ground_hull: clearance)
     simulation = Aogera::Simulation.new(
       level: level,
       prototypes: prototype_catalog,
-      ground_space: Aogera::GroundSpace.new(
-        bsp29_ground_hull: clearance
-      ),
-      ground_steering: Aogera::Simulation::GroundSteering.new(speed: 2.0)
+      ground_space: ground_space,
+      ground_steering: Aogera::Simulation::GroundSteering.new(
+        speed: 2.0,
+        ground_space: ground_space
+      )
     )
     hero_id = simulation.spawn_character(
       character_key: :hero,
       prototype: :player
     )
     hunter_id = simulation.entity_id_for_spawn(:hunter)
-    controller = Aogera::RealtimeController.new(
-      pathfinder: Aogera::Simulation::Pathfinder.new(
-        ground_clearance: clearance
-      ),
-      npc_interval: 1
-    )
+    controller = Aogera::RealtimeController.new(npc_interval: 1)
 
-    commands = controller.build(
+    decision = controller.build(
       input: Aogera::Input::Snapshot.empty,
       level: level,
       world: simulation.world_view,
       controlled_id: hero_id,
       tick_number: 1
     )
-    simulation.step(commands: commands)
+    simulation.step(commands: decision)
+    14.times do
+      simulation.step(commands: Aogera::Simulation::Commands::Buffer.new([]))
+    end
 
     position = simulation.world_view.component(hunter_id, :position)
-    assert_in_delta(1.5, position.x)
-    assert_operator((position.z - 2.5).abs, :>, 0.0)
-    assert_in_delta(
-      2.0 / Aogera::Realtime::TICK_HZ,
-      (position.z - 2.5).abs
-    )
+    assert_operator((position.z - 2.5).abs, :>, 0.1)
+    assert_instance_of Aogera::GroundHeading,
+      simulation.world_view.component(hunter_id, :ground_heading)
   end
-
-  def test_app_shares_bsp_ground_clearance_between_navigation_and_actor_movement
+  def test_app_shares_bsp_ground_space_between_local_navigation_and_actor_movement
     app = Aogera::App.new(
       clock: -> { 0.0 },
       raylib_api: Object.new,
       bsp29_map: app_bsp_map
     )
     mode = app.instance_variable_get(:@modes).current
-    controller = mode.controller
-    pathfinder = controller.instance_variable_get(:@pathfinder)
-    clearance = pathfinder.instance_variable_get(:@ground_clearance)
+    controller_space = mode.controller.instance_variable_get(:@ground_space)
     simulation = mode.simulation
+    steering = simulation.instance_variable_get(:@ground_steering)
+    navigation = steering.instance_variable_get(:@ground_navigation)
+    navigation_space = navigation.instance_variable_get(:@ground_space)
     executor = simulation.instance_variable_get(:@executor)
     movement = executor.instance_variable_get(:@ground_movement)
     movement_space = movement.instance_variable_get(:@ground_space)
-    movement_clearance = movement_space.instance_variable_get(:@bsp29_ground_hull)
+    clearance = movement_space.instance_variable_get(:@bsp29_ground_hull)
 
-    assert_instance_of(Aogera::BSP29::GroundClearance, clearance)
-    assert_same(clearance, movement_clearance)
-    assert_same(mode.instance_variable_get(:@ground_space), movement_space)
-    refute executor.instance_variable_defined?(:@character_ground_movement)
+    assert_instance_of Aogera::BSP29::GroundClearance, clearance
+    assert_same movement_space, navigation_space
+    assert_same movement_space, controller_space
+    assert_same mode.instance_variable_get(:@ground_space), movement_space
+    refute mode.controller.instance_variable_defined?(:@pathfinder)
   end
-
   private
 
   def open_level

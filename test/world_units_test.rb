@@ -21,12 +21,13 @@ class WorldUnitsTest < Minitest::Test
     assert_in_delta 7.04, player.components.fetch(:ground_body).radius
     assert_in_delta 20.8, player.components.fetch(:melee_attack).reach
   end
-  def test_loaded_grid_navigation_targets_world_scaled_cell_centers
+  def test_loaded_chase_targets_runtime_world_position_without_cell_reprojection
     prototypes = Aogera::Prototype::Loader.load(PROTOTYPE_PATH)
     authored = Aogera::Level::Readers::Ruby.read(LEVEL_PATH)
     level = Aogera::Level::Loader.load(authored, prototypes: prototypes)
     simulation = Aogera::Simulation.new(level: level, prototypes: prototypes)
     hero = simulation.spawn_character(character_key: :hero, prototype: :player)
+    hero_position = simulation.world_view.component(hero, :position)
 
     commands = Aogera::RealtimeController.new.build(
       input: Aogera::Input::Snapshot.empty,
@@ -39,15 +40,9 @@ class WorldUnitsTest < Minitest::Test
     targets = commands.grep(Aogera::Simulation::Commands::SetSteeringTarget)
     refute_empty targets
     targets.each do |target|
-      assert_in_delta(
-        Aogera::WorldUnits.grid_center(Aogera::WorldUnits.grid_cell(target.x)),
-        target.x
-      )
-      assert_in_delta(
-        Aogera::WorldUnits.grid_center(Aogera::WorldUnits.grid_cell(target.z)),
-        target.z
-      )
+      assert_equal hero, target.goal_entity_id
+      assert_in_delta hero_position.x, target.x
+      assert_in_delta hero_position.z, target.z
     end
   end
-
 end

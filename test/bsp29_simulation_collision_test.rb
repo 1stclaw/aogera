@@ -203,12 +203,7 @@ class BSP29SimulationCollisionTest < Minitest::Test
     )
     assert simulation.world_view.retired?(blocker_id)
 
-    controller = Aogera::RealtimeController.new(
-      pathfinder: Aogera::Simulation::Pathfinder.new(
-        ground_clearance: clearance
-      ),
-      npc_interval: 1
-    )
+    controller = Aogera::RealtimeController.new(npc_interval: 1)
     planned = controller.build(
       input: Aogera::Input::Snapshot.empty,
       level: level,
@@ -222,7 +217,8 @@ class BSP29SimulationCollisionTest < Minitest::Test
     end
 
     refute_nil(hunter_target)
-    assert_in_delta(3.5, hunter_target.x)
+    assert_equal(player_id, hunter_target.goal_entity_id)
+    assert_in_delta(1.5, hunter_target.x)
     assert_in_delta(2.5, hunter_target.z)
 
     simulation.step(commands: planned)

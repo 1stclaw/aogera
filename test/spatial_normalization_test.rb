@@ -60,7 +60,7 @@ class SpatialNormalizationTest < Minitest::Test
     assert_in_delta 2.5, goblin.z
   end
 
-  def test_nonadjacent_npc_navigation_produces_world_space_steering_target
+  def test_nonadjacent_npc_chase_goal_uses_target_world_position
     level = level_with(
       spawns: [
         Aogera::Level::Spawn.new(
@@ -89,6 +89,7 @@ class SpatialNormalizationTest < Minitest::Test
       prototype: :player
     )
     hunter_id = simulation.entity_id_for_spawn(:hunter)
+    target_position = simulation.world_view.component(player_id, :position)
 
     commands = Aogera::RealtimeController.new(npc_interval: 1).build(
       input: Aogera::Input::Snapshot.empty,
@@ -103,7 +104,8 @@ class SpatialNormalizationTest < Minitest::Test
 
     assert_instance_of Aogera::Simulation::Commands::SetSteeringTarget, command
     assert_equal hunter_id, command.entity_id
-    assert_in_delta 2.5, command.x
-    assert_in_delta 2.5, command.z
+    assert_equal player_id, command.goal_entity_id
+    assert_in_delta target_position.x, command.x
+    assert_in_delta target_position.z, command.z
   end
 end

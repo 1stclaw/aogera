@@ -127,20 +127,17 @@ BSP29::MapData
     -> RaylibAPI
 ```
 
-Dynamic renderable entities are still drawn at canonical `Position` values. For the controlled preview, the matching Ruby `test_field` remains the authored gameplay and navigation-topology bridge while BSP29 supplies visible static geometry and selected collision queries.
+Dynamic renderable entities are still drawn at canonical `Position` values. For the controlled preview, the matching Ruby `test_field` remains the authored gameplay/spawn/entry bridge while BSP29 supplies visible static geometry and collision queries. Active NPC chase no longer consumes the grid as navigation topology.
 
 This is intentionally a simple RC bridge. There is no `Scene3D`, `Projector3D`, model/material framework, or generic transform hierarchy.
 
 ## Navigation is separate
 
-`Simulation::Pathfinder` still uses the authored grid as temporary BFS navigation data. It derives cells with:
+Active chase navigation is a simulation concern and does not depend on renderer state.
 
-```text
-cell_x = floor(position.x / level.cell_size)
-cell_z = floor(position.z / level.cell_size)
-```
+`Simulation::GroundNavigation` consumes continuous runtime positions and probes short candidate movements through `GroundSpace`. In BSP mode those positive-radius probes reach the same `BSP29::GroundClearance` backend used by actual `GroundMovement`. `GroundSteering` stores/uses a normalized local `GroundHeading` and emits ordinary fixed-step `GroundMove` commands.
 
-Those cells are not renderer state and are not stored as entity positions. In BSP mode, BFS candidate transitions are converted from cell centers back to world coordinates and checked against compiled hull-1 static clearance before they are enqueued. Dynamic entity occupancy remains a grid-cell planning rule. NPC movement returns to continuous world-space displacement before entering `GroundMove`, and its execution uses the same `BSP29::GroundClearance` source for static hull-1 collision.
+The old `Simulation::Pathfinder` still exists as dormant/reference code, but its grid cells are not used by the renderer and are no longer used by normal production chase behavior.
 
 ## Combat and interaction
 
