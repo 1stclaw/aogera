@@ -2,37 +2,7 @@
 # frozen_string_literal: true
 
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
 require "aogera"
 
-path = ARGV.fetch(0) do
-  warn "usage: bundle exec ruby bin/aogera-bsp29-info PATH.bsp"
-  exit 64
-end
-
-map = Aogera::BSP29::Reader.read(path)
-world = map.world_model
-
-puts "BSP29: #{File.expand_path(path)}"
-puts "entities:     #{map.entities.length}"
-puts "planes:       #{map.planes.length}"
-puts "textures:     #{map.textures.length}"
-puts "vertices:     #{map.vertices.length}"
-puts "nodes:        #{map.nodes.length}"
-puts "faces:        #{map.faces.length}"
-puts "clipnodes:    #{map.clipnodes.length}"
-puts "leaves:       #{map.leaves.length}"
-puts "edges:        #{map.edges.length}"
-puts "surfedges:    #{map.surfedges.length}"
-puts "models:       #{map.models.length}"
-puts "vis bytes:    #{map.visibility.bytesize}"
-puts "light bytes:  #{map.lighting.bytesize}"
-
-if world
-  puts "world bounds:  #{world.bounds.mins.inspect} -> #{world.bounds.maxs.inspect}"
-end
-
-starts = map.entities_named("info_player_start")
-puts "player starts: #{starts.length}"
-starts.each_with_index do |entity, index|
-  puts "  #{index}: #{entity.origin.inspect}"
-end
+exit Aogera::CLI::BSP29.new.run([*ARGV, "--bsp-info"])

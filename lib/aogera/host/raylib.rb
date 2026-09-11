@@ -11,7 +11,7 @@ module Aogera
       KEYS = %i[
         w a s d
         up down left right
-        space enter escape q
+        space c left_shift enter escape q
       ].freeze
 
       def initialize(

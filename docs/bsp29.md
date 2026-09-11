@@ -1,6 +1,6 @@
 # BSP29 Reader and Static Preview
 
-Aogera's first Quake map integration begins with a **format Reader** and now includes a static-world preview plus operational BSP collision queries. The stable v0.3.2a release separated parsing, rendering, gameplay collision, and temporary grid navigation; the current v0.3.3 line has since moved active chase onto continuous local navigation while preserving the same BSP collision boundary.
+Aogera's first Quake map integration begins with a **format Reader** and now includes a static-world preview plus operational BSP collision queries. The stable v0.3.2a release separated parsing, rendering, gameplay collision, and temporary grid navigation; the stable v0.3.3 release moved active chase onto continuous local navigation while preserving the same BSP collision boundary.
 
 The current path is:
 
@@ -23,6 +23,8 @@ BSP29::MapData
 ```
 
 `BSP29::Reader` understands Quake 1 BSP version 29 binary structure. It does not construct an Aogera `Level`, spawn gameplay actors, call raylib, or perform collision queries.
+
+`Reader.read(path)` is the filesystem convenience entry point; `Reader.read_bytes(bytes)` is the source-neutral parsing boundary. Future package/content sources can supply BSP bytes through that existing seam without making the BSP Reader aware of PAK, ZIP, or mounting rules.
 
 ## Normalization boundary
 
@@ -123,17 +125,35 @@ The Reader currently validates:
 
 Cross-reference validation between faces, surfedges, nodes, models, and other records can be strengthened once real external maps become integration fixtures.
 
-## Existing-map inspection
+## Existing-map inspection and launch CLI
 
-An existing BSP29 file can be inspected without loading it into gameplay:
+`bin/aogera-bsp29` provides the small command-line surface used during real-map bring-up. Runtime launch modes are explicit; the current diagnostic launch is:
+
+```bash
+bundle exec ruby bin/aogera-bsp29 --spectator /path/to/map.bsp
+```
+
+A bare `PATH.bsp` is intentionally a usage error until a normal playable BSP launch mode exists.
+
+The same executable can inspect a map without opening raylib:
+
+```bash
+bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --bsp-info
+bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --dump-entities
+bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --dump-textures
+```
+
+`--bsp-info` prints structural counts, world-model bounds, visibility/light byte counts, and normalized `info_player_start` origins. `--dump-entities` prints the parsed source key/value declarations for every entity and also shows the normalized Aogera-space origin when the Reader parsed one. `--dump-textures` follows world-model faces through `TexInfo` to the BSP miptexture table and reports texture names, dimensions, face counts, missing referenced slots, and embedded-but-currently-unused textures. This is intended to inventory replacement/debug materials without guessing from map themes. `--help` documents the available options. Exit-style inspection commands are mutually exclusive.
+
+The older helper remains valid:
 
 ```bash
 bundle exec ruby bin/aogera-bsp29-info /path/to/map.bsp
 ```
 
-The tool prints structural counts, world-model bounds, visibility/light byte counts, and normalized `info_player_start` origins.
+It is now only a compatibility wrapper around the primary CLI's `--bsp-info` action. This command line is intentionally limited to process launch and inspection; it is not a Quake-style in-game console, cvar system, or gameplay command registry.
 
-This is intended as the first structural compatibility check for real Quake/TrenchBroom maps.
+This is intended as the first structural compatibility surface for real Quake/TrenchBroom maps.
 
 
 ## Controlled fixture validation
@@ -172,15 +192,23 @@ and `info_player_start` resolves to the expected Aogera position:
 
 ## Static-world preview
 
-The current 0.3.2a release can render world model `0` from a parsed BSP29 map:
+The current BSP preview can render world model `0` from a parsed BSP29 map:
 
 ```bash
-bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp
+bundle exec ruby bin/aogera-bsp29 --spectator /path/to/map.bsp
 ```
 
-The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices`, verifies/corrects polygon winding against the normalized BSP face plane, triangulates the convex polygon, and sends the triangles through `RaylibAPI`. The fixture texture names are mapped to diagnostic colors; embedded miptexture pixels are not sampled yet.
+The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices`, verifies/corrects polygon winding against the normalized BSP face plane, and triangulates the convex polygon. Since v0.3.4, those triangles are uploaded to persistent raylib mesh/model resources after the window opens, rather than issuing one Ruby/FFI `DrawTriangle3D` call per triangle every frame. The renderer now also reproduces Quake's 16-unit lightmap sampling grid from each face's `TexInfo`, `light_offset`, and styles, packs the first stored baked-light style into a padded grayscale atlas, and assigns lightmap UVs to the persistent mesh. Faces with no baked samples use a fullbright fallback texel. Embedded miptexture pixels and the Quake palette are still not sampled, so the current world is deliberately grayscale rather than textured.
 
-For the controlled `test_field.bsp` fixture, gameplay state still comes from the existing Ruby `test_field`, but static collision authority is BSP-backed. The bound persistent character and spawned NPCs use BSP29 compiled hull 1 for static movement through `BSP29::GroundClearance`; zero-radius melee/interaction obstruction uses world-model headnode 0 through `BSP29::PointHull`; and active NPC chase now chooses local headings by probing the same `GroundSpace` from actual continuous positions. Dynamic actor-vs-actor collision remains continuous `GroundBody` collision. The Ruby level is therefore still an authored/spawn/entry bridge, but it is no longer active chase topology.
+Beginning with the v0.3.4 bring-up line, `bin/aogera-bsp29` no longer imports the Ruby `test_field` as gameplay state. `BSP29::Bootstrap` selects the first `info_player_start`, uses its already-normalized origin as the Aogera player entry, and converts the Quake `angle` property to `FirstPersonView` yaw. BSP mode currently creates only the bound player; it does not import Quake monsters, items, triggers, or other map entities yet.
+
+When launched with `--spectator`, the BSP launcher enters `Mode::Spectator` rather than ordinary `Mode::Play`. The spectator camera begins at that bound player's eye position and then keeps independent camera coordinates. Its fixed-step movement bypasses `GroundMovement`, `GroundSpace`, and actor `Position`, allowing arbitrary vertical inspection before floor following, steps, gravity, and jumping exist. The underlying player entity remains at the BSP start and the configured BSP collision services remain available to the runtime for later gameplay tests.
+
+The spectator also renders a compact top-left diagnostic panel. It reports raylib's measured FPS, camera XYZ, yaw/pitch in degrees, world-model triangle count, persistent mesh draws per frame, baked-lightmapped face count, lightmap-atlas dimensions, and current runtime entity count. These values are presentation diagnostics only; they do not feed back into simulation timing or collision.
+
+Spectator controls are mouse look, WASD/arrows for view-relative flight, Space for world-up, Shift or C for world-down, and Q/Esc to quit. Forward flight follows pitch; combined directions are normalized to one configured speed.
+
+The current `Level` API still requires a terrain object, so BSP bootstrap supplies an inert one-cell terrain with no spawns, relations, or gameplay authority. The runtime still configures actor static movement through BSP29 compiled hull 1 / `BSP29::GroundClearance`, zero-radius obstruction through `BSP29::PointHull`, and local navigation through the same BSP-backed `GroundSpace`; spectator flight intentionally bypasses all of them. The one-cell terrain is not consulted by BSP rendering, collision, or spectator movement.
 
 `PointHull` follows BSP node children into leaves (`-(leaf_index + 1)`) and currently treats only `CONTENTS_SOLID` as blocking. Ground-style obstruction queries sample that point trace 16 world units above the source feet position so the flat combat/interaction model does not run exactly along floor/brush boundaries. This is a temporary 0.3.2 bridge, not vertical combat or a general contents/mask system.
 
@@ -190,16 +218,22 @@ The current policy keeps these two body descriptions separate. `BSP29::GroundHul
 
 Only model `0` is rendered. BSP submodels remain preserved for later doors/platforms.
 
+### BSP runtime bootstrap
+
+`BSP29::Bootstrap` is intentionally smaller than a Quake entity importer. Its only semantic entity today is `info_player_start`. A missing start, missing origin, or non-numeric `angle` is reported as `BSP29::FormatError` rather than silently falling back to the Ruby test level. The ordinary `bin/aogera` launch still uses `Level::Readers::Ruby` and `Level::Loader`.
+
+The controlled fixture historically authored `info_player_start` as an Aogera feet-origin position, so v0.3.4 currently consumes the normalized entity origin directly. Real Quake-map validation must confirm whether a Quake player-origin-to-Aogera-feet offset is required before Aogera claims faithful spawn-height compatibility. This is deliberately left visible rather than guessed in the bootstrap patch.
+
 ## Not implemented yet
 
 The BSP path does not yet provide:
 
 - palette conversion or raylib textures;
-- lightmap rendering;
+- animated/multi-style lightmap evaluation beyond the first stored style;
 - PVS traversal;
 - arbitrary authored actor radii for BSP static collision;
 - brush-submodel motion;
-- map-entity spawning through `Level::Loader`;
+- general map-entity spawning/import beyond the bootstrap `info_player_start`;
 - a global collision-certified route graph.
 
 Those systems should consume `BSP29::MapData` rather than reopen or reinterpret the source file themselves.

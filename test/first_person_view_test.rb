@@ -49,4 +49,28 @@ class FirstPersonViewTest < Minitest::Test
 
     assert_in_delta 0.2, Math.hypot(dx, dz)
   end
+
+  def test_flight_movement_uses_pitch_and_world_vertical_axis
+    pitch = 30.0 * Math::PI / 180.0
+    view = Aogera::FirstPersonView.new(yaw: 0.0, pitch: pitch)
+
+    dx, dy, dz = view.flight_movement_delta(
+      forward: 1,
+      strafe: 0,
+      vertical: 0,
+      distance: 2.0
+    )
+
+    assert_in_delta 0.0, dx, 1e-9
+    assert_in_delta 1.0, dy, 1e-9
+    assert_in_delta(-Math.sqrt(3.0), dz, 1e-9)
+
+    up = view.flight_movement_delta(
+      forward: 0,
+      strafe: 0,
+      vertical: 1,
+      distance: 2.0
+    )
+    assert_equal [0.0, 2.0, 0.0], up
+  end
 end

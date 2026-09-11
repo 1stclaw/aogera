@@ -23,7 +23,7 @@ the implementation that exists today.
 
 Aogera is currently a Ruby + raylib project.
 
-The stable v0.3.2a line retained Ruby 3.2 compatibility. The v0.3.3 development line deliberately raises the minimum to:
+The stable v0.3.2a line retained Ruby 3.2 compatibility. The stable v0.3.3 release deliberately raised the minimum to:
 
 ```text
 Ruby 3.4+

@@ -66,6 +66,21 @@ module Aogera
       [(x * scale), (z * scale)].freeze
     end
 
+    def flight_movement_delta(forward:, strafe:, vertical:, distance:)
+      forward_x, forward_y, forward_z = forward_vector
+      right_x = Math.cos(yaw)
+      right_z = Math.sin(yaw)
+
+      x = (forward_x * forward) + (right_x * strafe)
+      y = (forward_y * forward) + vertical
+      z = (forward_z * forward) + (right_z * strafe)
+      length = Math.sqrt((x * x) + (y * y) + (z * z))
+      return [0.0, 0.0, 0.0].freeze if length.zero?
+
+      scale = Float(distance) / length
+      [(x * scale), (y * scale), (z * scale)].freeze
+    end
+
     private
 
     def wrap_yaw(value)

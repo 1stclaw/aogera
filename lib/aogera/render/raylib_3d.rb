@@ -32,19 +32,38 @@ module Aogera
       STATUS_FONT_SIZE = 20
       STATUS_HEIGHT = 48
 
+      DIAGNOSTIC_MARGIN = 16
+      DIAGNOSTIC_PADDING = 10
+      DIAGNOSTIC_WIDTH = 360
+      DIAGNOSTIC_FONT_SIZE = 18
+      DIAGNOSTIC_LINE_HEIGHT = 22
+      DIAGNOSTIC_BACKGROUND = [11, 12, 15, 205].freeze
+      DIAGNOSTIC_TEXT = [224, 226, 230, 255].freeze
+
       def initialize(api:, bsp29_map: nil)
         @api = api
         @bsp29_world = bsp29_map && BSP29World.new(map: bsp29_map)
       end
 
-      def draw(level:, world:, status:, view:, camera_entity_id:)
+      def prepare
+        @bsp29_world&.prepare(@api)
+      end
+
+      def close
+        @bsp29_world&.close(@api)
+      end
+
+      def draw(
+        level:, world:, status:, view:, camera_entity_id:, camera_eye: nil
+      )
         @api.begin_drawing
         @api.clear(BACKGROUND)
         @api.begin_mode_3d(
           **camera_for(
             world: world,
             view: view,
-            camera_entity_id: camera_entity_id
+            camera_entity_id: camera_entity_id,
+            camera_eye: camera_eye
           )
         )
 
@@ -52,6 +71,7 @@ module Aogera
         draw_entities(level, world, hidden_entity_id: camera_entity_id)
 
         @api.end_mode_3d
+        draw_diagnostics(world: world, view: view, camera_eye: camera_eye)
         draw_status(status)
       ensure
         @api.end_drawing
@@ -132,13 +152,17 @@ module Aogera
         level.inside?(grid_x, grid_z)
       end
 
-      def camera_for(world:, view:, camera_entity_id:)
-        position = world.component(camera_entity_id, :position)
-        raise ArgumentError, "camera entity has no position" unless position
+      def camera_for(world:, view:, camera_entity_id:, camera_eye:)
+        if camera_eye
+          x, eye_y, z = camera_eye
+        else
+          position = world.component(camera_entity_id, :position)
+          raise ArgumentError, "camera entity has no position" unless position
 
-        x = position.x
-        z = position.z
-        eye_y = position.y + view.eye_height
+          x = position.x
+          z = position.z
+          eye_y = position.y + view.eye_height
+        end
         eye = [x, eye_y, z]
         forward_x, forward_y, forward_z = view.forward_vector
 
@@ -152,6 +176,51 @@ module Aogera
           up: [0.0, 1.0, 0.0],
           fovy: view.fovy
         }
+      end
+
+      def draw_diagnostics(world:, view:, camera_eye:)
+        return unless @bsp29_world && camera_eye
+
+        x, y, z = camera_eye
+        lines = [
+          "FPS #{@api.fps}",
+          format("Camera XYZ %.2f  %.2f  %.2f", x, y, z),
+          format(
+            "View yaw %.1f deg | pitch %.1f deg",
+            radians_to_degrees(view.yaw),
+            radians_to_degrees(view.pitch)
+          ),
+          "BSP #{@bsp29_world.triangle_count} tris | " \
+            "#{@bsp29_world.batch_count} mesh draws",
+          "Lightmaps #{@bsp29_world.lightmapped_face_count} faces | " \
+            "#{@bsp29_world.lightmap_atlas_width}x" \
+            "#{@bsp29_world.lightmap_atlas_height}",
+          "Entities #{world.entity_ids.length}"
+        ]
+        height = (DIAGNOSTIC_PADDING * 2) +
+          (lines.length * DIAGNOSTIC_LINE_HEIGHT)
+
+        @api.draw_rectangle(
+          x: DIAGNOSTIC_MARGIN,
+          y: DIAGNOSTIC_MARGIN,
+          width: DIAGNOSTIC_WIDTH,
+          height: height,
+          rgba: DIAGNOSTIC_BACKGROUND
+        )
+        lines.each_with_index do |line, index|
+          @api.draw_text(
+            text: line,
+            x: DIAGNOSTIC_MARGIN + DIAGNOSTIC_PADDING,
+            y: DIAGNOSTIC_MARGIN + DIAGNOSTIC_PADDING +
+              (index * DIAGNOSTIC_LINE_HEIGHT),
+            size: DIAGNOSTIC_FONT_SIZE,
+            rgba: DIAGNOSTIC_TEXT
+          )
+        end
+      end
+
+      def radians_to_degrees(value)
+        value * 180.0 / Math::PI
       end
 
       def draw_status(status)

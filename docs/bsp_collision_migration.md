@@ -319,7 +319,7 @@ It still provides:
 - authored spawn/entry declarations and their current validation;
 - the complete static collision/rendering fallback for the normal non-BSP Ruby launch.
 
-The controlled BSP launch still loads the matching Ruby level because BSP entity declarations have not yet replaced the current gameplay spawn/entry path.
+At the v0.3.3 checkpoint, the controlled BSP launch still loaded the matching Ruby level because BSP entity declarations had not yet replaced the gameplay spawn/entry path. Since v0.3.4, `BSP29::Bootstrap` instead creates the minimal BSP runtime directly from `info_player_start`; the Ruby `test_field` is no longer part of BSP launch.
 
 The old Pathfinder's cells, dynamic occupancy projection, cell-center waypoints, and static edge-clearance cache are now implementation history only; the executable Pathfinder and its BFS-only tests have been removed.
 

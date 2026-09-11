@@ -1,5 +1,7 @@
 # Aogera 3D Migration: v0.2.3 to v0.3.2
 
+> **Historical document — frozen.** This file preserves the 0.2.3 -> 0.3.2 migration and its early 0.3.3 follow-on notes as design evidence. Beginning with 0.3.4, BSP launch no longer loads the matching Ruby level: `BSP29::Bootstrap` supplies the BSP player start, `Mode::Spectator` provides collision-free inspection, and world model `0` is uploaded as persistent raylib mesh/lightmap resources. Those later changes are intentionally not folded back into this record. See `architecture.md`, `bsp29.md`, and `raylib_3d.md` for the current design.
+
 This document summarizes the architectural state of Aogera v0.3.2 relative to the final cleaned 2D/raylib baseline, v0.2.3.
 
 It is a state comparison rather than a chronological changelog. Superseded intermediate solutions are omitted; only systems and boundaries that exist in v0.3.2 are described here.

@@ -41,8 +41,23 @@ class RaylibFrontendTest < Minitest::Test
     def begin_mode_3d(**options) = @calls << [:begin_mode_3d, options]
     def end_mode_3d = @calls << [:end_mode_3d]
     def draw_cube(**options) = @calls << [:draw_cube, options]
+    def create_static_model(vertices:, texcoords: nil)
+      handle = [:model, @calls.count { |call| call.first == :create_static_model }]
+      @calls << [:create_static_model, {vertices: vertices, texcoords: texcoords, handle: handle}]
+      handle
+    end
+    def create_texture_rgba(width:, height:, pixels:)
+      handle = [:texture, @calls.count { |call| call.first == :create_texture_rgba }]
+      @calls << [:create_texture_rgba, {width: width, height: height, pixels: pixels, handle: handle}]
+      handle
+    end
+    def set_model_texture(model:, texture:) = @calls << [:set_model_texture, {model: model, texture: texture}]
+    def unload_texture(texture) = @calls << [:unload_texture, texture]
+    def draw_model(model:, rgba:) = @calls << [:draw_model, {model: model, rgba: rgba}]
+    def unload_model(model) = @calls << [:unload_model, model]
     def draw_rectangle(**options) = @calls << [:draw_rectangle, options]
     def draw_text(**options) = @calls << [:draw_text, options]
+    def fps = 60
     def screen_width = 1024
     def screen_height = 768
   end
@@ -76,6 +91,19 @@ class RaylibFrontendTest < Minitest::Test
 
     assert_equal([:enable_cursor], api.calls[-2])
     assert_equal([:close_window], api.calls[-1])
+  end
+
+  def test_raylib_host_polls_spectator_vertical_keys
+    api = FakeAPI.new
+    api.press(:c)
+    api.press(:left_shift)
+    host = Aogera::Host::Raylib.new(api: api)
+
+    events = host.poll_events
+    keys = events.grep(Aogera::Host::KeyEvent).map(&:key)
+
+    assert_includes keys, :c
+    assert_includes keys, :left_shift
   end
 
   def test_raylib_host_emits_key_and_mouse_events

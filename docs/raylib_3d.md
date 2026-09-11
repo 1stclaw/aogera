@@ -127,7 +127,7 @@ BSP29::MapData
     -> RaylibAPI
 ```
 
-Dynamic renderable entities are still drawn at canonical `Position` values. For the controlled preview, the matching Ruby `test_field` remains the authored gameplay/spawn/entry bridge while BSP29 supplies visible static geometry and collision queries. Active NPC chase no longer consumes the grid as navigation topology.
+Dynamic renderable entities are still drawn at canonical `Position` values. In the v0.3.4 BSP preview, the bound player position comes directly from the map's `info_player_start`; the Ruby `test_field` is no longer loaded by the BSP launcher. `Mode::Spectator` starts its camera at that player's eye position and then supplies an explicit camera position to `Render::Raylib3D`, leaving actor `Position` untouched while it flies through geometry. The current one-cell `Level` terrain is inert structural scaffolding only, while BSP29 supplies visible static geometry and configured collision queries.
 
 This is intentionally a simple RC bridge. There is no `Scene3D`, `Projector3D`, model/material framework, or generic transform hierarchy.
 
@@ -141,6 +141,10 @@ The obsolete grid `Simulation::Pathfinder` has been removed. Active chase uses c
 
 ## Combat and interaction
 
+BSP static rendering now has an explicit GPU-resource lifecycle. `Render::BSP29World` reconstructs world-model triangles on the Ruby side, derives BSP29 lightmap extents/UVs, packs baked grayscale samples into one padded atlas, and `Render::Raylib3D#prepare` uploads the persistent mesh plus atlas texture only after the raylib window/context opens. `#close` unloads both resources before the context closes. Drawing a BSP frame therefore issues a persistent model draw rather than one Ruby/FFI draw call per BSP triangle. Base Quake textures are still deferred; the atlas is currently used as the model's grayscale albedo solely to expose baked lighting.
+
+In BSP spectator mode, `Render::Raylib3D` also draws a small diagnostic overlay after leaving 3D mode. It shows measured raylib FPS, the spectator camera position, yaw/pitch, BSP triangle count, mesh-draw count, lightmapped-face/atlas statistics, and runtime entity count. FPS is observational only: simulation still runs at the independent fixed 30 Hz cadence while the host targets 60 rendered frames per second.
+
 The renderer does not define combat geometry.
 
 `MeleeAttack(reach, arc_degrees)` and `Interactor(reach, arc_degrees)` remain authored gameplay data. Player and NPC melee validation use continuous body separation and segment obstruction traces; interaction uses the same spatial foundation with separate eligibility semantics.
@@ -153,10 +157,9 @@ This preserves the useful platform boundary established before the 3D renderer a
 
 ## Still deferred
 
-Aogera 0.3.2a does not introduce:
+Aogera 0.3.4 still defers:
 
-- BSP hull/clipnode collision;
-- BSP palette/texture sampling and lightmaps;
+- BSP palette/base-texture sampling and animated/multi-style lightmap evaluation;
 - PVS-driven BSP visibility;
 - vertical actor physics;
 - projectile or hitscan rendering/simulation;

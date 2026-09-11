@@ -18,6 +18,20 @@ module Aogera
         escape: :cancel
       }.freeze
 
+      SPECTATOR_ACTIONS = ACTIONS.merge(
+        space: :move_up,
+        c: :move_down,
+        left_shift: :move_down
+      ).freeze
+
+      def self.spectator
+        new(actions: SPECTATOR_ACTIONS)
+      end
+
+      def initialize(actions: ACTIONS)
+        @actions = actions
+      end
+
       def map(physical_event)
         case physical_event
         when Host::MouseMotion
@@ -33,7 +47,7 @@ module Aogera
       private
 
       def map_key_event(event)
-        kind = ACTIONS[event.key]
+        kind = @actions[event.key]
         return unless kind
 
         Action.new(
