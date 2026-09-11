@@ -8,8 +8,10 @@ module Aogera
     def initialize(
       clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
       raylib_api: nil,
-      bsp29_map: nil
+      bsp29_map: nil,
+      bsp29_mode: nil
     )
+      validate_bsp29_launch!(bsp29_map, bsp29_mode)
       prototypes = Prototype::Loader.load(Content::Paths.prototype(:actors))
       level, dialogues, initial_view = runtime_content(bsp29_map, prototypes)
       @session = Session.new(
@@ -44,13 +46,13 @@ module Aogera
       @modes = ModeStack.new
       @modes.push(
         initial_mode(
-          bsp29_map: bsp29_map,
+          bsp29_mode: bsp29_mode,
           simulation: simulation,
           dialogues: dialogues,
           ground_space: ground_space
         )
       )
-      @mapper = bsp29_map ? Input::Mapper.spectator : Input::Mapper.new
+      @mapper = bsp29_mode == :spectator ? Input::Mapper.spectator : Input::Mapper.new
       @handoff = Input::Handoff.new
       @input_tracker = Input::Tracker.new
 
@@ -82,6 +84,18 @@ module Aogera
 
     private
 
+    def validate_bsp29_launch!(bsp29_map, bsp29_mode)
+      unless bsp29_mode.nil? || bsp29_mode == :spectator
+        raise ArgumentError, "unsupported BSP29 launch mode: #{bsp29_mode.inspect}"
+      end
+      if bsp29_map && bsp29_mode.nil?
+        raise ArgumentError, "BSP29 launch mode is required"
+      end
+      if bsp29_mode && !bsp29_map
+        raise ArgumentError, "BSP29 launch mode requires BSP29 map data"
+      end
+    end
+
     def runtime_content(bsp29_map, prototypes)
       if bsp29_map
         bootstrap = BSP29::Bootstrap.build(bsp29_map)
@@ -103,8 +117,8 @@ module Aogera
       [level, dialogues, nil]
     end
 
-    def initial_mode(bsp29_map:, simulation:, dialogues:, ground_space:)
-      if bsp29_map
+    def initial_mode(bsp29_mode:, simulation:, dialogues:, ground_space:)
+      if bsp29_mode == :spectator
         return Mode::Spectator.new(
           simulation: simulation,
           view: @view,

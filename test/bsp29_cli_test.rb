@@ -74,15 +74,15 @@ class BSP29CLITest < Minitest::Test
   def test_default_app_factory_builds_the_bsp_app
     map = fake_map
     app = FakeApp.new(0)
-    built_maps = []
+    built_args = []
     cli = Aogera::CLI::BSP29.new(
       reader: ->(_path) { map },
       stdout: StringIO.new,
       stderr: StringIO.new
     )
 
-    factory = lambda do |bsp29_map:|
-      built_maps << bsp29_map
+    factory = lambda do |bsp29_map:, bsp29_mode:|
+      built_args << [bsp29_map, bsp29_mode]
       app
     end
 
@@ -92,7 +92,7 @@ class BSP29CLITest < Minitest::Test
       assert_equal 0, status
     end
 
-    assert_equal [map], built_maps
+    assert_equal [[map, :spectator]], built_args
     assert_equal 1, app.runs
   end
 

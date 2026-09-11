@@ -67,7 +67,8 @@ class BSP29LocalNavigationTest < Minitest::Test
     app = Aogera::App.new(
       clock: -> { 0.0 },
       raylib_api: Object.new,
-      bsp29_map: app_bsp_map
+      bsp29_map: app_bsp_map,
+      bsp29_mode: :spectator
     )
     mode = app.instance_variable_get(:@modes).current
     simulation = mode.simulation

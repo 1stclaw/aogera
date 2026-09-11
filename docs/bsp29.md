@@ -24,6 +24,8 @@ BSP29::MapData
 
 `BSP29::Reader` understands Quake 1 BSP version 29 binary structure. It does not construct an Aogera `Level`, spawn gameplay actors, call raylib, or perform collision queries.
 
+`Reader.read(path)` is the filesystem convenience entry point; `Reader.read_bytes(bytes)` is the source-neutral parsing boundary. Future package/content sources can supply BSP bytes through that existing seam without making the BSP Reader aware of PAK, ZIP, or mounting rules.
+
 ## Normalization boundary
 
 Aogera uses Quake 1-compatible world-unit magnitude:

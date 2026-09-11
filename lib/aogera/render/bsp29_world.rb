@@ -60,8 +60,8 @@ module Aogera
               vertices: batch.vertices,
               texcoords: batch.texcoords
             )
-            api.set_model_texture(model: model, texture: texture)
             prepared << PreparedBatch.new(model: model, rgba: batch.rgba)
+            api.set_model_texture(model: model, texture: texture)
           end
           @prepared_texture = texture
           @prepared_batches = prepared.freeze

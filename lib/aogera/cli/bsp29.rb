@@ -293,7 +293,7 @@ module Aogera
           raise ArgumentError, "unsupported BSP29 launch mode: #{mode.inspect}"
         end
 
-        Aogera::App.new(bsp29_map: map)
+        Aogera::App.new(bsp29_map: map, bsp29_mode: mode)
       end
     end
   end

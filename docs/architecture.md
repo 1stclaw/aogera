@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.4 development runtime and its present boundaries. The BSP/collision architecture is inherited unchanged from the stable 0.3.2a checkpoint; 0.3.3 begins with internal data-model cleanup.
+This document describes the current Aogera 0.3.4 runtime and its present boundaries. The core BSP collision-authority split descends from the stable 0.3.2a checkpoint, 0.3.3 completed the continuous-navigation cutover, and 0.3.4 changes BSP bootstrap and rendering without replacing that collision boundary.
 
 ## Design goals
 

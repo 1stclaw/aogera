@@ -6,9 +6,11 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.3.4 (development)**
+**Version: 0.3.4 (release candidate)**
 
-Aogera 0.3.4 begins the real-BSP bring-up line on top of the stable 0.3.3 continuous-navigation release. BSP mode now bootstraps its runtime player entry directly from the map's normalized `info_player_start` instead of importing the Ruby `test_field` as gameplay scaffolding. It launches into a collision-free diagnostic spectator camera so arbitrary BSP geometry can be inspected before vertical Quake-style actor physics exists. The ordinary Ruby-authored launch remains unchanged.
+Aogera 0.3.4 consolidates the first real-BSP bring-up milestone on top of the stable 0.3.3 continuous-navigation release. BSP launch is now explicitly mode-driven: `--spectator` bootstraps the runtime player directly from normalized `info_player_start`, opens a collision-free diagnostic camera, and renders world model `0` through persistent raylib mesh/lightmap resources. The ordinary Ruby-authored launch remains unchanged.
+
+The 0.3.4 release boundary is intentionally narrow: BSP-native bootstrap, explicit spectator launch, persistent world rendering, baked-lightmap preview, and inspection diagnostics. Package/content-source work is deferred to 0.3.5; the planned next step is a minimal Quake PAK source feeding BSP bytes through the existing `BSP29::Reader.read_bytes` boundary, followed by palette and embedded miptexture rendering. No VFS abstraction is introduced in 0.3.4.
 
 Every spatial runtime entity uses:
 
@@ -138,7 +140,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The stable v0.3.3 release baseline is **268 runs / 848 assertions / 0 failures / 0 errors / 0 skips**. The current v0.3.4 real-BSP bring-up line, including BSP-native bootstrap, spectator/CLI work, persistent mesh rendering, grayscale baked-lightmap rendering, and the diagnostic overlay, is **301 runs / 1080 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The stable v0.3.3 release baseline is **268 runs / 848 assertions / 0 failures / 0 errors / 0 skips**. The 0.3.4 release-candidate baseline, including explicit BSP launch-mode invariants and GPU resource failure-path coverage, is **306 runs / 1106 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 
@@ -159,21 +161,19 @@ Aogera still has no generic scene/projector/transform layer, no general physics 
 - `docs/architecture.md` — current runtime architecture and subsystem boundaries;
 - `docs/authored_data.md` — Reader/normalized-data/Loader boundary and world-unit convention;
 - `docs/bsp29.md` — current BSP29 binary Reader, normalization, records, and inspection tool;
-- `docs/bsp_collision_migration.md` — v0.3.2 BSP collision migration history, current authority map, fixed-hull limitation, and incremental pathfinding roadmap;
-- `docs/navigation_migration.md` — active migration from grid BFS to Quake-like local navigation with a future collision-certified route-graph fallback;
+- `docs/bsp_collision_migration.md` — BSP collision migration history, authority decisions, fixed-hull limitation, and later cutover notes;
+- `docs/navigation_migration.md` — migration record for the completed grid-BFS to continuous local-navigation cutover and its future route-graph seam;
 - `docs/collision.md` — current ground-space trace, sweep, movement, and obstruction model;
 - `docs/raylib_3d.md` — raylib 3D frontend and first-person presentation path;
-- `docs/3d_migration.md` — cumulative architectural change from the v0.2.3 2D baseline to the v0.3.2 line;
+- `docs/3d_migration.md` — frozen historical record of the v0.2.3 -> v0.3.2 migration and early v0.3.3 follow-on;
 - `docs/future.md` — explicitly speculative future runtime, Ruby-version, performance, rendering, and navigation directions.
 
 ## Direction
 
-The 0.3.2 runtime now includes the first BSP29 **Reader**. BSP29 binary structure is decoded outside `Level::Loader`, and geometry-related values are normalized to Aogera axes without scalar resizing.
+Aogera 0.3.4 RC establishes the first self-contained BSP launch path: BSP29 supplies the player start, world model `0` supplies visible static geometry, compiled hull/node data supplies the configured collision services, and `Mode::Spectator` provides safe free-flight inspection while vertical actor physics remains deferred. The Ruby `test_field` is no longer part of BSP launch.
 
-The first downstream BSP integration now exists as a minimal world-model renderer. A controlled 44×14 test-field fixture compiled as BSP29 has matching structural counts between ericw-tools and `BSP29::Reader`, and its normalized player start resolves to `(112, 0, 112)` as expected.
+The rendering checkpoint is deliberately incomplete but structurally useful: BSP faces are persistent GPU geometry with real baked-lightmap UVs and a grayscale atlas, while embedded indexed miptexture pixels are parsed but not yet rendered. Collision remains hybrid and explicit: compiled hull 1 is authoritative for current actor static movement, the point hull handles obstruction traces, continuous `GroundBody` handles dynamic actors, and local NPC navigation probes the same `GroundSpace`.
 
-The current BSP collision-query boundary consumes compiled clip hull 1 for all current actor static movement and the world-model node/leaf tree for melee/interaction obstruction. BSP-mode dynamic entity rendering no longer consults the Ruby grid for bounds. Active NPC chase now operates directly on continuous world-space goals and probes movement through `GroundSpace`; grid BFS is no longer part of the production chase path.
-
-The stable v0.3.2a release remains the collision checkpoint. The 0.3.3 line is cleanup-focused and now includes the explicit navigation cutover: world-space `SteeringTarget`, collision-driven `GroundNavigation`, persistent local `GroundHeading`, and 30 Hz `GroundSteering`. The obsolete grid Pathfinder has been removed after the cutover was validated. See `docs/bsp_collision_migration.md` for the detailed migration record and roadmap.
+The next compatibility milestone is reserved for 0.3.5: a minimal `Content::Pak` source, `gfx/palette.lmp`, and rendering of the BSP's own embedded miptextures together with the existing lightmaps. That work should use `BSP29::Reader.read_bytes` rather than teaching the Reader about package formats. WAD2, Quake UI, broader mounting semantics, and a general VFS remain deferred until concrete consumers justify them.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

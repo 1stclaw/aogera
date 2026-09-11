@@ -6,7 +6,8 @@ class BSP29RenderTest < Minitest::Test
   class FakeAPI
     attr_reader :created, :textures, :textured, :drawn, :unloaded, :unloaded_textures
 
-    def initialize
+    def initialize(fail_on: nil)
+      @fail_on = fail_on
       @created = []
       @textures = []
       @textured = []
@@ -16,6 +17,8 @@ class BSP29RenderTest < Minitest::Test
     end
 
     def create_static_model(vertices:, texcoords: nil)
+      raise "create_static_model failed" if @fail_on == :create_static_model
+
       handle = [:model, @created.length]
       @created << {handle: handle, vertices: vertices, texcoords: texcoords}
       handle
@@ -28,6 +31,8 @@ class BSP29RenderTest < Minitest::Test
     end
 
     def set_model_texture(model:, texture:)
+      raise "set_model_texture failed" if @fail_on == :set_model_texture
+
       @textured << {model: model, texture: texture}
     end
 
@@ -141,6 +146,38 @@ class BSP29RenderTest < Minitest::Test
     assert_equal 1, api.unloaded.length
     assert_equal 1, api.unloaded_textures.length
     refute renderer.prepared?
+  end
+
+  def test_prepare_failure_while_creating_model_releases_created_texture
+    renderer = Aogera::Render::BSP29World.new(map: square_map)
+    api = FakeAPI.new(fail_on: :create_static_model)
+
+    error = assert_raises(RuntimeError) { renderer.prepare(api) }
+
+    assert_match(/create_static_model failed/, error.message)
+    assert_equal 1, api.textures.length
+    assert_empty api.created
+    assert_empty api.unloaded
+    assert_equal [api.textures.first.fetch(:handle)], api.unloaded_textures
+    refute renderer.prepared?
+  end
+
+  def test_prepare_failure_while_attaching_texture_releases_model_and_texture
+    renderer = Aogera::Render::BSP29World.new(map: square_map)
+    api = FakeAPI.new(fail_on: :set_model_texture)
+
+    error = assert_raises(RuntimeError) { renderer.prepare(api) }
+
+    assert_match(/set_model_texture failed/, error.message)
+    model = api.created.first.fetch(:handle)
+    texture = api.textures.first.fetch(:handle)
+    assert_equal [model], api.unloaded
+    assert_equal [texture], api.unloaded_textures
+    refute renderer.prepared?
+
+    retry_api = FakeAPI.new
+    renderer.prepare(retry_api)
+    assert renderer.prepared?
   end
 
   def test_draw_requires_prepared_gpu_resources
