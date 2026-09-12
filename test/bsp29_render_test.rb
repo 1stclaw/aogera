@@ -4,7 +4,8 @@ require_relative "test_helper"
 
 class BSP29RenderTest < Minitest::Test
   class FakeAPI
-    attr_reader :created, :textures, :textured, :drawn, :unloaded, :unloaded_textures
+    attr_reader :created, :textures, :textured, :drawn, :unloaded,
+      :unloaded_textures, :shaders, :shader_assignments, :wraps, :unloaded_shaders
 
     def initialize(fail_on: nil)
       @fail_on = fail_on
@@ -14,13 +15,22 @@ class BSP29RenderTest < Minitest::Test
       @drawn = []
       @unloaded = []
       @unloaded_textures = []
+      @shaders = []
+      @shader_assignments = []
+      @wraps = []
+      @unloaded_shaders = []
     end
 
-    def create_static_model(vertices:, texcoords: nil)
+    def create_static_model(vertices:, texcoords: nil, texcoords2: nil)
       raise "create_static_model failed" if @fail_on == :create_static_model
 
       handle = [:model, @created.length]
-      @created << {handle: handle, vertices: vertices, texcoords: texcoords}
+      @created << {
+        handle: handle,
+        vertices: vertices,
+        texcoords: texcoords,
+        texcoords2: texcoords2
+      }
       handle
     end
 
@@ -30,10 +40,34 @@ class BSP29RenderTest < Minitest::Test
       handle
     end
 
-    def set_model_texture(model:, texture:)
+    def create_shader(vertex_source:, fragment_source:)
+      raise "create_shader failed" if @fail_on == :create_shader
+
+      handle = [:shader, @shaders.length]
+      @shaders << {
+        handle: handle,
+        vertex_source: vertex_source,
+        fragment_source: fragment_source
+      }
+      handle
+    end
+
+    def set_model_shader(model:, shader:)
+      raise "set_model_shader failed" if @fail_on == :set_model_shader
+
+      @shader_assignments << {model: model, shader: shader}
+    end
+
+    def set_model_texture(model:, texture:, slot: :albedo)
       raise "set_model_texture failed" if @fail_on == :set_model_texture
 
-      @textured << {model: model, texture: texture}
+      @textured << {model: model, texture: texture, slot: slot}
+    end
+
+    def set_texture_wrap(texture:, mode:)
+      raise "set_texture_wrap failed" if @fail_on == :set_texture_wrap
+
+      @wraps << {texture: texture, mode: mode}
     end
 
     def draw_model(model:, rgba:)
@@ -46,6 +80,10 @@ class BSP29RenderTest < Minitest::Test
 
     def unload_texture(texture)
       @unloaded_textures << texture
+    end
+
+    def unload_shader(shader)
+      @unloaded_shaders << shader
     end
   end
 
@@ -138,6 +176,108 @@ class BSP29RenderTest < Minitest::Test
     assert_equal 1, renderer.batch_count
     assert_equal 1, api.created.length
     assert_equal 1, api.textures.length
+  end
+
+  def test_palette_enables_separate_base_textures_and_shared_low_resolution_lightmap
+    map = square_map(
+      extra_face: true,
+      extra_texture_name: "OTHER_TEXTURE",
+      size: 64.0,
+      light_offset: 0,
+      lighting: ([64] * 36).pack("C*")
+    )
+    map = map.with(models: [map.world_model.with(face_count: 2)].freeze)
+    renderer = Aogera::Render::BSP29World.new(map: map, palette: test_palette)
+    api = FakeAPI.new
+
+    renderer.prepare(api)
+
+    assert renderer.textured?
+    assert_equal 4, renderer.triangle_count
+    assert_equal 2, renderer.batch_count
+    assert_equal 2, api.created.length
+    assert_equal 3, api.textures.length
+    assert_equal 1, api.shaders.length
+    assert_equal 2, api.shader_assignments.length
+
+    lightmap = api.textures.fetch(0)
+    assert_equal renderer.lightmap_atlas_width, lightmap.fetch(:width)
+    assert_equal renderer.lightmap_atlas_height, lightmap.fetch(:height)
+    assert_equal({texture: lightmap.fetch(:handle), mode: :clamp}, api.wraps.fetch(0))
+    assert_equal [:repeat, :repeat], api.wraps.drop(1).map { |entry| entry.fetch(:mode) }
+
+    api.created.each do |created|
+      assert_equal 12, created.fetch(:texcoords).length
+      assert_equal 12, created.fetch(:texcoords2).length
+      assert_operator created.fetch(:texcoords).max, :>, 1.0
+      created.fetch(:texcoords2).each do |coordinate|
+        assert_operator coordinate, :>, 0.0
+        assert_operator coordinate, :<, 1.0
+      end
+    end
+
+    assert_equal 2, api.textured.count { |entry| entry.fetch(:slot) == :albedo }
+    lightmap_bindings = api.textured.select { |entry| entry.fetch(:slot) == :lightmap }
+    assert_equal 2, lightmap_bindings.length
+    assert_equal [lightmap.fetch(:handle)], lightmap_bindings.map { |entry| entry.fetch(:texture) }.uniq
+
+    renderer.close(api)
+    assert_equal 2, api.unloaded.length
+    assert_equal 3, api.unloaded_textures.length
+    assert_equal 1, api.unloaded_shaders.length
+  end
+
+  def test_textured_missing_texture_slot_uses_one_white_fallback_base_texture
+    map = square_map
+    map = map.with(texinfo: [map.texinfo.first.with(texture_index: 99)].freeze)
+    renderer = Aogera::Render::BSP29World.new(map: map, palette: test_palette)
+    api = FakeAPI.new
+
+    renderer.prepare(api)
+
+    assert_equal 1, renderer.batch_count
+    assert_equal 2, api.textures.length
+    fallback = api.textures.fetch(1)
+    assert_equal 1, fallback.fetch(:width)
+    assert_equal 1, fallback.fetch(:height)
+    assert_equal [255, 255, 255, 255], fallback.fetch(:pixels).bytes
+    assert_equal Array.new(12, 0.0), api.created.first.fetch(:texcoords)
+  end
+
+  def test_prepare_failure_while_configuring_lightmap_wrap_releases_texture
+    renderer = Aogera::Render::BSP29World.new(
+      map: square_map,
+      palette: test_palette
+    )
+    api = FakeAPI.new(fail_on: :set_texture_wrap)
+
+    error = assert_raises(RuntimeError) { renderer.prepare(api) }
+
+    assert_match(/set_texture_wrap failed/, error.message)
+    assert_equal 1, api.textures.length
+    assert_equal [api.textures.first.fetch(:handle)], api.unloaded_textures
+    assert_empty api.created
+    assert_empty api.shaders
+    refute renderer.prepared?
+  end
+
+  def test_textured_prepare_failure_after_shader_assignment_cleans_every_gpu_resource
+    renderer = Aogera::Render::BSP29World.new(
+      map: square_map,
+      palette: test_palette
+    )
+    api = FakeAPI.new(fail_on: :set_model_shader)
+
+    error = assert_raises(RuntimeError) { renderer.prepare(api) }
+
+    assert_match(/set_model_shader failed/, error.message)
+    assert_equal 1, api.created.length
+    assert_equal 2, api.textures.length
+    assert_equal 1, api.shaders.length
+    assert_equal [api.created.first.fetch(:handle)], api.unloaded
+    assert_equal api.textures.map { |texture| texture.fetch(:handle) }.reverse, api.unloaded_textures
+    assert_equal [api.shaders.first.fetch(:handle)], api.unloaded_shaders
+    refute renderer.prepared?
   end
 
   def test_prepare_is_idempotent_and_close_unloads_model_and_texture_once
@@ -427,8 +567,23 @@ class BSP29RenderTest < Minitest::Test
       name: name,
       width: 16,
       height: 16,
-      mipmaps: ["".b, "".b, "".b, "".b].freeze
+      mipmaps: [
+        ([1] * 256).pack("C*").freeze,
+        ([1] * 64).pack("C*").freeze,
+        ([1] * 16).pack("C*").freeze,
+        ([1] * 4).pack("C*").freeze
+      ].freeze
     )
+  end
+
+  def test_palette
+    bytes = String.new(capacity: Aogera::Quake::PaletteReader::BYTE_SIZE, encoding: Encoding::BINARY)
+    256.times do |index|
+      bytes << index
+      bytes << (255 - index)
+      bytes << (index / 2)
+    end
+    Aogera::Quake::PaletteReader.read_bytes(bytes)
   end
 
   def cross_y_from_flat(values)

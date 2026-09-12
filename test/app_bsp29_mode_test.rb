@@ -19,6 +19,14 @@ class AppBSP29ModeTest < Minitest::Test
     assert_match(/requires BSP29 map data/, error.message)
   end
 
+  def test_bsp_palette_requires_bsp_map_data
+    error = assert_raises(ArgumentError) do
+      Aogera::App.new(bsp29_palette: Object.new)
+    end
+
+    assert_match(/palette requires BSP29 map data/, error.message)
+  end
+
   def test_unknown_bsp_launch_mode_is_rejected
     error = assert_raises(ArgumentError) do
       Aogera::App.new(bsp29_map: Object.new, bsp29_mode: :play)

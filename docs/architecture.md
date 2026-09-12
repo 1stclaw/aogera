@@ -337,6 +337,8 @@ BSP29::MapData -> Render::BSP29SurfaceBuilder -> stable face buffers -> Render::
 
 The controlled player is omitted from the first-person entity pass. The BSP preview renders world model `0` only and intentionally bypasses any generic scene representation.
 
+For textured BSP launch, `BSP29World` keeps the map-format split intact rather than baking a new combined texture. UV0 carries normalized-but-unwrapped Quake base texture coordinates, UV1 carries the padded lightmap-atlas coordinates, used embedded miptextures become repeat-wrapped GPU textures, and the one shared baked-lightmap atlas is clamp-wrapped. A minimal shader multiplies those samples per fragment. The original BSP lightmap resolution and lighting blob are preserved; Ruby performs no per-frame lightmap expansion or rebake. Loose BSP launch without a palette continues to use the established grayscale lightmap-only material.
+
 The camera eye uses the controlled entity's `Position` plus logical eye height. Its target comes from the `FirstPersonView` forward vector.
 
 There is no `Scene3D`, `Projector3D`, generic transform hierarchy, or generic physics system. `RaylibAPI` owns conversion from plain Ruby camera/geometry values into `raylib-bindings` FFI types.
@@ -365,7 +367,7 @@ Aogera world-unit magnitude is Quake 1 compatible: one current grid cell is 32 w
 
 `BSP29::Reader` is the first external Reader. It returns normalized `BSP29::MapData` rather than forcing BSP structure through the grid-shaped `Level::AuthoredData`. `Level::Loader` therefore remains honest about the representation it currently constructs.
 
-`Content::RubyPaths` explicitly centralizes repository-local executable Ruby source paths. Binary game-content source selection is separate: `Content::VFS` resolves normalized virtual paths across mounted `Content::Directory` and `Content::Pak` sources, returning bytes only. Later mounts override earlier mounts. `CLI::BSP29` is the first integration point: `--pak FILE` reads the selected virtual BSP through a one-source VFS and calls `BSP29::Reader.read_bytes`; direct host paths still use `Reader.read`. `Quake::PaletteReader` is a second source-neutral byte decoder: it accepts the canonical `gfx/palette.lmp` bytes and returns immutable RGB data plus the original compact lookup bytes without knowing whether the bytes came from a PAK, directory, or another future source. `Quake::MipTextureDecoder` composes normalized BSP miptexture data with that palette only when a caller requests one mip level; it returns one packed RGBA buffer and does not change storage policy or the authoritative indexed BSP data. Format Readers, `App`, simulation, and rendering remain unaware of VFS policy; there is intentionally no general asset manager.
+`Content::RubyPaths` explicitly centralizes repository-local executable Ruby source paths. Binary game-content source selection is separate: `Content::VFS` resolves normalized virtual paths across mounted `Content::Directory` and `Content::Pak` sources, returning bytes only. Later mounts override earlier mounts. `CLI::BSP29` is the first integration point: `--pak FILE` reads the selected virtual BSP through a one-source VFS and calls `BSP29::Reader.read_bytes`; direct host paths still use `Reader.read`. `Quake::PaletteReader` is a second source-neutral byte decoder: it accepts the canonical `gfx/palette.lmp` bytes and returns immutable RGB data plus the original compact lookup bytes without knowing whether the bytes came from a PAK, directory, or another future source. `Quake::MipTextureDecoder` composes normalized BSP miptexture data with that palette only when a caller requests one mip level; it returns one packed RGBA buffer and does not change storage policy or the authoritative indexed BSP data. For PAK-backed spectator launch, `CLI::BSP29` decodes the palette and passes that decoded value alongside `BSP29::MapData`; no VFS/source handle reaches `App`, simulation, collision, or rendering. There is intentionally no general asset manager.
 
 ## Current v0.3.5 development boundary
 
@@ -385,7 +387,7 @@ Aogera 0.3.5 development currently has:
 - an on-demand Quake miptexture decoder that expands only the requested indexed mip level into one packed RGBA buffer while preserving the original BSP mip chain;
 - a BSP29 surface-preparation boundary that preserves flat face geometry, unwrapped base-texture S/T, local lightmap S/T, texture metadata, and compact lighting-blob offsets before GPU allocation;
 - a base-texture mapping helper that normalizes preserved S/T by miptexture dimensions without wrapping away Quake tiling coordinates;
-- a minimal BSP29 world-model renderer that consumes those prepared surfaces and currently reproduces the same grayscale baked-lightmap preview;
+- a BSP29 world-model renderer that can either reproduce the grayscale baked-lightmap fallback or, when given a Quake palette, batch surfaces by embedded miptexture and render independent UV0 base textures × UV1 original low-resolution baked lightmaps through a minimal shader;
 - a BSP-only `Mode::Spectator` whose camera is detached from gameplay collision for arbitrary-map inspection;
 - BSP29 compiled hull 1 through shared `GroundClearance` as the actor static movement backend;
 - BSP29 world-model node/leaf tracing for melee and interaction obstruction.

@@ -44,9 +44,9 @@ class Render3DContractTest < Minitest::Test
     def begin_mode_3d(**options) = @calls << [:begin_mode_3d, options]
     def end_mode_3d = @calls << [:end_mode_3d]
     def draw_cube(**options) = @calls << [:draw_cube, options]
-    def create_static_model(vertices:, texcoords: nil)
+    def create_static_model(vertices:, texcoords: nil, texcoords2: nil)
       handle = [:model, @calls.count { |call| call.first == :create_static_model }]
-      @calls << [:create_static_model, {vertices: vertices, texcoords: texcoords, handle: handle}]
+      @calls << [:create_static_model, {vertices: vertices, texcoords: texcoords, texcoords2: texcoords2, handle: handle}]
       handle
     end
     def create_texture_rgba(width:, height:, pixels:)
@@ -54,7 +54,15 @@ class Render3DContractTest < Minitest::Test
       @calls << [:create_texture_rgba, {width: width, height: height, pixels: pixels, handle: handle}]
       handle
     end
-    def set_model_texture(model:, texture:) = @calls << [:set_model_texture, {model: model, texture: texture}]
+    def set_model_texture(model:, texture:, slot: :albedo) = @calls << [:set_model_texture, {model: model, texture: texture, slot: slot}]
+    def create_shader(vertex_source:, fragment_source:)
+      handle = [:shader, @calls.count { |call| call.first == :create_shader }]
+      @calls << [:create_shader, {vertex_source: vertex_source, fragment_source: fragment_source, handle: handle}]
+      handle
+    end
+    def set_model_shader(model:, shader:) = @calls << [:set_model_shader, {model: model, shader: shader}]
+    def set_texture_wrap(texture:, mode:) = @calls << [:set_texture_wrap, {texture: texture, mode: mode}]
+    def unload_shader(shader) = @calls << [:unload_shader, shader]
     def unload_texture(texture) = @calls << [:unload_texture, texture]
     def draw_model(model:, rgba:) = @calls << [:draw_model, {model: model, rgba: rgba}]
     def unload_model(model) = @calls << [:unload_model, model]

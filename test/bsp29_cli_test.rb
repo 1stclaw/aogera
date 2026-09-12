@@ -83,8 +83,8 @@ class BSP29CLITest < Minitest::Test
       stderr: StringIO.new
     )
 
-    factory = lambda do |bsp29_map:, bsp29_mode:|
-      built_args << [bsp29_map, bsp29_mode]
+    factory = lambda do |bsp29_map:, bsp29_mode:, bsp29_palette:|
+      built_args << [bsp29_map, bsp29_mode, bsp29_palette]
       app
     end
 
@@ -94,7 +94,7 @@ class BSP29CLITest < Minitest::Test
       assert_equal 0, status
     end
 
-    assert_equal [[map, :spectator]], built_args
+    assert_equal [[map, :spectator, nil]], built_args
     assert_equal 1, app.runs
   end
 
@@ -231,10 +231,15 @@ class BSP29CLITest < Minitest::Test
     app = FakeApp.new(0)
     modes = []
 
-    with_pak("maps/test.bsp" => minimal_bsp) do |pak_path|
+    with_pak(
+      "maps/test.bsp" => minimal_bsp,
+      Aogera::Quake::PALETTE_PATH => minimal_palette
+    ) do |pak_path|
+      palettes = []
       cli = Aogera::CLI::BSP29.new(
-        app_factory: lambda do |_map, mode:|
+        app_factory: lambda do |_map, mode:, palette:|
           modes << mode
+          palettes << palette
           app
         end,
         stdout: StringIO.new,
@@ -245,7 +250,38 @@ class BSP29CLITest < Minitest::Test
 
       assert_equal 0, status
       assert_equal [:spectator], modes
+      assert_equal 1, palettes.length
+      assert_equal 256, palettes.first.size
       assert_equal 1, app.runs
+    end
+  end
+
+  def test_pak_spectator_requires_palette_member
+    stderr = StringIO.new
+
+    with_pak("maps/test.bsp" => minimal_bsp) do |pak_path|
+      cli = Aogera::CLI::BSP29.new(stdout: StringIO.new, stderr: stderr)
+
+      status = cli.run(["--spectator", "--pak", pak_path, "maps/test.bsp"])
+
+      assert_equal 66, status
+      assert_includes stderr.string, "gfx/palette.lmp"
+    end
+  end
+
+  def test_pak_spectator_rejects_malformed_palette
+    stderr = StringIO.new
+
+    with_pak(
+      "maps/test.bsp" => minimal_bsp,
+      Aogera::Quake::PALETTE_PATH => "bad".b
+    ) do |pak_path|
+      cli = Aogera::CLI::BSP29.new(stdout: StringIO.new, stderr: stderr)
+
+      status = cli.run(["--spectator", "--pak", pak_path, "maps/test.bsp"])
+
+      assert_equal 65, status
+      assert_includes stderr.string, "Quake palette must be exactly 768 bytes"
     end
   end
 
@@ -378,6 +414,16 @@ class BSP29CLITest < Minitest::Test
     )
   end
 
+  def minimal_palette
+    bytes = String.new(capacity: Aogera::Quake::PaletteReader::BYTE_SIZE, encoding: Encoding::BINARY)
+    256.times do |index|
+      bytes << index
+      bytes << index
+      bytes << index
+    end
+    bytes
+  end
+
   def build_cli(
     map:,
     app: FakeApp.new(0),
@@ -391,8 +437,9 @@ class BSP29CLITest < Minitest::Test
         reader_paths << path
         map
       end,
-      app_factory: lambda do |_map, mode:|
+      app_factory: lambda do |_map, mode:, palette:|
         modes << mode
+        raise "unexpected palette for direct BSP" if palette
         app
       end,
       stdout: stdout,

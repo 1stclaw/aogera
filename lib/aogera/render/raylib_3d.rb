@@ -40,9 +40,12 @@ module Aogera
       DIAGNOSTIC_BACKGROUND = [11, 12, 15, 205].freeze
       DIAGNOSTIC_TEXT = [224, 226, 230, 255].freeze
 
-      def initialize(api:, bsp29_map: nil)
+      def initialize(api:, bsp29_map: nil, bsp29_palette: nil)
         @api = api
-        @bsp29_world = bsp29_map && BSP29World.new(map: bsp29_map)
+        @bsp29_world = bsp29_map && BSP29World.new(
+          map: bsp29_map,
+          palette: bsp29_palette
+        )
       end
 
       def prepare

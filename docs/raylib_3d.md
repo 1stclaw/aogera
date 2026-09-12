@@ -141,7 +141,7 @@ The obsolete grid `Simulation::Pathfinder` has been removed. Active chase uses c
 
 ## Combat and interaction
 
-BSP static rendering now has an explicit CPU-preparation/GPU-resource split. `Render::BSP29SurfaceBuilder` reconstructs world-model faces once at map load into stable flat buffers, preserving unwrapped Quake base-texture S/T separately from local lightmap S/T and retaining baked-light metadata as offsets into one original lighting blob. `Render::BSP29World` packs the first stored light style into the existing padded grayscale atlas, triangulates the prepared face buffers for raylib, and `Render::Raylib3D#prepare` uploads the persistent mesh plus atlas texture only after the raylib window/context opens. `#close` unloads both resources before the context closes. Drawing a BSP frame therefore consumes persistent GPU resources without rebuilding BSP faces or lightmaps. Base Quake textures are still deferred; the low-resolution baked atlas is currently used as the model's grayscale albedo solely to expose static lighting.
+BSP static rendering now has an explicit CPU-preparation/GPU-resource split. `Render::BSP29SurfaceBuilder` reconstructs world-model faces once at map load into stable flat buffers, preserving unwrapped Quake base-texture S/T separately from local lightmap S/T and retaining baked-light metadata as offsets into one original lighting blob. `Render::BSP29World` packs the first stored light style into the existing padded low-resolution atlas and triangulates the prepared face buffers for raylib. With a decoded Quake palette, used embedded miptextures are expanded only for GPU upload, surfaces are batched by base texture, UV0 carries repeating base coordinates, UV1 carries clamp-sampled lightmap-atlas coordinates, and a minimal shader multiplies the two samples per fragment. `Render::Raylib3D#prepare` allocates those persistent resources only after the raylib window/context opens; `#close` releases models, textures, and shader before the context closes. Drawing a BSP frame therefore consumes persistent GPU resources without rebuilding faces, base pixels, or lightmaps. Without a palette, the same renderer retains its grayscale lightmap-only fallback.
 
 In BSP spectator mode, `Render::Raylib3D` also draws a small diagnostic overlay after leaving 3D mode. It shows measured raylib FPS, the spectator camera position, yaw/pitch, BSP triangle count, mesh-draw count, lightmapped-face/atlas statistics, and runtime entity count. FPS is observational only: simulation still runs at the independent fixed 30 Hz cadence while the host targets 60 rendered frames per second.
 
@@ -159,7 +159,7 @@ This preserves the useful platform boundary established before the 3D renderer a
 
 Aogera 0.3.5 still defers:
 
-- BSP palette-sampled base-texture rendering and animated/multi-style lightmap evaluation;
+- Quake fullbright-palette treatment, animated base textures, special sky/turbulent surfaces, and animated/multi-style lightmap evaluation;
 - PVS-driven BSP visibility;
 - vertical actor physics;
 - projectile or hitscan rendering/simulation;

@@ -5,6 +5,7 @@ require "optparse"
 module Aogera
   module CLI
     BSP29Options = Data.define(:path, :pak_path, :mode, :action)
+    LoadedBSP29 = Data.define(:map, :source, :vfs)
 
     class BSP29
       EX_USAGE = 64
@@ -22,8 +23,8 @@ module Aogera
         @reader = reader
         @bytes_reader = bytes_reader
         @pak_factory = pak_factory
-        @app_factory = app_factory || lambda do |map, mode:|
-          build_app(map, mode:)
+        @app_factory = app_factory || lambda do |map, mode:, palette:|
+          build_app(map, mode:, palette:)
         end
         @stdout = stdout
         @stderr = stderr
@@ -35,27 +36,28 @@ module Aogera
         return print_help(parser) if options.action == :help
 
         begin
-          map, source = load_map(options)
+          loaded = load_map(options)
+          palette = options.action == :run ? load_palette(loaded.vfs) : nil
         rescue SystemCallError, Aogera::Content::NotFound => error
           @stderr.puts "aogera-bsp29: input not available: #{error.message}"
           return EX_NOINPUT
         rescue Aogera::Content::InvalidPath => error
           @stderr.puts "aogera-bsp29: invalid content path: #{error.message}"
           return EX_USAGE
-        rescue Aogera::Content::Pak::FormatError => error
+        rescue Aogera::Content::Pak::FormatError, Aogera::Quake::PaletteReader::FormatError => error
           @stderr.puts "aogera-bsp29: #{error.message}"
           return EX_DATAERR
         end
 
         case options.action
         when :run
-          @app_factory.call(map, mode: options.mode).run
+          @app_factory.call(loaded.map, mode: options.mode, palette: palette).run
         when :bsp_info
-          @report.bsp_info(map, source: source)
+          @report.bsp_info(loaded.map, source: loaded.source)
         when :dump_entities
-          @report.entities(map, source: source)
+          @report.entities(loaded.map, source: loaded.source)
         when :dump_textures
-          @report.textures(map, source: source)
+          @report.textures(loaded.map, source: loaded.source)
         else
           raise ArgumentError, "unknown BSP29 CLI action: #{options.action.inspect}"
         end
@@ -169,15 +171,29 @@ module Aogera
 
       def load_map(options)
         unless options.pak_path
-          return [@reader.call(options.path), options.path]
+          return LoadedBSP29.new(
+            map: @reader.call(options.path),
+            source: options.path,
+            vfs: nil
+          )
         end
 
         virtual_path = Aogera::Content::VirtualPath.normalize(options.path)
         vfs = Aogera::Content::VFS.new
         vfs.mount(@pak_factory.call(options.pak_path))
         bytes = vfs.read(virtual_path)
-        map = @bytes_reader.call(bytes)
-        [map, "#{options.pak_path}:#{virtual_path}"]
+        LoadedBSP29.new(
+          map: @bytes_reader.call(bytes),
+          source: "#{options.pak_path}:#{virtual_path}",
+          vfs: vfs
+        )
+      end
+
+      def load_palette(vfs)
+        return unless vfs
+
+        bytes = vfs.read(Aogera::Quake::PALETTE_PATH)
+        Aogera::Quake::PaletteReader.read_bytes(bytes)
       end
 
       def select_action!(state, action, option)
@@ -195,12 +211,16 @@ module Aogera
         0
       end
 
-      def build_app(map, mode:)
+      def build_app(map, mode:, palette:)
         unless mode == :spectator
           raise ArgumentError, "unsupported BSP29 launch mode: #{mode.inspect}"
         end
 
-        Aogera::App.new(bsp29_map: map, bsp29_mode: mode)
+        Aogera::App.new(
+          bsp29_map: map,
+          bsp29_mode: mode,
+          bsp29_palette: palette
+        )
       end
     end
   end

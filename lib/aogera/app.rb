@@ -9,9 +9,10 @@ module Aogera
       clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
       raylib_api: nil,
       bsp29_map: nil,
-      bsp29_mode: nil
+      bsp29_mode: nil,
+      bsp29_palette: nil
     )
-      validate_bsp29_launch!(bsp29_map, bsp29_mode)
+      validate_bsp29_launch!(bsp29_map, bsp29_mode, bsp29_palette)
       prototypes = Prototype::Loader.load(Content::RubyPaths.prototype(:actors))
       level, dialogues, initial_view = runtime_content(bsp29_map, prototypes)
       @session = Session.new(
@@ -58,7 +59,11 @@ module Aogera
 
       api = raylib_api || RaylibAPI.new
       @host = Host::Raylib.new(api: api)
-      @renderer = Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
+      @renderer = Render::Raylib3D.new(
+        api: api,
+        bsp29_map: bsp29_map,
+        bsp29_palette: bsp29_palette
+      )
       @clock = clock
       @fixed_step = FixedStep.new(hz: TICK_HZ)
     end
@@ -84,7 +89,7 @@ module Aogera
 
     private
 
-    def validate_bsp29_launch!(bsp29_map, bsp29_mode)
+    def validate_bsp29_launch!(bsp29_map, bsp29_mode, bsp29_palette)
       unless bsp29_mode.nil? || bsp29_mode == :spectator
         raise ArgumentError, "unsupported BSP29 launch mode: #{bsp29_mode.inspect}"
       end
@@ -93,6 +98,9 @@ module Aogera
       end
       if bsp29_mode && !bsp29_map
         raise ArgumentError, "BSP29 launch mode requires BSP29 map data"
+      end
+      if bsp29_palette && !bsp29_map
+        raise ArgumentError, "BSP29 palette requires BSP29 map data"
       end
     end
 
