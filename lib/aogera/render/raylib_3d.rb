@@ -195,6 +195,9 @@ module Aogera
           ),
           "BSP #{@bsp29_world.triangle_count} tris | " \
             "#{@bsp29_world.batch_count} mesh draws",
+          "World #{@bsp29_world.world_surface_count} surfaces | " \
+            "#{@bsp29_world.brush_submodel_count} submodels skipped",
+          base_texture_diagnostic,
           "Lightmaps #{@bsp29_world.lightmapped_face_count} faces | " \
             "#{@bsp29_world.lightmap_atlas_width}x" \
             "#{@bsp29_world.lightmap_atlas_height}",
@@ -220,6 +223,15 @@ module Aogera
             rgba: DIAGNOSTIC_TEXT
           )
         end
+      end
+
+      def base_texture_diagnostic
+        base = if @bsp29_world.textured?
+          "#{@bsp29_world.used_texture_count} textures"
+        else
+          "grayscale fallback"
+        end
+        "Base #{base} | #{@bsp29_world.missing_texture_face_count} missing faces"
       end
 
       def radians_to_degrees(value)

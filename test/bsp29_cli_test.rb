@@ -110,6 +110,8 @@ class BSP29CLITest < Minitest::Test
     assert_includes stdout.string, "BSP29: maps/e1m3.bsp"
     assert_includes stdout.string, "entities:     2"
     assert_includes stdout.string, "planes:       3"
+    assert_includes stdout.string, "world faces:  5"
+    assert_includes stdout.string, "submodels:    0"
     assert_includes stdout.string, "world bounds:  (-64.0, -24.0, -32.0) -> (64.0, 96.0, 128.0)"
     assert_includes stdout.string, "player starts: 1"
     assert_includes stdout.string, "0: (12.0, 24.0, 36.0)"

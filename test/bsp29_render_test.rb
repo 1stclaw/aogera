@@ -193,6 +193,10 @@ class BSP29RenderTest < Minitest::Test
     renderer.prepare(api)
 
     assert renderer.textured?
+    assert_equal 2, renderer.world_surface_count
+    assert_equal 0, renderer.brush_submodel_count
+    assert_equal 2, renderer.used_texture_count
+    assert_equal 0, renderer.missing_texture_face_count
     assert_equal 4, renderer.triangle_count
     assert_equal 2, renderer.batch_count
     assert_equal 2, api.created.length
@@ -236,6 +240,8 @@ class BSP29RenderTest < Minitest::Test
     renderer.prepare(api)
 
     assert_equal 1, renderer.batch_count
+    assert_equal 0, renderer.used_texture_count
+    assert_equal 1, renderer.missing_texture_face_count
     assert_equal 2, api.textures.length
     fallback = api.textures.fetch(1)
     assert_equal 1, fallback.fetch(:width)
@@ -334,6 +340,17 @@ class BSP29RenderTest < Minitest::Test
     error = assert_raises(RuntimeError) { renderer.draw(FakeAPI.new) }
 
     assert_match(/not prepared/, error.message)
+  end
+
+  def test_renderer_reports_preserved_but_unrendered_brush_submodels
+    map = square_map
+    submodel = map.world_model.with(first_face: 0, face_count: 0)
+    map = map.with(models: [map.world_model, submodel].freeze)
+
+    renderer = Aogera::Render::BSP29World.new(map: map)
+
+    assert_equal 1, renderer.world_surface_count
+    assert_equal 1, renderer.brush_submodel_count
   end
 
   def test_only_world_model_zero_faces_are_batched

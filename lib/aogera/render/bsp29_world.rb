@@ -18,7 +18,9 @@ module Aogera
       PreparedBatch = Data.define(:model, :rgba)
 
       attr_reader :batches, :triangle_count, :lightmapped_face_count,
-        :lightmap_atlas_width, :lightmap_atlas_height
+        :lightmap_atlas_width, :lightmap_atlas_height,
+        :world_surface_count, :brush_submodel_count, :used_texture_count,
+        :missing_texture_face_count
 
       def batch_count = batches.length
       def textured? = !@palette.nil?
@@ -28,6 +30,9 @@ module Aogera
         @palette = palette
         @prepared_world = BSP29SurfaceBuilder.build(map)
         surfaces = @prepared_world.surfaces
+        @world_surface_count = surfaces.length
+        @brush_submodel_count = [map.models.length - 1, 0].max
+        @used_texture_count, @missing_texture_face_count = texture_diagnostics(surfaces)
         @lightmapped_face_count = surfaces.count(&:lightmap)
         @lightmap_atlas = build_lightmap_atlas(@prepared_world)
         @lightmap_atlas_width = @lightmap_atlas.width
@@ -108,6 +113,20 @@ module Aogera
       end
 
       private
+
+      def texture_diagnostics(surfaces)
+        used = {}
+        missing_faces = 0
+        surfaces.each do |surface|
+          texture = texture_for(surface.texture_index)
+          if texture
+            used[surface.texture_index] = true
+          else
+            missing_faces += 1
+          end
+        end
+        [used.length, missing_faces]
+      end
 
       def build_batches(surfaces, atlas)
         return [] if surfaces.empty?

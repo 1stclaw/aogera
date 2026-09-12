@@ -306,6 +306,8 @@ class Render3DContractTest < Minitest::Test
     assert_includes texts, "Camera XYZ 10.00  20.00  30.00"
     assert_includes texts, "View yaw 90.0 deg | pitch 0.0 deg"
     assert_includes texts, "BSP 0 tris | 0 mesh draws"
+    assert_includes texts, "World 0 surfaces | 0 submodels skipped"
+    assert_includes texts, "Base grayscale fallback | 0 missing faces"
     assert_includes texts, "Entities 2"
     assert_equal 2, api.calls.count { |call| call.first == :draw_rectangle }
   end

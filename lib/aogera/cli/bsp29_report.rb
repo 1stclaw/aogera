@@ -22,6 +22,8 @@ module Aogera
         @stdout.puts "edges:        #{map.edges.length}"
         @stdout.puts "surfedges:    #{map.surfedges.length}"
         @stdout.puts "models:       #{map.models.length}"
+        @stdout.puts "world faces:  #{world ? world.face_count : 0}"
+        @stdout.puts "submodels:    #{[map.models.length - 1, 0].max}"
         @stdout.puts "vis bytes:    #{map.visibility.bytesize}"
         @stdout.puts "light bytes:  #{map.lighting.bytesize}"
 
