@@ -117,6 +117,16 @@ class BSP29ReaderTest < Minitest::Test
     assert_equal [0, 1, 2, 3], texture.mipmaps.map { |mip| mip.getbyte(0) }
   end
 
+
+  def test_miptexture_name_stops_at_first_nul_byte
+    raw_name = "sky1\0ignored!!".ljust(16, "X")
+    map = Aogera::BSP29::Reader.read_bytes(
+      build_bsp(textures: texture_lump(raw_name: raw_name))
+    )
+
+    assert_equal "sky1", map.textures.fetch(0).name
+  end
+
   def test_parsed_miptexture_can_be_palette_expanded_without_changing_bsp_data
     map = Aogera::BSP29::Reader.read_bytes(build_bsp(textures: texture_lump))
     texture = map.textures.fetch(0)
@@ -227,14 +237,14 @@ class BSP29ReaderTest < Minitest::Test
     header + payload
   end
 
-  def texture_lump
+  def texture_lump(raw_name: "TEST\0".ljust(16, "\0"))
     width = 16
     height = 16
     mip_sizes = [256, 64, 16, 4]
     mip_offsets = [40]
     mip_sizes[0, 3].each { |size| mip_offsets << mip_offsets.last + size }
 
-    header = "TEST\0".ljust(16, "\0") +
+    header = raw_name.byteslice(0, 16).ljust(16, "\0") +
       [width, height, *mip_offsets].pack("V6")
     pixels = mip_sizes.each_with_index.map { |size, index| index.chr * size }.join.b
     texture = header + pixels

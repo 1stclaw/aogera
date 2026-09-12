@@ -4,7 +4,7 @@ require "optparse"
 
 module Aogera
   module CLI
-    BSP29Options = Data.define(:path, :pak_path, :mode, :action)
+    BSP29Options = Data.define(:path, :pak_path, :mode, :action, :two_sided)
     LoadedBSP29 = Data.define(:map, :source, :vfs)
 
     class BSP29
@@ -23,8 +23,8 @@ module Aogera
         @reader = reader
         @bytes_reader = bytes_reader
         @pak_factory = pak_factory
-        @app_factory = app_factory || lambda do |map, mode:, palette:|
-          build_app(map, mode:, palette:)
+        @app_factory = app_factory || lambda do |map, mode:, palette:, two_sided:|
+          build_app(map, mode:, palette:, two_sided:)
         end
         @stdout = stdout
         @stderr = stderr
@@ -51,7 +51,12 @@ module Aogera
 
         case options.action
         when :run
-          @app_factory.call(loaded.map, mode: options.mode, palette: palette).run
+          @app_factory.call(
+            loaded.map,
+            mode: options.mode,
+            palette: palette,
+            two_sided: options.two_sided
+          ).run
         when :bsp_info
           @report.bsp_info(loaded.map, source: loaded.source)
         when :dump_entities
@@ -79,7 +84,8 @@ module Aogera
         state = {
           pak_path: nil,
           mode: nil,
-          action: :run
+          action: :run,
+          two_sided: false
         }
         parser = option_parser(state)
         parser.parse!(args)
@@ -90,7 +96,8 @@ module Aogera
               path: nil,
               pak_path: state[:pak_path],
               mode: state[:mode],
-              action: :help
+              action: :help,
+              two_sided: state[:two_sided]
             ),
             parser
           ]
@@ -105,7 +112,11 @@ module Aogera
 
         if state[:action] == :run && state[:mode].nil?
           raise OptionParser::InvalidArgument,
-            "launch mode required; use --spectator"
+            "launch mode required; use --spectator or --walkthrough"
+        end
+        if state[:two_sided] && state[:action] != :run
+          raise OptionParser::InvalidArgument,
+            "--bsp-two-sided requires a runtime launch mode"
         end
 
         [
@@ -113,7 +124,8 @@ module Aogera
             path: path,
             pak_path: state[:pak_path],
             mode: state[:mode],
-            action: state[:action]
+            action: state[:action],
+            two_sided: state[:two_sided]
           ),
           parser
         ]
@@ -139,7 +151,21 @@ module Aogera
             "--spectator",
             "Launch the collision-free BSP spectator"
           ) do
-            state[:mode] = :spectator
+            select_mode!(state, :spectator, "--spectator")
+          end
+
+          parser.on(
+            "--walkthrough",
+            "Launch horizontal player movement with BSP collision"
+          ) do
+            select_mode!(state, :walkthrough, "--walkthrough")
+          end
+
+          parser.on(
+            "--bsp-two-sided",
+            "Duplicate reversed world triangles for culling diagnosis"
+          ) do
+            state[:two_sided] = true
           end
 
           parser.on(
@@ -196,6 +222,16 @@ module Aogera
         Aogera::Quake::PaletteReader.read_bytes(bytes)
       end
 
+      def select_mode!(state, mode, option)
+        current = state[:mode]
+        if current && current != mode
+          raise OptionParser::InvalidOption,
+            "#{option} conflicts with --#{current}"
+        end
+
+        state[:mode] = mode
+      end
+
       def select_action!(state, action, option)
         current = state[:action]
         if current != :run && current != action
@@ -211,15 +247,16 @@ module Aogera
         0
       end
 
-      def build_app(map, mode:, palette:)
-        unless mode == :spectator
+      def build_app(map, mode:, palette:, two_sided:)
+        unless %i[spectator walkthrough].include?(mode)
           raise ArgumentError, "unsupported BSP29 launch mode: #{mode.inspect}"
         end
 
         Aogera::App.new(
           bsp29_map: map,
           bsp29_mode: mode,
-          bsp29_palette: palette
+          bsp29_palette: palette,
+          bsp29_two_sided: two_sided
         )
       end
     end

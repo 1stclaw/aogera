@@ -91,6 +91,13 @@ class BSP29RenderTest < Minitest::Test
     renderer = Aogera::Render::BSP29World.new(map: square_map)
     api = FakeAPI.new
 
+    assert_equal 1, renderer.world_face_count
+    assert_equal 1, renderer.world_surface_count
+    assert_equal 0, renderer.dropped_surface_count
+    assert_equal 1, renderer.reversed_surface_count
+    assert_equal 2, renderer.source_triangle_count
+    assert_equal 0, renderer.degenerate_triangle_count
+    refute renderer.two_sided?
     assert_equal 2, renderer.triangle_count
     assert_equal 1, renderer.batch_count
     assert_equal 18, renderer.batches.first.vertices.length
@@ -111,6 +118,65 @@ class BSP29RenderTest < Minitest::Test
     triangles.each do |triangle|
       assert_operator cross_y_from_flat(triangle), :>, 0.0
     end
+  end
+
+  def test_two_sided_diagnostic_submits_reversed_copy_of_each_triangle
+    renderer = Aogera::Render::BSP29World.new(map: square_map, two_sided: true)
+    api = FakeAPI.new
+
+    assert renderer.two_sided?
+    assert_equal 2, renderer.source_triangle_count
+    assert_equal 4, renderer.triangle_count
+
+    renderer.prepare(api)
+    triangles = api.created.first.fetch(:vertices).each_slice(9).to_a
+
+    assert_equal 4, triangles.length
+    assert_operator cross_y_from_flat(triangles.fetch(0)), :>, 0.0
+    assert_operator cross_y_from_flat(triangles.fetch(1)), :<, 0.0
+    assert_equal triangles.fetch(0).each_slice(3).to_a.sort,
+      triangles.fetch(1).each_slice(3).to_a.sort
+  end
+
+
+  def test_surface_builder_reverses_full_quake_winding_when_leading_vertices_are_collinear
+    prepared = Aogera::Render::BSP29SurfaceBuilder.build(tjunction_winding_map(side: 0))
+    surface = prepared.surfaces.fetch(0)
+    diagnostics = prepared.diagnostics
+
+    assert_equal 1, diagnostics.reversed_face_count
+    assert_equal 3, diagnostics.source_triangle_count
+    assert_equal 0, diagnostics.degenerate_triangle_count
+    first_triangle = surface.positions.each_slice(3).take(3).flatten
+    assert_operator cross_y_from_flat(first_triangle), :>, 0.0
+  end
+
+  def test_surface_builder_converts_planeback_quake_winding_for_raylib
+    prepared = Aogera::Render::BSP29SurfaceBuilder.build(tjunction_winding_map(side: 1))
+    surface = prepared.surfaces.fetch(0)
+    diagnostics = prepared.diagnostics
+
+    assert_equal 1, diagnostics.reversed_face_count
+    assert_equal 3, diagnostics.source_triangle_count
+    assert_equal 0, diagnostics.degenerate_triangle_count
+    first_triangle = surface.positions.each_slice(3).take(3).flatten
+    assert_operator cross_y_from_flat(first_triangle), :<, 0.0
+  end
+
+  def test_surface_builder_counts_world_faces_dropped_before_mesh_preparation
+    map = square_map
+    short_face = map.faces.first.with(edge_count: 2)
+    map = map.with(faces: [short_face].freeze)
+
+    prepared = Aogera::Render::BSP29SurfaceBuilder.build(map)
+    diagnostics = prepared.diagnostics
+
+    assert_equal 1, diagnostics.world_face_count
+    assert_equal 0, diagnostics.prepared_surface_count
+    assert_equal 1, diagnostics.dropped_face_count
+    assert_equal 0, diagnostics.source_triangle_count
+    assert_equal 0, diagnostics.degenerate_triangle_count
+    assert_empty prepared.surfaces
   end
 
   def test_baked_light_samples_build_grayscale_atlas_and_uvs
@@ -359,6 +425,18 @@ class BSP29RenderTest < Minitest::Test
     assert_equal 2, renderer.triangle_count
   end
 
+  def test_rejects_negative_face_plane_index_after_winding_conversion_refactor
+    map = square_map
+    bad_face = map.faces.first.with(plane_index: -1)
+    bad_map = map.with(faces: [bad_face].freeze)
+
+    error = assert_raises(Aogera::BSP29::FormatError) do
+      Aogera::Render::BSP29World.new(map: bad_map)
+    end
+
+    assert_match(/plane index is out of range: -1/, error.message)
+  end
+
   def test_rejects_negative_cross_reference_indices
     map = square_map
     bad_face = map.faces.first.with(texinfo_index: -1)
@@ -487,6 +565,82 @@ class BSP29RenderTest < Minitest::Test
   end
 
   private
+
+
+  def tjunction_winding_map(side:)
+    vec = Aogera::BSP29::Vec3
+    vertices = [
+      vec.new(x: 0.0, y: 0.0, z: 0.0),
+      vec.new(x: 1.0, y: 0.0, z: 0.0),
+      vec.new(x: 2.0, y: 0.0, z: 0.0),
+      vec.new(x: 2.0, y: 0.0, z: 2.0),
+      vec.new(x: 0.0, y: 0.0, z: 2.0)
+    ].freeze
+    edges = [
+      Aogera::BSP29::Edge.new(vertex_indices: [0, 0].freeze),
+      Aogera::BSP29::Edge.new(vertex_indices: [0, 1].freeze),
+      Aogera::BSP29::Edge.new(vertex_indices: [1, 2].freeze),
+      Aogera::BSP29::Edge.new(vertex_indices: [2, 3].freeze),
+      Aogera::BSP29::Edge.new(vertex_indices: [3, 4].freeze),
+      Aogera::BSP29::Edge.new(vertex_indices: [4, 0].freeze)
+    ].freeze
+    surfedges = side.zero? ? [1, 2, 3, 4, 5] : [-5, -4, -3, -2, -1]
+
+    Aogera::BSP29::MapData.new(
+      entities: [].freeze,
+      planes: [
+        Aogera::BSP29::Plane.new(
+          normal: vec.new(x: 0.0, y: 1.0, z: 0.0),
+          distance: 0.0,
+          type: 1
+        )
+      ].freeze,
+      textures: [mip_texture("AOG_GROUND")].freeze,
+      vertices: vertices,
+      visibility: "".b.freeze,
+      nodes: [].freeze,
+      texinfo: [
+        Aogera::BSP29::TexInfo.new(
+          s_axis: vec.new(x: 1.0, y: 0.0, z: 0.0),
+          s_offset: 0.0,
+          t_axis: vec.new(x: 0.0, y: 0.0, z: 1.0),
+          t_offset: 0.0,
+          texture_index: 0,
+          flags: 0
+        )
+      ].freeze,
+      faces: [
+        Aogera::BSP29::Face.new(
+          plane_index: 0,
+          side: side,
+          first_edge: 0,
+          edge_count: 5,
+          texinfo_index: 0,
+          styles: [0, 255, 255, 255].freeze,
+          light_offset: -1
+        )
+      ].freeze,
+      lighting: "".b.freeze,
+      clipnodes: [].freeze,
+      leaves: [].freeze,
+      marksurfaces: [].freeze,
+      edges: edges,
+      surfedges: surfedges.freeze,
+      models: [
+        Aogera::BSP29::Model.new(
+          bounds: Aogera::BSP29::Bounds.new(
+            mins: vec.new(x: 0.0, y: 0.0, z: 0.0),
+            maxs: vec.new(x: 2.0, y: 0.0, z: 2.0)
+          ),
+          origin: vec.new(x: 0.0, y: 0.0, z: 0.0),
+          headnodes: [0, 0, 0, 0].freeze,
+          visible_leaf_count: 0,
+          first_face: 0,
+          face_count: 1
+        )
+      ].freeze
+    )
+  end
 
   def square_map(
     extra_face: false,

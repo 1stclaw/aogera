@@ -40,11 +40,14 @@ module Aogera
       DIAGNOSTIC_BACKGROUND = [11, 12, 15, 205].freeze
       DIAGNOSTIC_TEXT = [224, 226, 230, 255].freeze
 
-      def initialize(api:, bsp29_map: nil, bsp29_palette: nil)
+      def initialize(
+        api:, bsp29_map: nil, bsp29_palette: nil, bsp29_two_sided: false
+      )
         @api = api
         @bsp29_world = bsp29_map && BSP29World.new(
           map: bsp29_map,
-          palette: bsp29_palette
+          palette: bsp29_palette,
+          two_sided: bsp29_two_sided
         )
       end
 
@@ -59,22 +62,27 @@ module Aogera
       def draw(
         level:, world:, status:, view:, camera_entity_id:, camera_eye: nil
       )
+        resolved_camera_eye = camera_eye || entity_camera_eye(
+          world: world,
+          view: view,
+          camera_entity_id: camera_entity_id
+        )
+
         @api.begin_drawing
         @api.clear(BACKGROUND)
         @api.begin_mode_3d(
-          **camera_for(
-            world: world,
-            view: view,
-            camera_entity_id: camera_entity_id,
-            camera_eye: camera_eye
-          )
+          **camera_for(view: view, camera_eye: resolved_camera_eye)
         )
 
         draw_static_world(level)
         draw_entities(level, world, hidden_entity_id: camera_entity_id)
 
         @api.end_mode_3d
-        draw_diagnostics(world: world, view: view, camera_eye: camera_eye)
+        draw_diagnostics(
+          world: world,
+          view: view,
+          camera_eye: resolved_camera_eye
+        )
         draw_status(status)
       ensure
         @api.end_drawing
@@ -155,22 +163,23 @@ module Aogera
         level.inside?(grid_x, grid_z)
       end
 
-      def camera_for(world:, view:, camera_entity_id:, camera_eye:)
-        if camera_eye
-          x, eye_y, z = camera_eye
-        else
-          position = world.component(camera_entity_id, :position)
-          raise ArgumentError, "camera entity has no position" unless position
+      def entity_camera_eye(world:, view:, camera_entity_id:)
+        position = world.component(camera_entity_id, :position)
+        raise ArgumentError, "camera entity has no position" unless position
 
-          x = position.x
-          z = position.z
-          eye_y = position.y + view.eye_height
-        end
-        eye = [x, eye_y, z]
+        [
+          position.x,
+          position.y + view.eye_height,
+          position.z
+        ]
+      end
+
+      def camera_for(view:, camera_eye:)
+        x, eye_y, z = camera_eye
         forward_x, forward_y, forward_z = view.forward_vector
 
         {
-          position: eye,
+          position: camera_eye,
           target: [
             x + forward_x,
             eye_y + forward_y,
@@ -193,10 +202,15 @@ module Aogera
             radians_to_degrees(view.yaw),
             radians_to_degrees(view.pitch)
           ),
-          "BSP #{@bsp29_world.triangle_count} tris | " \
+          "BSP #{@bsp29_world.triangle_count} submitted tris | " \
             "#{@bsp29_world.batch_count} mesh draws",
-          "World #{@bsp29_world.world_surface_count} surfaces | " \
-            "#{@bsp29_world.brush_submodel_count} submodels skipped",
+          "Faces #{@bsp29_world.world_surface_count}/#{@bsp29_world.world_face_count} prepared | " \
+            "#{@bsp29_world.dropped_surface_count} dropped",
+          "Raylib winding #{@bsp29_world.reversed_surface_count} flipped | " \
+            "#{@bsp29_world.degenerate_triangle_count} degenerate tris",
+          "Source #{@bsp29_world.source_triangle_count} tris | " \
+            "two-sided #{@bsp29_world.two_sided? ? 'ON' : 'off'}",
+          "Brush #{@bsp29_world.brush_submodel_count} submodels skipped",
           base_texture_diagnostic,
           "Lightmaps #{@bsp29_world.lightmapped_face_count} faces | " \
             "#{@bsp29_world.lightmap_atlas_width}x" \

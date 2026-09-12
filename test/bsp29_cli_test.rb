@@ -58,7 +58,7 @@ class BSP29CLITest < Minitest::Test
     assert_equal 64, status
     assert_empty reader_paths
     assert_equal 0, app.runs
-    assert_includes stderr.string, "launch mode required; use --spectator"
+    assert_includes stderr.string, "launch mode required; use --spectator or --walkthrough"
   end
 
   def test_explicit_spectator_is_supported
@@ -73,6 +73,58 @@ class BSP29CLITest < Minitest::Test
     assert_equal 1, app.runs
   end
 
+  def test_explicit_walkthrough_is_supported
+    app = FakeApp.new(0)
+    modes = []
+    cli = build_cli(map: fake_map, app: app, modes: modes)
+
+    status = cli.run(["--walkthrough", "map.bsp"])
+
+    assert_equal 0, status
+    assert_equal [:walkthrough], modes
+    assert_equal 1, app.runs
+  end
+
+  def test_runtime_launch_modes_conflict
+    stderr = StringIO.new
+    cli = build_cli(map: fake_map, stderr: stderr)
+
+    status = cli.run(["--spectator", "--walkthrough", "map.bsp"])
+
+    assert_equal 64, status
+    assert_includes stderr.string, "conflicts with --spectator"
+  end
+
+  def test_two_sided_diagnostic_is_forwarded_to_runtime_app
+    app = FakeApp.new(0)
+    received = []
+    cli = Aogera::CLI::BSP29.new(
+      reader: ->(_path) { fake_map },
+      app_factory: lambda do |_map, mode:, palette:, two_sided:|
+        received << [mode, palette, two_sided]
+        app
+      end,
+      stdout: StringIO.new,
+      stderr: StringIO.new
+    )
+
+    status = cli.run(["--walkthrough", "--bsp-two-sided", "map.bsp"])
+
+    assert_equal 0, status
+    assert_equal [[:walkthrough, nil, true]], received
+    assert_equal 1, app.runs
+  end
+
+  def test_two_sided_diagnostic_is_rejected_for_inspection_only
+    stderr = StringIO.new
+    cli = build_cli(map: fake_map, stderr: stderr)
+
+    status = cli.run(["--bsp-info", "--bsp-two-sided", "map.bsp"])
+
+    assert_equal 64, status
+    assert_includes stderr.string, "--bsp-two-sided requires a runtime launch mode"
+  end
+
   def test_default_app_factory_builds_the_bsp_app
     map = fake_map
     app = FakeApp.new(0)
@@ -83,8 +135,10 @@ class BSP29CLITest < Minitest::Test
       stderr: StringIO.new
     )
 
-    factory = lambda do |bsp29_map:, bsp29_mode:, bsp29_palette:|
-      built_args << [bsp29_map, bsp29_mode, bsp29_palette]
+    factory = lambda do |
+      bsp29_map:, bsp29_mode:, bsp29_palette:, bsp29_two_sided:
+    |
+      built_args << [bsp29_map, bsp29_mode, bsp29_palette, bsp29_two_sided]
       app
     end
 
@@ -94,7 +148,7 @@ class BSP29CLITest < Minitest::Test
       assert_equal 0, status
     end
 
-    assert_equal [[map, :spectator, nil]], built_args
+    assert_equal [[map, :spectator, nil, false]], built_args
     assert_equal 1, app.runs
   end
 
@@ -175,6 +229,9 @@ class BSP29CLITest < Minitest::Test
     assert_includes stdout.string, "--dump-entities"
     assert_includes stdout.string, "--dump-textures"
     assert_includes stdout.string, "--pak PATH"
+    assert_includes stdout.string, "--spectator"
+    assert_includes stdout.string, "--walkthrough"
+    assert_includes stdout.string, "--bsp-two-sided"
   end
 
   def test_missing_path_is_a_usage_error
@@ -239,9 +296,10 @@ class BSP29CLITest < Minitest::Test
     ) do |pak_path|
       palettes = []
       cli = Aogera::CLI::BSP29.new(
-        app_factory: lambda do |_map, mode:, palette:|
+        app_factory: lambda do |_map, mode:, palette:, two_sided:|
           modes << mode
           palettes << palette
+          raise "unexpected two-sided diagnostic" if two_sided
           app
         end,
         stdout: StringIO.new,
@@ -254,6 +312,35 @@ class BSP29CLITest < Minitest::Test
       assert_equal [:spectator], modes
       assert_equal 1, palettes.length
       assert_equal 256, palettes.first.size
+      assert_equal 1, app.runs
+    end
+  end
+
+  def test_pak_walkthrough_reads_palette_and_launches
+    app = FakeApp.new(0)
+    modes = []
+
+    with_pak(
+      "maps/test.bsp" => minimal_bsp,
+      Aogera::Quake::PALETTE_PATH => minimal_palette
+    ) do |pak_path|
+      palettes = []
+      cli = Aogera::CLI::BSP29.new(
+        app_factory: lambda do |_map, mode:, palette:, two_sided:|
+          modes << mode
+          palettes << palette
+          raise "unexpected two-sided diagnostic" if two_sided
+          app
+        end,
+        stdout: StringIO.new,
+        stderr: StringIO.new
+      )
+
+      status = cli.run(["--walkthrough", "--pak", pak_path, "maps/test.bsp"])
+
+      assert_equal 0, status
+      assert_equal [:walkthrough], modes
+      assert_equal 256, palettes.fetch(0).size
       assert_equal 1, app.runs
     end
   end
@@ -439,7 +526,7 @@ class BSP29CLITest < Minitest::Test
         reader_paths << path
         map
       end,
-      app_factory: lambda do |_map, mode:, palette:|
+      app_factory: lambda do |_map, mode:, palette:, two_sided:|
         modes << mode
         raise "unexpected palette for direct BSP" if palette
         app

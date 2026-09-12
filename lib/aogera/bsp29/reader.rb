@@ -290,7 +290,7 @@ module Aogera
         end.freeze
 
         MipTexture.new(
-          name: raw_name.delete("\0").dup.freeze,
+          name: raw_name.split("\0", 2).first.dup.freeze,
           width: width,
           height: height,
           mipmaps: mipmaps

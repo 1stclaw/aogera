@@ -305,11 +305,70 @@ class Render3DContractTest < Minitest::Test
     assert_includes texts, "FPS 57"
     assert_includes texts, "Camera XYZ 10.00  20.00  30.00"
     assert_includes texts, "View yaw 90.0 deg | pitch 0.0 deg"
-    assert_includes texts, "BSP 0 tris | 0 mesh draws"
-    assert_includes texts, "World 0 surfaces | 0 submodels skipped"
+    assert_includes texts, "BSP 0 submitted tris | 0 mesh draws"
+    assert_includes texts, "Faces 0/0 prepared | 0 dropped"
+    assert_includes texts, "Raylib winding 0 flipped | 0 degenerate tris"
+    assert_includes texts, "Source 0 tris | two-sided off"
+    assert_includes texts, "Brush 0 submodels skipped"
     assert_includes texts, "Base grayscale fallback | 0 missing faces"
     assert_includes texts, "Entities 2"
     assert_equal 2, api.calls.count { |call| call.first == :draw_rectangle }
+  end
+
+  def test_bsp_two_sided_diagnostic_is_visible_in_overlay
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 0.0, y: 0.0, z: 0.0)
+    )
+    renderer = Aogera::Render::Raylib3D.new(
+      api: api,
+      bsp29_map: empty_bsp29_map,
+      bsp29_two_sided: true
+    )
+    renderer.prepare
+
+    renderer.draw(
+      level: Object.new,
+      world: world.view,
+      status: "diagnostic",
+      view: Aogera::FirstPersonView.for_direction(:north),
+      camera_entity_id: camera_id
+    )
+
+    texts = api.calls
+      .select { |call| call.first == :draw_text }
+      .map { |call| call.last[:text] }
+
+    assert_includes texts, "Source 0 tris | two-sided ON"
+  end
+
+  def test_bsp_entity_bound_camera_also_draws_diagnostics
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 7.0, y: 8.0, z: 9.0)
+    )
+    view = Aogera::FirstPersonView.for_direction(:north)
+    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: empty_bsp29_map)
+    renderer.prepare
+
+    renderer.draw(
+      level: Object.new,
+      world: world.view,
+      status: "walkthrough",
+      view: view,
+      camera_entity_id: camera_id
+    )
+
+    texts = api.calls
+      .select { |call| call.first == :draw_text }
+      .map { |call| call.last[:text] }
+
+    assert_includes texts, format(
+      "Camera XYZ 7.00  %.2f  9.00",
+      8.0 + view.eye_height
+    )
   end
 
   def test_entities_without_renderable_component_are_not_drawn

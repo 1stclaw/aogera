@@ -19,18 +19,27 @@ module Aogera
 
       attr_reader :batches, :triangle_count, :lightmapped_face_count,
         :lightmap_atlas_width, :lightmap_atlas_height,
-        :world_surface_count, :brush_submodel_count, :used_texture_count,
-        :missing_texture_face_count
+        :world_surface_count, :world_face_count, :dropped_surface_count,
+        :reversed_surface_count, :source_triangle_count, :degenerate_triangle_count,
+        :brush_submodel_count, :used_texture_count, :missing_texture_face_count
 
       def batch_count = batches.length
       def textured? = !@palette.nil?
+      def two_sided? = @two_sided
 
-      def initialize(map:, palette: nil)
+      def initialize(map:, palette: nil, two_sided: false)
         @map = map
         @palette = palette
+        @two_sided = two_sided
         @prepared_world = BSP29SurfaceBuilder.build(map)
         surfaces = @prepared_world.surfaces
-        @world_surface_count = surfaces.length
+        diagnostics = @prepared_world.diagnostics
+        @world_face_count = diagnostics.world_face_count
+        @world_surface_count = diagnostics.prepared_surface_count
+        @dropped_surface_count = diagnostics.dropped_face_count
+        @reversed_surface_count = diagnostics.reversed_face_count
+        @source_triangle_count = diagnostics.source_triangle_count
+        @degenerate_triangle_count = diagnostics.degenerate_triangle_count
         @brush_submodel_count = [map.models.length - 1, 0].max
         @used_texture_count, @missing_texture_face_count = texture_diagnostics(surfaces)
         @lightmapped_face_count = surfaces.count(&:lightmap)
@@ -205,17 +214,33 @@ module Aogera
       )
         vertex_count = surface.positions.length / 3
         (1...(vertex_count - 1)).each do |index|
-          append_vertex_data(
+          append_triangle(
             vertices, base_texcoords, lightmap_texcoords,
-            surface, base_uv, 0, placement, atlas
+            surface, base_uv, [0, index, index + 1], placement, atlas
           )
-          append_vertex_data(
+          next unless two_sided?
+
+          append_triangle(
             vertices, base_texcoords, lightmap_texcoords,
-            surface, base_uv, index, placement, atlas
+            surface, base_uv, [0, index + 1, index], placement, atlas
           )
+        end
+      end
+
+      def append_triangle(
+        vertices,
+        base_texcoords,
+        lightmap_texcoords,
+        surface,
+        base_uv,
+        indices,
+        placement,
+        atlas
+      )
+        indices.each do |vertex_index|
           append_vertex_data(
             vertices, base_texcoords, lightmap_texcoords,
-            surface, base_uv, index + 1, placement, atlas
+            surface, base_uv, vertex_index, placement, atlas
           )
         end
       end

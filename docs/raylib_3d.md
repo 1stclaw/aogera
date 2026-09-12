@@ -1,4 +1,4 @@
-# Aogera 0.3.2a Raylib 3D Frontend
+# Aogera Raylib 3D Frontend
 
 Aogera's active 3D frontend consumes the same canonical runtime position used by simulation and collision.
 
@@ -127,7 +127,7 @@ BSP29::MapData
     -> RaylibAPI
 ```
 
-Dynamic renderable entities are still drawn at canonical `Position` values. In the v0.3.4 BSP preview, the bound player position comes directly from the map's `info_player_start`; the Ruby `test_field` is no longer loaded by the BSP launcher. `Mode::Spectator` starts its camera at that player's eye position and then supplies an explicit camera position to `Render::Raylib3D`, leaving actor `Position` untouched while it flies through geometry. The current one-cell `Level` terrain is inert structural scaffolding only, while BSP29 supplies visible static geometry and configured collision queries.
+Dynamic renderable entities are still drawn at canonical `Position` values. The bound player position comes directly from the map's `info_player_start`; the Ruby `test_field` is no longer loaded by the BSP launcher. `Mode::Spectator` starts its camera at that player's eye position and then supplies an explicit camera position to `Render::Raylib3D`, leaving actor `Position` untouched while it flies through geometry. `Mode::Walkthrough` instead leaves camera resolution entity-bound, so the first-person camera follows the controlled player's canonical `Position` after each collision-resolved fixed step. The current one-cell `Level` terrain is inert structural scaffolding only, while BSP29 supplies visible static geometry and configured collision queries.
 
 This is intentionally a simple RC bridge. There is no `Scene3D`, `Projector3D`, model/material framework, or generic transform hierarchy.
 
@@ -139,11 +139,15 @@ Active chase navigation is a simulation concern and does not depend on renderer 
 
 The obsolete grid `Simulation::Pathfinder` has been removed. Active chase uses continuous local navigation and does not expose navigation cells to the renderer.
 
-## Combat and interaction
+## BSP GPU preparation
 
 BSP static rendering now has an explicit CPU-preparation/GPU-resource split. `Render::BSP29SurfaceBuilder` reconstructs world-model faces once at map load into stable flat buffers, preserving unwrapped Quake base-texture S/T separately from local lightmap S/T and retaining baked-light metadata as offsets into one original lighting blob. `Render::BSP29World` packs the first stored light style into the existing padded low-resolution atlas and triangulates the prepared face buffers for raylib. With a decoded Quake palette, used embedded miptextures are expanded only for GPU upload, surfaces are batched by base texture, UV0 carries repeating base coordinates, UV1 carries clamp-sampled lightmap-atlas coordinates, and a minimal shader multiplies the two samples per fragment. `Render::Raylib3D#prepare` allocates those persistent resources only after the raylib window/context opens; `#close` releases models, textures, and shader before the context closes. Drawing a BSP frame therefore consumes persistent GPU resources without rebuilding faces, base pixels, or lightmaps. Without a palette, the same renderer retains its grayscale lightmap-only fallback.
 
-In BSP spectator mode, `Render::Raylib3D` also draws a small diagnostic overlay after leaving 3D mode. It shows measured raylib FPS, the spectator camera position, yaw/pitch, BSP triangle count, mesh-draw count, prepared world-surface count, preserved-but-unrendered BSP submodel count, base-texture or grayscale-fallback status, missing texture-face references, lightmapped-face/atlas statistics, and runtime entity count. FPS is observational only: simulation still runs at the independent fixed 30 Hz cadence while the host targets 60 rendered frames per second.
+In either BSP runtime mode, `Render::Raylib3D` also draws a small diagnostic overlay after leaving 3D mode. It resolves one camera-eye position per rendered frame—explicit spectator eye or entity-bound walkthrough eye—and shows measured raylib FPS, camera position, yaw/pitch, BSP triangle count, mesh-draw count, prepared world-surface count, preserved-but-unrendered BSP submodel count, base-texture or grayscale-fallback status, missing texture-face references, lightmapped-face/atlas statistics, and runtime entity count. FPS is observational only: simulation still runs at the independent fixed 30 Hz cadence while the host targets 60 rendered frames per second.
+
+For the detailed BSP-face-to-raylib conversion, including surfedge reconstruction, winding, triangulation, UV domains, batching, and native mesh upload, see `docs/bsp_to_raylib_meshes.md`.
+
+## Combat and interaction
 
 The renderer does not define combat geometry.
 
@@ -168,3 +172,10 @@ Aogera 0.3.5 still defers:
 - generic scene/transform/physics abstractions.
 
 The important frontend state is already normalized: rendering, camera placement, movement, collision, and NPC/player positions consume the same continuous runtime world coordinates.
+
+
+## BSP face-conversion diagnostic
+
+The 0.3.5 diagnostic checkpoint exposes conversion measurements from `BSP29SurfaceBuilder`: world faces presented by model `0`, prepared/dropped surfaces, Quake-source polygons flipped for raylib winding, source triangle count, and degenerate fan triangles. These measurements are computed once at map load with the prepared surface data.
+
+The two-sided A/B test confirmed that missing ordinary world faces were reaching the GPU with the wrong cull-facing orientation. Quake surfedge order is now treated as source truth and each complete polygon is reversed once for raylib's back-face-culling convention. The earlier heuristic compared only the first three vertices with the BSP plane; that fails when T-junction fixing places collinear vertices at the beginning of a valid polygon. `bin/aogera-bsp29 --bsp-two-sided` is retained as a map-authoring/compatibility diagnostic by submitting an additional opposite-winding copy of every triangle. It is useful when checking custom BSP29 output, including ericw-tools builds, but it is not the default rendering policy.
