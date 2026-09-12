@@ -1,6 +1,6 @@
 # Aogera Architecture
 
-This document describes the current Aogera 0.3.4 runtime and its present boundaries. The core BSP collision-authority split descends from the stable 0.3.2a checkpoint, 0.3.3 completed the continuous-navigation cutover, and 0.3.4 changes BSP bootstrap and rendering without replacing that collision boundary.
+This document describes the current Aogera 0.3.5 development runtime and its present boundaries. The core BSP collision-authority split descends from the stable 0.3.2a checkpoint, 0.3.3 completed the continuous-navigation cutover, and 0.3.4 changed BSP bootstrap and rendering without replacing that collision boundary. Aogera 0.3.5 has now separated source/decoder boundaries, added the minimal binary-content VFS, routed optional PAK-backed BSP launch/inspection through that VFS, and added a source-neutral Quake palette decoder while keeping decoded data downstream of storage policy.
 
 ## Design goals
 
@@ -351,23 +351,25 @@ content/levels/
 content/dialogue/
 ```
 
-Map/world authored data now has an explicit Reader/Loader boundary:
+Map/world authored data has an explicit source/Reader/Loader boundary. The current Ruby-authored level path remains path-based because it uses Ruby `require`:
 
 ```text
-source file -> Reader -> Level::AuthoredData -> Level::Loader -> Level
+Ruby source path -> Level::Readers::Ruby -> Level::AuthoredData -> Level::Loader -> Level
 ```
 
-`Level::Readers::Ruby` understands the current Ruby/grid source format and converts source grid positions into Aogera world coordinates. `Level::Loader` accepts normalized `Level::AuthoredData` only and owns Aogera-facing validation/construction rather than file parsing.
+Binary formats use a different boundary: source access obtains bytes before the format Reader interprets them. `BSP29::Reader.read_bytes` is the current concrete example. Package/filesystem policy belongs upstream of that decoder rather than inside BSP parsing.
+
+`Level::Readers::Ruby` understands the current Ruby/grid source format and converts source grid positions into Aogera world coordinates. `Level::Loader` accepts normalized `Level::AuthoredData` only and owns Aogera-facing validation/construction rather than binary or package parsing.
 
 Aogera world-unit magnitude is Quake 1 compatible: one current grid cell is 32 world units. This is a measurement convention only; Quake entity-origin and gameplay conventions are not imported into core runtime semantics.
 
 `BSP29::Reader` is the first external Reader. It returns normalized `BSP29::MapData` rather than forcing BSP structure through the grid-shaped `Level::AuthoredData`. `Level::Loader` therefore remains honest about the representation it currently constructs.
 
-`Content::Paths` still centralizes current authored Ruby paths. There is intentionally no general asset manager yet.
+`Content::RubyPaths` explicitly centralizes repository-local executable Ruby source paths. Binary game-content source selection is separate: `Content::VFS` resolves normalized virtual paths across mounted `Content::Directory` and `Content::Pak` sources, returning bytes only. Later mounts override earlier mounts. `CLI::BSP29` is the first integration point: `--pak FILE` reads the selected virtual BSP through a one-source VFS and calls `BSP29::Reader.read_bytes`; direct host paths still use `Reader.read`. `Quake::PaletteReader` is a second source-neutral byte decoder: it accepts the canonical `gfx/palette.lmp` bytes and returns immutable RGB data without knowing whether the bytes came from a PAK, directory, or another future source. Format Readers, `App`, simulation, and rendering remain unaware of storage policy; there is intentionally no general asset manager.
 
-## Current v0.3.4 boundary
+## Current v0.3.5 development boundary
 
-Aogera 0.3.4 currently has:
+Aogera 0.3.5 development currently has:
 
 - one continuous runtime position model for player, enemies, NPCs, and spatial interactables;
 - one ground movement/collision execution path for current actors;
@@ -378,6 +380,8 @@ Aogera 0.3.4 currently has:
 - a Reader -> normalized authored data -> Loader map boundary;
 - Quake 1-compatible world-unit magnitude with 32-unit current grid cells;
 - a validated BSP29 Reader preserving geometry, BSP tree, clipnodes, textures, entities, visibility/light blobs, and submodels;
+- a minimal binary-content VFS with normalized virtual paths, loose-directory sources, Quake PAK sources, deterministic last-mounted-source precedence, and PAK-backed BSP CLI loading;
+- a source-neutral Quake palette decoder for the 256 RGB entries in `gfx/palette.lmp`, validated with VFS/PAK-supplied bytes but not yet wired into rendering;
 - a minimal BSP29 world-model renderer used by the controlled test-field preview;
 - a BSP-only `Mode::Spectator` whose camera is detached from gameplay collision for arbitrary-map inspection;
 - BSP29 compiled hull 1 through shared `GroundClearance` as the actor static movement backend;

@@ -21,8 +21,6 @@ module Aogera
 
       def read(path)
         read_bytes(File.binread(path))
-      rescue Errno::ENOENT => error
-        raise FormatError, "BSP29 file not found: #{error.message}"
       end
 
       def read_bytes(bytes)

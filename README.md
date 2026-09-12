@@ -6,11 +6,11 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 ## Current status
 
-**Version: 0.3.4 (release candidate)**
+**Version: 0.3.5 (development)**
 
-Aogera 0.3.4 consolidates the first real-BSP bring-up milestone on top of the stable 0.3.3 continuous-navigation release. BSP launch is now explicitly mode-driven: `--spectator` bootstraps the runtime player directly from normalized `info_player_start`, opens a collision-free diagnostic camera, and renders world model `0` through persistent raylib mesh/lightmap resources. The ordinary Ruby-authored launch remains unchanged.
+Aogera 0.3.5 development starts from the 0.3.4 real-BSP milestone: BSP-native bootstrap, explicit diagnostic spectator launch, persistent world-model rendering, baked-lightmap preview, and inspection diagnostics remain the current runtime baseline. The ordinary Ruby-authored launch remains unchanged.
 
-The 0.3.4 release boundary is intentionally narrow: BSP-native bootstrap, explicit spectator launch, persistent world rendering, baked-lightmap preview, and inspection diagnostics. Package/content-source work is deferred to 0.3.5; the planned next step is a minimal Quake PAK source feeding BSP bytes through the existing `BSP29::Reader.read_bytes` boundary, followed by palette and embedded miptexture rendering. No VFS abstraction is introduced in 0.3.4.
+Aogera 0.3.5 now has four incremental content checkpoints: source/decoder boundary cleanup, the minimal binary-content VFS foundation, BSP CLI integration through Quake PAK files, and source-neutral Quake palette decoding. `Content::VFS` mounts `Content::Directory` and `Content::Pak` sources behind normalized virtual paths, with later mounts taking precedence. `bin/aogera-bsp29 --pak FILE VIRTUAL_PATH` reads BSP bytes through that namespace and passes them to `BSP29::Reader.read_bytes`; direct host-filesystem BSP paths remain supported. `Quake::PaletteReader` independently decodes the 768-byte `gfx/palette.lmp` representation into 256 immutable RGB entries and is tested with bytes supplied through the same VFS/PAK path. The common VFS source contract remains deliberately limited to `read(path)` and `exist?(path)`.
 
 Every spatial runtime entity uses:
 
@@ -74,7 +74,7 @@ The obsolete grid `Simulation::Pathfinder` implementation has been removed from 
 
 ## Running
 
-Aogera 0.3.4 requires **Ruby 3.4+**. The repository currently pins Ruby 3.4.10 for development through `.ruby-version`.
+Aogera 0.3.5 requires **Ruby 3.4+**. The repository currently pins Ruby 3.4.10 for development through `.ruby-version`.
 
 ```bash
 bundle install
@@ -89,18 +89,28 @@ For the controlled BSP29 test-field preview, launch the diagnostic spectator exp
 bundle exec ruby bin/aogera-bsp29 --spectator ../bsp29-test-field/test_field.bsp
 ```
 
-`bin/aogera-bsp29` has a deliberately small development CLI. No runtime launch mode is implicit: a bare BSP path is a usage error until a playable BSP mode exists.
+A BSP can also be read directly from a Quake PAK without extraction. With `--pak`, the final BSP argument is a virtual path inside the archive:
 
-Structural and entity inspection can be performed without opening raylib:
+```bash
+bundle exec ruby bin/aogera-bsp29 \
+  --spectator \
+  --pak ../quake1-shareware/id1/pak0.pak \
+  maps/e1m3.bsp
+```
+
+`bin/aogera-bsp29` has a deliberately small development CLI. No runtime launch mode is implicit: a bare BSP argument is a usage error until a playable BSP mode exists. Without `--pak` the BSP argument is a host-filesystem path; with `--pak FILE` it is a normalized VFS path inside that PAK.
+
+Structural and entity inspection can be performed without opening raylib in either source mode:
 
 ```bash
 bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp --bsp-info
-bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp --dump-entities
-bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp --dump-textures
+bundle exec ruby bin/aogera-bsp29 --pak ../quake1-shareware/id1/pak0.pak maps/e1m3.bsp --bsp-info
+bundle exec ruby bin/aogera-bsp29 --pak ../quake1-shareware/id1/pak0.pak maps/e1m3.bsp --dump-entities
+bundle exec ruby bin/aogera-bsp29 --pak ../quake1-shareware/id1/pak0.pak maps/e1m3.bsp --dump-textures
 bundle exec ruby bin/aogera-bsp29 --help
 ```
 
-`--bsp-info` prints BSP counts, world bounds, visibility/light byte counts, and normalized player starts. `--dump-entities` prints the original entity key/value declarations and, where available, the Reader's normalized Aogera-space origin. `--dump-textures` reports world-model texture names, dimensions, face-reference counts, missing texture slots, and embedded textures not currently used by world model `0`. Only one exit-style inspection command may be selected per invocation. `--spectator` is currently the only runtime launch mode and must be explicit. The older `bin/aogera-bsp29-info` executable remains as a compatibility wrapper around `--bsp-info`. This is a launch/inspection CLI, not an interactive developer console or a game-command system.
+`--bsp-info` prints BSP counts, world bounds, visibility/light byte counts, and normalized player starts. `--dump-entities` prints the original entity key/value declarations and, where available, the Reader's normalized Aogera-space origin. `--dump-textures` reports world-model texture names, dimensions, face-reference counts, missing texture slots, and embedded textures not currently used by world model `0`. Only one exit-style inspection command may be selected per invocation. `--spectator` is currently the only runtime launch mode and must be explicit. `--pak` changes only source resolution: PAK/VFS code returns bytes, while `BSP29::Reader.read_bytes` remains the format decoder. The older `bin/aogera-bsp29-info` executable remains as a compatibility wrapper around `--bsp-info`. This is a launch/inspection CLI, not an interactive developer console or a game-command system.
 
 BSP mode reads the first `info_player_start` from the map entity lump, uses its normalized origin as the initial Aogera player position, and converts its Quake `angle` to the initial first-person yaw. It no longer imports the Ruby `test_field`, its NPCs, relations, or dialogue. The preview now starts in `Mode::Spectator`: the camera begins at the spawned player's eye position but then flies independently without changing the player entity or consulting collision. A top-left diagnostic panel reports actual raylib FPS, camera XYZ, yaw/pitch, BSP triangle and mesh-draw counts, lightmapped-face/atlas statistics, and runtime entity count; the bottom bar remains the spectator controls/tick readout. BSP world-model faces provide static rendering; the compiled collision backends remain configured in the dormant runtime for later actor testing. The current one-cell `Level` terrain in BSP mode is only structural scaffolding for `Simulation`.
 
@@ -140,7 +150,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The stable v0.3.3 release baseline is **268 runs / 848 assertions / 0 failures / 0 errors / 0 skips**. The 0.3.4 release-candidate baseline, including explicit BSP launch-mode invariants and GPU resource failure-path coverage, is **306 runs / 1106 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The stable v0.3.4 release baseline is **306 runs / 1106 assertions / 0 failures / 0 errors / 0 skips**. The v0.3.5 source-boundary preparation checkpoint was **308 runs / 1116 assertions / 0 failures / 0 errors / 0 skips**; the VFS-foundation checkpoint was **320 runs / 1165 assertions / 0 failures / 0 errors / 0 skips**; and the PAK/BSP CLI integration checkpoint was **327 runs / 1198 assertions / 0 failures / 0 errors / 0 skips**. The current palette-decoder checkpoint is **332 runs / 1218 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 
@@ -160,6 +170,7 @@ Aogera still has no generic scene/projector/transform layer, no general physics 
 
 - `docs/architecture.md` — current runtime architecture and subsystem boundaries;
 - `docs/authored_data.md` — Reader/normalized-data/Loader boundary and world-unit convention;
+- `docs/content_vfs.md` — binary-content VFS path rules, source contract, mount precedence, PAK behavior, and errors;
 - `docs/bsp29.md` — current BSP29 binary Reader, normalization, records, and inspection tool;
 - `docs/bsp_collision_migration.md` — BSP collision migration history, authority decisions, fixed-hull limitation, and later cutover notes;
 - `docs/navigation_migration.md` — migration record for the completed grid-BFS to continuous local-navigation cutover and its future route-graph seam;
@@ -170,10 +181,10 @@ Aogera still has no generic scene/projector/transform layer, no general physics 
 
 ## Direction
 
-Aogera 0.3.4 RC establishes the first self-contained BSP launch path: BSP29 supplies the player start, world model `0` supplies visible static geometry, compiled hull/node data supplies the configured collision services, and `Mode::Spectator` provides safe free-flight inspection while vertical actor physics remains deferred. The Ruby `test_field` is no longer part of BSP launch.
+Aogera 0.3.4 established the first self-contained BSP launch path: BSP29 supplies the player start, world model `0` supplies visible static geometry, compiled hull/node data supplies the configured collision services, and `Mode::Spectator` provides safe free-flight inspection while vertical actor physics remains deferred. The Ruby `test_field` is no longer part of BSP launch.
 
-The rendering checkpoint is deliberately incomplete but structurally useful: BSP faces are persistent GPU geometry with real baked-lightmap UVs and a grayscale atlas, while embedded indexed miptexture pixels are parsed but not yet rendered. Collision remains hybrid and explicit: compiled hull 1 is authoritative for current actor static movement, the point hull handles obstruction traces, continuous `GroundBody` handles dynamic actors, and local NPC navigation probes the same `GroundSpace`.
+The rendering checkpoint remains deliberately incomplete but structurally useful: BSP faces are persistent GPU geometry with real baked-lightmap UVs and a grayscale atlas, while embedded indexed miptexture pixels are parsed but not yet rendered. Collision remains hybrid and explicit: compiled hull 1 is authoritative for current actor static movement, the point hull handles obstruction traces, continuous `GroundBody` handles dynamic actors, and local NPC navigation probes the same `GroundSpace`.
 
-The next compatibility milestone is reserved for 0.3.5: a minimal `Content::Pak` source, `gfx/palette.lmp`, and rendering of the BSP's own embedded miptextures together with the existing lightmaps. That work should use `BSP29::Reader.read_bytes` rather than teaching the Reader about package formats. WAD2, Quake UI, broader mounting semantics, and a general VFS remain deferred until concrete consumers justify them.
+Aogera 0.3.5 develops the content-source milestone incrementally. The preparation checkpoint separated repository-local Ruby source paths from binary content, the VFS checkpoint added directory and Quake PAK sources, the PAK/BSP checkpoint routed BSP launch/inspection through `Content::VFS`, and the current palette checkpoint adds `Quake::PaletteReader` for the canonical 256-color `gfx/palette.lmp` bytes without coupling that decoder to storage or rendering. Direct BSP file loading remains available. The next 0.3.5 work can prepare the BSP renderer's CPU-side surface/material representation and then combine embedded indexed miptextures with the existing lightmaps. WAD2, Quake UI, ZIP support, generic asset management, and broader package features remain out of scope.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

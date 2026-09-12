@@ -4,41 +4,58 @@ require "optparse"
 
 module Aogera
   module CLI
-    BSP29Options = Data.define(:path, :mode, :action)
+    BSP29Options = Data.define(:path, :pak_path, :mode, :action)
 
     class BSP29
       EX_USAGE = 64
       EX_DATAERR = 65
+      EX_NOINPUT = 66
 
       def initialize(
         reader: Aogera::BSP29::Reader.method(:read),
+        bytes_reader: Aogera::BSP29::Reader.method(:read_bytes),
+        pak_factory: Aogera::Content::Pak.method(:new),
         app_factory: nil,
         stdout: $stdout,
         stderr: $stderr
       )
         @reader = reader
+        @bytes_reader = bytes_reader
+        @pak_factory = pak_factory
         @app_factory = app_factory || lambda do |map, mode:|
           build_app(map, mode:)
         end
         @stdout = stdout
         @stderr = stderr
+        @report = BSP29Report.new(stdout: stdout)
       end
 
       def run(argv)
         options, parser = parse(argv)
         return print_help(parser) if options.action == :help
 
-        map = @reader.call(options.path)
+        begin
+          map, source = load_map(options)
+        rescue SystemCallError, Aogera::Content::NotFound => error
+          @stderr.puts "aogera-bsp29: input not available: #{error.message}"
+          return EX_NOINPUT
+        rescue Aogera::Content::InvalidPath => error
+          @stderr.puts "aogera-bsp29: invalid content path: #{error.message}"
+          return EX_USAGE
+        rescue Aogera::Content::Pak::FormatError => error
+          @stderr.puts "aogera-bsp29: #{error.message}"
+          return EX_DATAERR
+        end
 
         case options.action
         when :run
           @app_factory.call(map, mode: options.mode).run
         when :bsp_info
-          print_bsp_info(map, options.path)
+          @report.bsp_info(map, source: source)
         when :dump_entities
-          print_entities(map, options.path)
+          @report.entities(map, source: source)
         when :dump_textures
-          print_textures(map, options.path)
+          @report.textures(map, source: source)
         else
           raise ArgumentError, "unknown BSP29 CLI action: #{options.action.inspect}"
         end
@@ -58,6 +75,7 @@ module Aogera
       def parse(argv)
         args = argv.dup
         state = {
+          pak_path: nil,
           mode: nil,
           action: :run
         }
@@ -66,13 +84,18 @@ module Aogera
 
         if state[:action] == :help
           return [
-            BSP29Options.new(path: nil, mode: state[:mode], action: :help),
+            BSP29Options.new(
+              path: nil,
+              pak_path: state[:pak_path],
+              mode: state[:mode],
+              action: :help
+            ),
             parser
           ]
         end
 
         path = args.shift
-        raise OptionParser::MissingArgument, "PATH.bsp" unless path
+        raise OptionParser::MissingArgument, "BSP" unless path
         unless args.empty?
           raise OptionParser::InvalidArgument,
             "unexpected arguments: #{args.join(' ')}"
@@ -86,6 +109,7 @@ module Aogera
         [
           BSP29Options.new(
             path: path,
+            pak_path: state[:pak_path],
             mode: state[:mode],
             action: state[:action]
           ),
@@ -96,10 +120,18 @@ module Aogera
       def option_parser(state)
         OptionParser.new do |parser|
           parser.banner = <<~USAGE.chomp
-            Usage: bundle exec ruby bin/aogera-bsp29 [options] PATH.bsp
+            Usage: bundle exec ruby bin/aogera-bsp29 [options] BSP
 
             BSP29 launch and inspection commands.
+            BSP is a host path by default, or a virtual path with --pak.
           USAGE
+
+          parser.on(
+            "--pak PATH",
+            "Read BSP from a Quake PAK virtual path"
+          ) do |path|
+            state[:pak_path] = path
+          end
 
           parser.on(
             "--spectator",
@@ -135,6 +167,19 @@ module Aogera
         end
       end
 
+      def load_map(options)
+        unless options.pak_path
+          return [@reader.call(options.path), options.path]
+        end
+
+        virtual_path = Aogera::Content::VirtualPath.normalize(options.path)
+        vfs = Aogera::Content::VFS.new
+        vfs.mount(@pak_factory.call(options.pak_path))
+        bytes = vfs.read(virtual_path)
+        map = @bytes_reader.call(bytes)
+        [map, "#{options.pak_path}:#{virtual_path}"]
+      end
+
       def select_action!(state, action, option)
         current = state[:action]
         if current != :run && current != action
@@ -148,144 +193,6 @@ module Aogera
       def print_help(parser)
         @stdout.puts parser
         0
-      end
-
-      def print_bsp_info(map, path)
-        world = map.world_model
-
-        @stdout.puts "BSP29: #{File.expand_path(path)}"
-        @stdout.puts "entities:     #{map.entities.length}"
-        @stdout.puts "planes:       #{map.planes.length}"
-        @stdout.puts "textures:     #{map.textures.length}"
-        @stdout.puts "vertices:     #{map.vertices.length}"
-        @stdout.puts "nodes:        #{map.nodes.length}"
-        @stdout.puts "faces:        #{map.faces.length}"
-        @stdout.puts "clipnodes:    #{map.clipnodes.length}"
-        @stdout.puts "leaves:       #{map.leaves.length}"
-        @stdout.puts "edges:        #{map.edges.length}"
-        @stdout.puts "surfedges:    #{map.surfedges.length}"
-        @stdout.puts "models:       #{map.models.length}"
-        @stdout.puts "vis bytes:    #{map.visibility.bytesize}"
-        @stdout.puts "light bytes:  #{map.lighting.bytesize}"
-
-        if world
-          @stdout.puts(
-            "world bounds:  #{format_vec(world.bounds.mins)} -> " \
-            "#{format_vec(world.bounds.maxs)}"
-          )
-        end
-
-        starts = map.entities_named("info_player_start")
-        @stdout.puts "player starts: #{starts.length}"
-        starts.each_with_index do |entity, index|
-          @stdout.puts "  #{index}: #{format_vec(entity.origin)}"
-        end
-      end
-
-      def print_entities(map, path)
-        @stdout.puts "BSP29 entities: #{File.expand_path(path)}"
-        @stdout.puts "count: #{map.entities.length}"
-
-        map.entities.each_with_index do |entity, index|
-          @stdout.puts
-          @stdout.puts "[#{index}] #{entity.classname || '(no classname)'}"
-          entity.properties.each do |key, value|
-            @stdout.puts "  #{key}=#{value.inspect}"
-          end
-          if entity.origin
-            @stdout.puts "  normalized_origin=#{format_vec(entity.origin)}"
-          end
-        end
-      end
-
-      def print_textures(map, path)
-        world = map.world_model
-        faces = if world
-          map.faces.slice(world.first_face, world.face_count) || []
-        else
-          []
-        end
-
-        counts = Hash.new(0)
-        faces.each do |face|
-          index = face.texinfo_index
-          if index.negative? || index >= map.texinfo.length
-            raise Aogera::BSP29::FormatError,
-              "world face references missing texinfo #{index}"
-          end
-
-          counts[map.texinfo[index].texture_index] += 1
-        end
-
-        used = []
-        missing = []
-        counts.each do |texture_index, face_count|
-          texture = if texture_index >= 0 && texture_index < map.textures.length
-            map.textures[texture_index]
-          end
-          if texture
-            used << [texture.name, texture.width, texture.height, face_count, texture_index]
-          else
-            missing << [texture_index, face_count]
-          end
-        end
-
-        used.sort_by! { |name, _width, _height, _faces, _index| name }
-        missing.sort_by!(&:first)
-        used_indices = counts.keys.to_h { |index| [index, true] }
-        unused = map.textures.each_with_index.filter_map do |texture, index|
-          next unless texture
-          next if used_indices[index]
-
-          [texture.name, texture.width, texture.height, index]
-        end
-        unused.sort_by! { |name, _width, _height, _index| name }
-
-        embedded_count = map.textures.count { |texture| texture }
-        @stdout.puts "BSP29 textures: #{File.expand_path(path)}"
-        @stdout.puts "texture slots:       #{map.textures.length}"
-        @stdout.puts "embedded textures:   #{embedded_count}"
-        @stdout.puts "world face refs:      #{faces.length}"
-        @stdout.puts "unique used textures: #{used.length}"
-        @stdout.puts "missing used slots:   #{missing.length}"
-
-        @stdout.puts
-        @stdout.puts "World-model textures:"
-        if used.empty?
-          @stdout.puts "  (none)"
-        else
-          used.each do |name, width, height, face_count, index|
-            @stdout.puts format(
-              "  %-16s %4dx%-4d faces=%-4d index=%d",
-              name, width, height, face_count, index
-            )
-          end
-        end
-
-        unless missing.empty?
-          @stdout.puts
-          @stdout.puts "Missing texture slots referenced by world faces:"
-          missing.each do |index, face_count|
-            @stdout.puts "  index=#{index} faces=#{face_count}"
-          end
-        end
-
-        unless unused.empty?
-          @stdout.puts
-          @stdout.puts "Embedded but unused by world model:"
-          unused.each do |name, width, height, index|
-            @stdout.puts format(
-              "  %-16s %4dx%-4d index=%d",
-              name, width, height, index
-            )
-          end
-        end
-      end
-
-      def format_vec(vec)
-        return "(none)" unless vec
-
-        "(#{vec.x}, #{vec.y}, #{vec.z})"
       end
 
       def build_app(map, mode:)

@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "stringio"
+require "tempfile"
+require "tmpdir"
 require_relative "test_helper"
 
 class BSP29CLITest < Minitest::Test
@@ -101,10 +103,11 @@ class BSP29CLITest < Minitest::Test
     stdout = StringIO.new
     cli = build_cli(map: fake_map, app: app, stdout: stdout)
 
-    status = cli.run(["map.bsp", "--bsp-info"])
+    status = cli.run(["maps/e1m3.bsp", "--bsp-info"])
 
     assert_equal 0, status
     assert_equal 0, app.runs
+    assert_includes stdout.string, "BSP29: maps/e1m3.bsp"
     assert_includes stdout.string, "entities:     2"
     assert_includes stdout.string, "planes:       3"
     assert_includes stdout.string, "world bounds:  (-64.0, -24.0, -32.0) -> (64.0, 96.0, 128.0)"
@@ -169,6 +172,7 @@ class BSP29CLITest < Minitest::Test
     assert_includes stdout.string, "--bsp-info"
     assert_includes stdout.string, "--dump-entities"
     assert_includes stdout.string, "--dump-textures"
+    assert_includes stdout.string, "--pak PATH"
   end
 
   def test_missing_path_is_a_usage_error
@@ -178,7 +182,7 @@ class BSP29CLITest < Minitest::Test
     status = cli.run([])
 
     assert_equal 64, status
-    assert_includes stderr.string, "missing argument: PATH.bsp"
+    assert_includes stderr.string, "missing argument: BSP"
     assert_includes stderr.string, "--help"
   end
 
@@ -207,7 +211,172 @@ class BSP29CLITest < Minitest::Test
     assert_includes stderr.string, "aogera-bsp29: bad BSP"
   end
 
+  def test_missing_input_is_reported_as_an_input_error
+    stderr = StringIO.new
+    cli = Aogera::CLI::BSP29.new(
+      reader: ->(_path) { raise Errno::ENOENT, "missing.bsp" },
+      app_factory: ->(_map, mode:) { raise "should not launch #{mode}" },
+      stdout: StringIO.new,
+      stderr: stderr
+    )
+
+    status = cli.run(["--spectator", "missing.bsp"])
+
+    assert_equal 66, status
+    assert_includes stderr.string, "aogera-bsp29: input not available:"
+    assert_includes stderr.string, "missing.bsp"
+  end
+
+  def test_pak_spectator_reads_virtual_bsp_bytes_and_launches
+    app = FakeApp.new(0)
+    modes = []
+
+    with_pak("maps/test.bsp" => minimal_bsp) do |pak_path|
+      cli = Aogera::CLI::BSP29.new(
+        app_factory: lambda do |_map, mode:|
+          modes << mode
+          app
+        end,
+        stdout: StringIO.new,
+        stderr: StringIO.new
+      )
+
+      status = cli.run(["--spectator", "--pak", pak_path, "maps/test.bsp"])
+
+      assert_equal 0, status
+      assert_equal [:spectator], modes
+      assert_equal 1, app.runs
+    end
+  end
+
+  def test_pak_inspection_actions_read_the_same_virtual_bsp
+    with_pak("maps/test.bsp" => minimal_bsp) do |pak_path|
+      {
+        "--bsp-info" => "BSP29: #{pak_path}:maps/test.bsp",
+        "--dump-entities" => "BSP29 entities: #{pak_path}:maps/test.bsp",
+        "--dump-textures" => "BSP29 textures: #{pak_path}:maps/test.bsp"
+      }.each do |option, heading|
+        stdout = StringIO.new
+        cli = Aogera::CLI::BSP29.new(stdout: stdout, stderr: StringIO.new)
+
+        status = cli.run(["--pak", pak_path, "maps\\test.bsp", option])
+
+        assert_equal 0, status, option
+        assert_includes stdout.string, heading, option
+      end
+    end
+  end
+
+  def test_pak_missing_member_is_reported_as_input_error
+    stderr = StringIO.new
+
+    with_pak("maps/other.bsp" => minimal_bsp) do |pak_path|
+      cli = Aogera::CLI::BSP29.new(stdout: StringIO.new, stderr: stderr)
+
+      status = cli.run(["--bsp-info", "--pak", pak_path, "maps/missing.bsp"])
+
+      assert_equal 66, status
+      assert_includes stderr.string, "aogera-bsp29: input not available:"
+      assert_includes stderr.string, "maps/missing.bsp"
+    end
+  end
+
+  def test_pak_invalid_virtual_path_is_a_usage_error
+    stderr = StringIO.new
+
+    with_pak("maps/test.bsp" => minimal_bsp) do |pak_path|
+      cli = Aogera::CLI::BSP29.new(stdout: StringIO.new, stderr: stderr)
+
+      status = cli.run(["--bsp-info", "--pak", pak_path, "../maps/test.bsp"])
+
+      assert_equal 64, status
+      assert_includes stderr.string, "aogera-bsp29: invalid content path:"
+    end
+  end
+
+  def test_malformed_pak_is_reported_as_data_error
+    stderr = StringIO.new
+
+    Tempfile.create(["aogera-bsp29-cli", ".pak"]) do |file|
+      file.binmode
+      file.write("NOPE".b + [12, 0].pack("V2"))
+      file.flush
+
+      cli = Aogera::CLI::BSP29.new(stdout: StringIO.new, stderr: stderr)
+      status = cli.run(["--bsp-info", "--pak", file.path, "maps/test.bsp"])
+
+      assert_equal 65, status
+      assert_includes stderr.string, "invalid PAK magic"
+    end
+  end
+
+  def test_malformed_bsp_inside_pak_is_reported_as_data_error
+    stderr = StringIO.new
+
+    with_pak("maps/broken.bsp" => "not a bsp".b) do |pak_path|
+      cli = Aogera::CLI::BSP29.new(stdout: StringIO.new, stderr: stderr)
+
+      status = cli.run(["--bsp-info", "--pak", pak_path, "maps/broken.bsp"])
+
+      assert_equal 65, status
+      assert_includes stderr.string, "BSP29 header is truncated"
+    end
+  end
+
+  def test_missing_physical_pak_is_reported_as_input_error
+    stderr = StringIO.new
+    missing = File.join(Dir.tmpdir, "aogera-missing-#{Process.pid}-#{object_id}.pak")
+    File.unlink(missing) if File.exist?(missing)
+    cli = Aogera::CLI::BSP29.new(stdout: StringIO.new, stderr: stderr)
+
+    status = cli.run(["--bsp-info", "--pak", missing, "maps/test.bsp"])
+
+    assert_equal 66, status
+    assert_includes stderr.string, "aogera-bsp29: input not available:"
+    assert_includes stderr.string, missing
+  end
+
   private
+
+  def with_pak(entries)
+    payload = +"".b
+    records = entries.map do |name, bytes|
+      bytes = bytes.b
+      offset = Aogera::Content::Pak::HEADER_SIZE + payload.bytesize
+      payload << bytes
+      pak_directory_entry(name, offset, bytes.bytesize)
+    end
+    directory = records.join.b
+    directory_offset = Aogera::Content::Pak::HEADER_SIZE + payload.bytesize
+    archive = "PACK".b +
+      [directory_offset, directory.bytesize].pack("V2") +
+      payload + directory
+
+    Tempfile.create(["aogera-bsp29-cli", ".pak"]) do |file|
+      file.binmode
+      file.write(archive)
+      file.flush
+      yield file.path
+    end
+  end
+
+  def pak_directory_entry(name, offset, length)
+    name = name.b
+    raise "test PAK name too long" if name.bytesize > Aogera::Content::Pak::NAME_SIZE
+
+    name.ljust(Aogera::Content::Pak::NAME_SIZE, "\0") +
+      [offset, length].pack("V2")
+  end
+
+  def minimal_bsp
+    directory = Array.new(Aogera::BSP29::HEADER_LUMP_COUNT) do
+      [Aogera::BSP29::HEADER_SIZE, 0]
+    end
+
+    [Aogera::BSP29::VERSION].pack("l<") + directory.flatten.pack(
+      "l<#{Aogera::BSP29::HEADER_LUMP_COUNT * 2}"
+    )
+  end
 
   def build_cli(
     map:,

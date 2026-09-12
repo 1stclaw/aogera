@@ -135,6 +135,19 @@ class BSP29ReaderTest < Minitest::Test
     end
   end
 
+  def test_file_access_errors_remain_source_errors
+    missing_path = nil
+    Tempfile.create(["aogera-bsp29-missing", ".bsp"]) do |file|
+      missing_path = file.path
+    end
+
+    error = assert_raises(Errno::ENOENT) do
+      Aogera::BSP29::Reader.read(missing_path)
+    end
+
+    assert_includes error.message, missing_path
+  end
+
   def test_rejects_non_bsp29_versions
     bytes = build_bsp
     bytes[0, 4] = [30].pack("l<")

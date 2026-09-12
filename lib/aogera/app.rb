@@ -12,7 +12,7 @@ module Aogera
       bsp29_mode: nil
     )
       validate_bsp29_launch!(bsp29_map, bsp29_mode)
-      prototypes = Prototype::Loader.load(Content::Paths.prototype(:actors))
+      prototypes = Prototype::Loader.load(Content::RubyPaths.prototype(:actors))
       level, dialogues, initial_view = runtime_content(bsp29_map, prototypes)
       @session = Session.new(
         characters: {
@@ -107,13 +107,13 @@ module Aogera
       end
 
       authored_level = Level::Readers::Ruby.read(
-        Content::Paths.level(:test_field)
+        Content::RubyPaths.level(:test_field)
       )
       level = Level::Loader.load(
         authored_level,
         prototypes: prototypes
       )
-      dialogues = Dialogue::Loader.load(Content::Paths.dialogue(:test_field))
+      dialogues = Dialogue::Loader.load(Content::RubyPaths.dialogue(:test_field))
       [level, dialogues, nil]
     end
 
