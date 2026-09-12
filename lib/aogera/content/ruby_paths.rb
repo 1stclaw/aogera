@@ -2,7 +2,7 @@
 
 module Aogera
   module Content
-    module Paths
+    module RubyPaths
       ROOT = File.expand_path("../../../content", __dir__).freeze
 
       module_function

@@ -117,6 +117,42 @@ class BSP29ReaderTest < Minitest::Test
     assert_equal [0, 1, 2, 3], texture.mipmaps.map { |mip| mip.getbyte(0) }
   end
 
+
+  def test_miptexture_name_stops_at_first_nul_byte
+    raw_name = "sky1\0ignored!!".ljust(16, "X")
+    map = Aogera::BSP29::Reader.read_bytes(
+      build_bsp(textures: texture_lump(raw_name: raw_name))
+    )
+
+    assert_equal "sky1", map.textures.fetch(0).name
+  end
+
+  def test_parsed_miptexture_can_be_palette_expanded_without_changing_bsp_data
+    map = Aogera::BSP29::Reader.read_bytes(build_bsp(textures: texture_lump))
+    texture = map.textures.fetch(0)
+    palette_bytes = "\0".b * Aogera::Quake::PaletteReader::BYTE_SIZE
+    [
+      [0, 10, 20, 30],
+      [1, 40, 50, 60],
+      [2, 70, 80, 90],
+      [3, 100, 110, 120]
+    ].each do |index, r, g, b|
+      offset = index * 3
+      palette_bytes.setbyte(offset, r)
+      palette_bytes.setbyte(offset + 1, g)
+      palette_bytes.setbyte(offset + 2, b)
+    end
+    palette = Aogera::Quake::PaletteReader.read_bytes(palette_bytes)
+
+    image = Aogera::Quake::MipTextureDecoder.decode(texture, palette, level: 2)
+
+    assert_equal 4, image.width
+    assert_equal 4, image.height
+    assert_equal [70, 80, 90, 255], image.pixels.bytes.first(4)
+    assert_equal 16, texture.mipmaps.fetch(2).bytesize
+    assert_equal 2, texture.mipmaps.fetch(2).getbyte(0)
+  end
+
   def test_preserves_missing_texture_directory_entries
     texture_bytes = [2, -1, -1].pack("l<l<l<")
     map = Aogera::BSP29::Reader.read_bytes(build_bsp(textures: texture_bytes))
@@ -133,6 +169,19 @@ class BSP29ReaderTest < Minitest::Test
       map = Aogera::BSP29::Reader.read(file.path)
       assert_equal Aogera::BSP29::Vec3.new(x: 1.0, y: 3.0, z: -2.0), map.vertices.first
     end
+  end
+
+  def test_file_access_errors_remain_source_errors
+    missing_path = nil
+    Tempfile.create(["aogera-bsp29-missing", ".bsp"]) do |file|
+      missing_path = file.path
+    end
+
+    error = assert_raises(Errno::ENOENT) do
+      Aogera::BSP29::Reader.read(missing_path)
+    end
+
+    assert_includes error.message, missing_path
   end
 
   def test_rejects_non_bsp29_versions
@@ -188,14 +237,14 @@ class BSP29ReaderTest < Minitest::Test
     header + payload
   end
 
-  def texture_lump
+  def texture_lump(raw_name: "TEST\0".ljust(16, "\0"))
     width = 16
     height = 16
     mip_sizes = [256, 64, 16, 4]
     mip_offsets = [40]
     mip_sizes[0, 3].each { |size| mip_offsets << mip_offsets.last + size }
 
-    header = "TEST\0".ljust(16, "\0") +
+    header = raw_name.byteslice(0, 16).ljust(16, "\0") +
       [width, height, *mip_offsets].pack("V6")
     pixels = mip_sizes.each_with_index.map { |size, index| index.chr * size }.join.b
     texture = header + pixels

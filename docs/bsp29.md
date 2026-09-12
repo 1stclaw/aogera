@@ -14,7 +14,7 @@ BSP29::Reader
    v
 BSP29::MapData
    |
-   +--> Render::BSP29World (world model 0 preview)
+   +--> Render::BSP29SurfaceBuilder -> Render::BSP29World (world model 0 preview)
    +--> BSP29::GroundClearance (compiled hull 1, actor movement/local probes)
    |       |
    |       +--> BSP29::GroundHull (radius-bound fixed-hull adapter)
@@ -24,7 +24,7 @@ BSP29::MapData
 
 `BSP29::Reader` understands Quake 1 BSP version 29 binary structure. It does not construct an Aogera `Level`, spawn gameplay actors, call raylib, or perform collision queries.
 
-`Reader.read(path)` is the filesystem convenience entry point; `Reader.read_bytes(bytes)` is the source-neutral parsing boundary. Future package/content sources can supply BSP bytes through that existing seam without making the BSP Reader aware of PAK, ZIP, or mounting rules.
+`Reader.read(path)` is the filesystem convenience entry point; `Reader.read_bytes(bytes)` is the source-neutral parsing boundary. File-access failures from `read(path)` remain source errors rather than being relabeled as BSP format errors. Future package/content sources can supply BSP bytes through `read_bytes` without making the BSP Reader aware of PAK, ZIP, or mounting rules.
 
 ## Normalization boundary
 
@@ -89,7 +89,7 @@ MipTexture
 └── four indexed-color mip levels
 ```
 
-No Quake palette or raylib texture conversion is performed yet.
+The BSP Reader still performs no palette or raylib texture conversion. A separate source-neutral `Quake::PaletteReader` decodes Quake's 768-byte `gfx/palette.lmp` into 256 RGB entries while retaining the original packed RGB lookup table. `Quake::MipTextureDecoder` can now combine one already-parsed BSP mip level with that palette into one packed RGBA buffer on demand. The original indexed mipmaps remain the authoritative BSP data; the decoder does not eagerly expand the whole mip chain or create per-pixel Ruby records. Palette-specific rendering semantics such as fullbright treatment are deliberately not collapsed into the decoded map representation: the indexed source bytes remain available so a later shader/upload step can derive those effects without reconstructing or reparsing texture data.
 
 Brush model `0` remains the static world model. Additional BSP submodels remain separate in `MapData#models`; the Reader does not flatten doors/platforms/moving brush candidates into world geometry.
 
@@ -127,23 +127,55 @@ Cross-reference validation between faces, surfedges, nodes, models, and other re
 
 ## Existing-map inspection and launch CLI
 
-`bin/aogera-bsp29` provides the small command-line surface used during real-map bring-up. Runtime launch modes are explicit; the current diagnostic launch is:
+`bin/aogera-bsp29` provides the small command-line surface used during real-map bring-up. Runtime launch modes are explicit. Collision-free inspection uses:
 
 ```bash
 bundle exec ruby bin/aogera-bsp29 --spectator /path/to/map.bsp
 ```
 
-A bare `PATH.bsp` is intentionally a usage error until a normal playable BSP launch mode exists.
+The first player-bound collision-aware mode uses:
+
+```bash
+bundle exec ruby bin/aogera-bsp29 --walkthrough /path/to/map.bsp
+```
+
+Walkthrough is currently horizontal-only at the bootstrap height. It exercises the existing fixed-step hull-1 movement path but does not yet implement gravity, floor following, steps, jumping, or other vertical actor physics.
+
+The BSP can alternatively be addressed as a virtual path inside a Quake PAK:
+
+```bash
+bundle exec ruby bin/aogera-bsp29 \
+  --walkthrough \
+  --pak /path/to/id1/pak0.pak \
+  maps/e1m3.bsp
+```
+
+Use `--spectator` instead of `--walkthrough` for collision-free flight through the same PAK-backed map.
+
+The two-sided diagnostic confirmed the earlier world-face winding bug. Normal preparation now reverses each complete Quake surfedge polygon once for raylib, rather than guessing orientation from the first three vertices. `--bsp-two-sided` is retained as a map-authoring/compatibility diagnostic and duplicates each prepared world-model triangle with reversed winding before GPU upload:
+
+```bash
+bundle exec ruby bin/aogera-bsp29 \
+  --walkthrough \
+  --bsp-two-sided \
+  --pak /path/to/id1/pak0.pak \
+  maps/e1m3.bsp
+```
+
+This is an A/B compatibility diagnostic, not the default two-sided rendering policy. It remains useful for custom-authored BSP29 maps and alternate QBSP toolchains such as ericw-tools. The normal path should render ordinary model-0 walls/floors with only the single corrected winding. If a surface still appears only in two-sided mode, investigate its winding/conversion; if it is absent in both, inspect face-preparation/drop counters and the separate skipped-brush-submodel diagnostics.
+
+Without `--pak`, the BSP argument is a host-filesystem path and uses `Reader.read`. With `--pak FILE`, the CLI mounts that archive in a fresh `Content::VFS`, reads the virtual BSP path, and sends the resulting bytes to `Reader.read_bytes`. The BSP Reader therefore remains unaware of PAK structure and mounting rules. A bare BSP argument remains intentionally invalid: runtime mode selection is explicit, and `--spectator` conflicts with `--walkthrough`.
 
 The same executable can inspect a map without opening raylib:
 
 ```bash
 bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --bsp-info
-bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --dump-entities
-bundle exec ruby bin/aogera-bsp29 /path/to/map.bsp --dump-textures
+bundle exec ruby bin/aogera-bsp29 --pak /path/to/id1/pak0.pak maps/e1m3.bsp --bsp-info
+bundle exec ruby bin/aogera-bsp29 --pak /path/to/id1/pak0.pak maps/e1m3.bsp --dump-entities
+bundle exec ruby bin/aogera-bsp29 --pak /path/to/id1/pak0.pak maps/e1m3.bsp --dump-textures
 ```
 
-`--bsp-info` prints structural counts, world-model bounds, visibility/light byte counts, and normalized `info_player_start` origins. `--dump-entities` prints the parsed source key/value declarations for every entity and also shows the normalized Aogera-space origin when the Reader parsed one. `--dump-textures` follows world-model faces through `TexInfo` to the BSP miptexture table and reports texture names, dimensions, face counts, missing referenced slots, and embedded-but-currently-unused textures. This is intended to inventory replacement/debug materials without guessing from map themes. `--help` documents the available options. Exit-style inspection commands are mutually exclusive.
+`--bsp-info` prints structural counts, world-model bounds, visibility/light byte counts, and normalized `info_player_start` origins. `--dump-entities` prints the parsed source key/value declarations for every entity and also shows the normalized Aogera-space origin when the Reader parsed one. `--dump-textures` follows world-model faces through `TexInfo` to the BSP miptexture table and reports texture names, dimensions, face counts, missing referenced slots, and embedded-but-currently-unused textures. Miptexture names use Quake's 16-byte NUL-terminated convention; bytes after the first NUL are padding and are not part of the logical name. This is intended to inventory replacement/debug materials without guessing from map themes. `--help` documents the available options. Exit-style inspection commands are mutually exclusive.
 
 The older helper remains valid:
 
@@ -198,13 +230,15 @@ The current BSP preview can render world model `0` from a parsed BSP29 map:
 bundle exec ruby bin/aogera-bsp29 --spectator /path/to/map.bsp
 ```
 
-The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices`, verifies/corrects polygon winding against the normalized BSP face plane, and triangulates the convex polygon. Since v0.3.4, those triangles are uploaded to persistent raylib mesh/model resources after the window opens, rather than issuing one Ruby/FFI `DrawTriangle3D` call per triangle every frame. The renderer now also reproduces Quake's 16-unit lightmap sampling grid from each face's `TexInfo`, `light_offset`, and styles, packs the first stored baked-light style into a padded grayscale atlas, and assigns lightmap UVs to the persistent mesh. Faces with no baked samples use a fullbright fallback texel. Embedded miptexture pixels and the Quake palette are still not sampled, so the current world is deliberately grayscale rather than textured.
+The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices` and then converts Quake's source polygon winding to raylib by reversing the complete polygon once. Surface preparation records the world-model face count, prepared/dropped face count, number of Quake-source polygons flipped for raylib, source triangle count, and zero-area fan-triangle count. The winding conversion deliberately does not infer orientation from the first three vertices: valid QBSP faces may begin with collinear T-junction vertices. In the current v0.3.5 checkpoint, `Render::BSP29SurfaceBuilder` performs that work once at map load and stores face-level flat position buffers plus two independent coordinate domains: unwrapped Quake texture-space S/T for repeating miptextures and local lightmap-space S/T on Quake's original 16-unit luxel grid. Texture index/name, texinfo flags, original face index, active light-style IDs, and light offset are retained without assigning atlas coordinates. Baked samples remain in one compact lighting blob rather than being copied into one Ruby String per face.
+
+`Render::BSP29World` consumes those stable surfaces, triangulates faces into persistent GPU batches, packs only the first stored baked-light style into the same padded lightmap atlas used since v0.3.4, and derives normalized atlas UVs at that rendering boundary. The original low-resolution lightmaps are not rebaked, upscaled, or rewritten. Faces with no baked samples use the atlas fullbright fallback texel. When a Quake palette is supplied, `Render::BSP29TextureMapping` converts preserved base S/T into normalized coordinates while deliberately leaving negative and greater-than-one values unwrapped; surfaces are grouped by their referenced embedded miptexture, each used base texture is palette-expanded only for upload and repeat-wrapped, and UV0 base coordinates plus UV1 lightmap-atlas coordinates are supplied to a minimal two-texture shader. The shared lightmap atlas is clamp-wrapped and multiplied with the base sample per fragment. Without a palette, `BSP29World` retains the established grayscale lightmap-only fallback.
 
 Beginning with the v0.3.4 bring-up line, `bin/aogera-bsp29` no longer imports the Ruby `test_field` as gameplay state. `BSP29::Bootstrap` selects the first `info_player_start`, uses its already-normalized origin as the Aogera player entry, and converts the Quake `angle` property to `FirstPersonView` yaw. BSP mode currently creates only the bound player; it does not import Quake monsters, items, triggers, or other map entities yet.
 
 When launched with `--spectator`, the BSP launcher enters `Mode::Spectator` rather than ordinary `Mode::Play`. The spectator camera begins at that bound player's eye position and then keeps independent camera coordinates. Its fixed-step movement bypasses `GroundMovement`, `GroundSpace`, and actor `Position`, allowing arbitrary vertical inspection before floor following, steps, gravity, and jumping exist. The underlying player entity remains at the BSP start and the configured BSP collision services remain available to the runtime for later gameplay tests.
 
-The spectator also renders a compact top-left diagnostic panel. It reports raylib's measured FPS, camera XYZ, yaw/pitch in degrees, world-model triangle count, persistent mesh draws per frame, baked-lightmapped face count, lightmap-atlas dimensions, and current runtime entity count. These values are presentation diagnostics only; they do not feed back into simulation timing or collision.
+The spectator also renders a compact top-left diagnostic panel. It reports raylib's measured FPS, camera XYZ, yaw/pitch in degrees, submitted and source triangle counts, persistent mesh draws per frame, prepared/world face counts and dropped faces, raylib-winding-flip and degenerate-triangle counts, preserved-but-unrendered BSP submodel count, base-texture or grayscale-fallback state, missing texture-face references, baked-lightmapped face count, lightmap-atlas dimensions, and current runtime entity count. These values are presentation diagnostics only; they do not feed back into simulation timing or collision.
 
 Spectator controls are mouse look, WASD/arrows for view-relative flight, Space for world-up, Shift or C for world-down, and Q/Esc to quit. Forward flight follows pitch; combined directions are normalized to one configured speed.
 
@@ -218,6 +252,8 @@ The current policy keeps these two body descriptions separate. `BSP29::GroundHul
 
 Only model `0` is rendered. BSP submodels remain preserved for later doors/platforms.
 
+The complete model-0 conversion path from surfedges through prepared face data, dual UV domains, triangle batching, and `RaylibAPI#create_static_model` is documented in `docs/bsp_to_raylib_meshes.md`.
+
 ### BSP runtime bootstrap
 
 `BSP29::Bootstrap` is intentionally smaller than a Quake entity importer. Its only semantic entity today is `info_player_start`. A missing start, missing origin, or non-numeric `angle` is reported as `BSP29::FormatError` rather than silently falling back to the Ruby test level. The ordinary `bin/aogera` launch still uses `Level::Readers::Ruby` and `Level::Loader`.
@@ -228,7 +264,8 @@ The controlled fixture historically authored `info_player_start` as an Aogera fe
 
 The BSP path does not yet provide:
 
-- palette conversion or raylib textures;
+- Quake fullbright-palette treatment or animated miptexture sequencing;
+- special sky/turbulent-surface rendering;
 - animated/multi-style lightmap evaluation beyond the first stored style;
 - PVS traversal;
 - arbitrary authored actor radii for BSP static collision;

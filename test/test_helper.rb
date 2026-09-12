@@ -9,9 +9,9 @@ $LOAD_PATH.unshift(
 require "aogera"
 
 module AogeraTestPaths
-  PROTOTYPE_PATH = Aogera::Content::Paths.prototype(:actors)
-  LEVEL_PATH = Aogera::Content::Paths.level(:test_field)
-  DIALOGUE_PATH = Aogera::Content::Paths.dialogue(:test_field)
+  PROTOTYPE_PATH = Aogera::Content::RubyPaths.prototype(:actors)
+  LEVEL_PATH = Aogera::Content::RubyPaths.level(:test_field)
+  DIALOGUE_PATH = Aogera::Content::RubyPaths.dialogue(:test_field)
 end
 
 module AogeraTestSupport

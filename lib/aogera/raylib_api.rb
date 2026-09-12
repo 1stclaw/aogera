@@ -97,7 +97,7 @@ module Aogera
       )
     end
 
-    def create_static_model(vertices:, texcoords: nil)
+    def create_static_model(vertices:, texcoords: nil, texcoords2: nil)
       unless vertices.length.positive? && (vertices.length % 9).zero?
         raise ArgumentError, "static model vertices must contain complete triangles"
       end
@@ -107,25 +107,37 @@ module Aogera
       unless texcoords.length == vertex_count * 2
         raise ArgumentError, "static model texcoords must contain one UV pair per vertex"
       end
+      if texcoords2 && texcoords2.length != vertex_count * 2
+        raise ArgumentError, "static model texcoords2 must contain one UV pair per vertex"
+      end
 
       vertex_data = nil
       texcoord_data = nil
+      texcoord2_data = nil
       mesh = nil
       uploaded = false
 
       vertex_data = ::Raylib.MemAlloc(vertices.length * FFI.type_size(:float))
       texcoord_data = ::Raylib.MemAlloc(texcoords.length * FFI.type_size(:float))
+      texcoord2_data = if texcoords2
+                         ::Raylib.MemAlloc(texcoords2.length * FFI.type_size(:float))
+                       end
       raise NoMemoryError, "raylib vertex allocation failed" if vertex_data.null?
       raise NoMemoryError, "raylib texcoord allocation failed" if texcoord_data.null?
+      if texcoord2_data&.null?
+        raise NoMemoryError, "raylib secondary texcoord allocation failed"
+      end
 
       vertex_data.write_array_of_float(vertices)
       texcoord_data.write_array_of_float(texcoords)
+      texcoord2_data&.write_array_of_float(texcoords2)
 
       mesh = ::Raylib::Mesh.new
       mesh.vertexCount = vertex_count
       mesh.triangleCount = vertex_count / 3
       mesh.vertices = vertex_data
       mesh.texcoords = texcoord_data
+      mesh.texcoords2 = texcoord2_data if texcoord2_data
       ::Raylib.UploadMesh(mesh.pointer, false)
       uploaded = true
       ::Raylib.LoadModelFromMesh(mesh)
@@ -135,6 +147,7 @@ module Aogera
       else
         ::Raylib.MemFree(vertex_data) if vertex_data && !vertex_data.null?
         ::Raylib.MemFree(texcoord_data) if texcoord_data && !texcoord_data.null?
+        ::Raylib.MemFree(texcoord2_data) if texcoord2_data && !texcoord2_data.null?
       end
       raise
     end
@@ -174,12 +187,41 @@ module Aogera
       raise
     end
 
-    def set_model_texture(model:, texture:)
-      ::Raylib.SetMaterialTexture(
-        model.material(0),
-        ::Raylib::MATERIAL_MAP_ALBEDO,
-        texture
-      )
+    def create_shader(vertex_source:, fragment_source:)
+      ::Raylib.LoadShaderFromMemory(vertex_source, fragment_source)
+    end
+
+    def set_model_shader(model:, shader:)
+      model.material(0).shader = shader
+    end
+
+    def set_model_texture(model:, texture:, slot: :albedo)
+      map_type = case slot
+                 when :albedo
+                   ::Raylib::MATERIAL_MAP_ALBEDO
+                 when :lightmap
+                   ::Raylib::MATERIAL_MAP_METALNESS
+                 else
+                   raise ArgumentError, "unknown material texture slot: #{slot.inspect}"
+                 end
+
+      ::Raylib.SetMaterialTexture(model.material(0), map_type, texture)
+    end
+
+    def set_texture_wrap(texture:, mode:)
+      wrap = case mode
+             when :repeat
+               ::Raylib::TEXTURE_WRAP_REPEAT
+             when :clamp
+               ::Raylib::TEXTURE_WRAP_CLAMP
+             else
+               raise ArgumentError, "unknown texture wrap mode: #{mode.inspect}"
+             end
+      ::Raylib.SetTextureWrap(texture, wrap)
+    end
+
+    def unload_shader(shader)
+      ::Raylib.UnloadShader(shader)
     end
 
     def unload_texture(texture)

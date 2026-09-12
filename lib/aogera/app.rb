@@ -9,10 +9,14 @@ module Aogera
       clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) },
       raylib_api: nil,
       bsp29_map: nil,
-      bsp29_mode: nil
+      bsp29_mode: nil,
+      bsp29_palette: nil,
+      bsp29_two_sided: false
     )
-      validate_bsp29_launch!(bsp29_map, bsp29_mode)
-      prototypes = Prototype::Loader.load(Content::Paths.prototype(:actors))
+      validate_bsp29_launch!(
+        bsp29_map, bsp29_mode, bsp29_palette, bsp29_two_sided
+      )
+      prototypes = Prototype::Loader.load(Content::RubyPaths.prototype(:actors))
       level, dialogues, initial_view = runtime_content(bsp29_map, prototypes)
       @session = Session.new(
         characters: {
@@ -58,7 +62,12 @@ module Aogera
 
       api = raylib_api || RaylibAPI.new
       @host = Host::Raylib.new(api: api)
-      @renderer = Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
+      @renderer = Render::Raylib3D.new(
+        api: api,
+        bsp29_map: bsp29_map,
+        bsp29_palette: bsp29_palette,
+        bsp29_two_sided: bsp29_two_sided
+      )
       @clock = clock
       @fixed_step = FixedStep.new(hz: TICK_HZ)
     end
@@ -84,8 +93,10 @@ module Aogera
 
     private
 
-    def validate_bsp29_launch!(bsp29_map, bsp29_mode)
-      unless bsp29_mode.nil? || bsp29_mode == :spectator
+    def validate_bsp29_launch!(
+      bsp29_map, bsp29_mode, bsp29_palette, bsp29_two_sided = false
+    )
+      unless bsp29_mode.nil? || %i[spectator walkthrough].include?(bsp29_mode)
         raise ArgumentError, "unsupported BSP29 launch mode: #{bsp29_mode.inspect}"
       end
       if bsp29_map && bsp29_mode.nil?
@@ -93,6 +104,12 @@ module Aogera
       end
       if bsp29_mode && !bsp29_map
         raise ArgumentError, "BSP29 launch mode requires BSP29 map data"
+      end
+      if bsp29_palette && !bsp29_map
+        raise ArgumentError, "BSP29 palette requires BSP29 map data"
+      end
+      if bsp29_two_sided && !bsp29_map
+        raise ArgumentError, "BSP29 two-sided diagnostic requires BSP29 map data"
       end
     end
 
@@ -107,22 +124,33 @@ module Aogera
       end
 
       authored_level = Level::Readers::Ruby.read(
-        Content::Paths.level(:test_field)
+        Content::RubyPaths.level(:test_field)
       )
       level = Level::Loader.load(
         authored_level,
         prototypes: prototypes
       )
-      dialogues = Dialogue::Loader.load(Content::Paths.dialogue(:test_field))
+      dialogues = Dialogue::Loader.load(Content::RubyPaths.dialogue(:test_field))
       [level, dialogues, nil]
     end
 
     def initial_mode(bsp29_mode:, simulation:, dialogues:, ground_space:)
+      camera_entity_id = simulation.entity_id_for_character(PLAYER_KEY)
+
       if bsp29_mode == :spectator
         return Mode::Spectator.new(
           simulation: simulation,
           view: @view,
-          camera_entity_id: simulation.entity_id_for_character(PLAYER_KEY)
+          camera_entity_id: camera_entity_id
+        )
+      end
+
+      if bsp29_mode == :walkthrough
+        return Mode::Walkthrough.new(
+          simulation: simulation,
+          view: @view,
+          controlled_entity_id: camera_entity_id,
+          controller: RealtimeController.new(ground_space: ground_space)
         )
       end
 

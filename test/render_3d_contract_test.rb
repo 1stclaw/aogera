@@ -44,9 +44,9 @@ class Render3DContractTest < Minitest::Test
     def begin_mode_3d(**options) = @calls << [:begin_mode_3d, options]
     def end_mode_3d = @calls << [:end_mode_3d]
     def draw_cube(**options) = @calls << [:draw_cube, options]
-    def create_static_model(vertices:, texcoords: nil)
+    def create_static_model(vertices:, texcoords: nil, texcoords2: nil)
       handle = [:model, @calls.count { |call| call.first == :create_static_model }]
-      @calls << [:create_static_model, {vertices: vertices, texcoords: texcoords, handle: handle}]
+      @calls << [:create_static_model, {vertices: vertices, texcoords: texcoords, texcoords2: texcoords2, handle: handle}]
       handle
     end
     def create_texture_rgba(width:, height:, pixels:)
@@ -54,7 +54,15 @@ class Render3DContractTest < Minitest::Test
       @calls << [:create_texture_rgba, {width: width, height: height, pixels: pixels, handle: handle}]
       handle
     end
-    def set_model_texture(model:, texture:) = @calls << [:set_model_texture, {model: model, texture: texture}]
+    def set_model_texture(model:, texture:, slot: :albedo) = @calls << [:set_model_texture, {model: model, texture: texture, slot: slot}]
+    def create_shader(vertex_source:, fragment_source:)
+      handle = [:shader, @calls.count { |call| call.first == :create_shader }]
+      @calls << [:create_shader, {vertex_source: vertex_source, fragment_source: fragment_source, handle: handle}]
+      handle
+    end
+    def set_model_shader(model:, shader:) = @calls << [:set_model_shader, {model: model, shader: shader}]
+    def set_texture_wrap(texture:, mode:) = @calls << [:set_texture_wrap, {texture: texture, mode: mode}]
+    def unload_shader(shader) = @calls << [:unload_shader, shader]
     def unload_texture(texture) = @calls << [:unload_texture, texture]
     def draw_model(model:, rgba:) = @calls << [:draw_model, {model: model, rgba: rgba}]
     def unload_model(model) = @calls << [:unload_model, model]
@@ -250,10 +258,7 @@ class Render3DContractTest < Minitest::Test
         layer: 10
       )
     )
-    bsp29_map = Object.new
-    bsp29_map.define_singleton_method(:world_model) { nil }
-
-    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
+    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: empty_bsp29_map)
     renderer.prepare
     renderer.draw(
       level: Object.new,
@@ -280,10 +285,8 @@ class Render3DContractTest < Minitest::Test
       position: Aogera::Component::Position.new(x: 1.0, y: 2.0, z: 3.0)
     )
     world.spawn(position: Aogera::Component::Position.new(x: 4.0, y: 5.0, z: 6.0))
-    bsp29_map = Object.new
-    bsp29_map.define_singleton_method(:world_model) { nil }
     view = Aogera::FirstPersonView.for_direction(:east)
-    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
+    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: empty_bsp29_map)
     renderer.prepare
 
     renderer.draw(
@@ -302,9 +305,70 @@ class Render3DContractTest < Minitest::Test
     assert_includes texts, "FPS 57"
     assert_includes texts, "Camera XYZ 10.00  20.00  30.00"
     assert_includes texts, "View yaw 90.0 deg | pitch 0.0 deg"
-    assert_includes texts, "BSP 0 tris | 0 mesh draws"
+    assert_includes texts, "BSP 0 submitted tris | 0 mesh draws"
+    assert_includes texts, "Faces 0/0 prepared | 0 dropped"
+    assert_includes texts, "Raylib winding 0 flipped | 0 degenerate tris"
+    assert_includes texts, "Source 0 tris | two-sided off"
+    assert_includes texts, "Brush 0 submodels skipped"
+    assert_includes texts, "Base grayscale fallback | 0 missing faces"
     assert_includes texts, "Entities 2"
     assert_equal 2, api.calls.count { |call| call.first == :draw_rectangle }
+  end
+
+  def test_bsp_two_sided_diagnostic_is_visible_in_overlay
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 0.0, y: 0.0, z: 0.0)
+    )
+    renderer = Aogera::Render::Raylib3D.new(
+      api: api,
+      bsp29_map: empty_bsp29_map,
+      bsp29_two_sided: true
+    )
+    renderer.prepare
+
+    renderer.draw(
+      level: Object.new,
+      world: world.view,
+      status: "diagnostic",
+      view: Aogera::FirstPersonView.for_direction(:north),
+      camera_entity_id: camera_id
+    )
+
+    texts = api.calls
+      .select { |call| call.first == :draw_text }
+      .map { |call| call.last[:text] }
+
+    assert_includes texts, "Source 0 tris | two-sided ON"
+  end
+
+  def test_bsp_entity_bound_camera_also_draws_diagnostics
+    api = FakeAPI.new
+    world = Aogera::World.new
+    camera_id = world.spawn(
+      position: Aogera::Component::Position.new(x: 7.0, y: 8.0, z: 9.0)
+    )
+    view = Aogera::FirstPersonView.for_direction(:north)
+    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: empty_bsp29_map)
+    renderer.prepare
+
+    renderer.draw(
+      level: Object.new,
+      world: world.view,
+      status: "walkthrough",
+      view: view,
+      camera_entity_id: camera_id
+    )
+
+    texts = api.calls
+      .select { |call| call.first == :draw_text }
+      .map { |call| call.last[:text] }
+
+    assert_includes texts, format(
+      "Camera XYZ 7.00  %.2f  9.00",
+      8.0 + view.eye_height
+    )
   end
 
   def test_entities_without_renderable_component_are_not_drawn
@@ -326,5 +390,27 @@ class Render3DContractTest < Minitest::Test
     cubes = api.calls.select { |call| call.first == :draw_cube }.map(&:last)
     assert_equal 1, cubes.length
     assert_in_delta Aogera::Render::Raylib3D::FLOOR_HEIGHT, cubes.first[:height]
+  end
+
+  private
+
+  def empty_bsp29_map
+    Aogera::BSP29::MapData.new(
+      entities: [].freeze,
+      planes: [].freeze,
+      textures: [].freeze,
+      vertices: [].freeze,
+      visibility: "".b.freeze,
+      nodes: [].freeze,
+      texinfo: [].freeze,
+      faces: [].freeze,
+      lighting: "".b.freeze,
+      clipnodes: [].freeze,
+      leaves: [].freeze,
+      marksurfaces: [].freeze,
+      edges: [].freeze,
+      surfedges: [].freeze,
+      models: [].freeze
+    )
   end
 end
