@@ -12,12 +12,13 @@ module Aogera
       module_function
 
       def read_bytes(bytes)
-        source = String(bytes).b
+        source = String(bytes).dup.force_encoding(Encoding::BINARY)
         unless source.bytesize == BYTE_SIZE
           raise FormatError,
             "Quake palette must be exactly #{BYTE_SIZE} bytes; got #{source.bytesize}"
         end
 
+        source.freeze
         colors = Array.new(COLOR_COUNT) do |index|
           offset = index * CHANNEL_COUNT
           PaletteColor.new(
@@ -27,7 +28,7 @@ module Aogera
           )
         end.freeze
 
-        Palette.new(colors: colors)
+        Palette.new(colors: colors, rgb_bytes: source)
       end
     end
   end

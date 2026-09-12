@@ -106,4 +106,4 @@ BSP29::Reader.read_bytes
 
 This source choice does not propagate into `App`, simulation, collision, or rendering. They continue to receive decoded BSP data. `Content::Directory` is implemented and tested as a VFS source but does not yet have a dedicated BSP CLI option.
 
-The same byte boundary is now proven for Quake's palette data. `Quake::PaletteReader` accepts bytes only; tests mount a synthetic PAK, read `gfx/palette.lmp` through `Content::VFS`, and pass those bytes to the palette decoder. The Reader does not know about PAKs or VFS mounts, and the renderer does not consume the decoded palette yet.
+The same byte boundary is proven for Quake's palette data. `Quake::PaletteReader` accepts bytes only; tests mount a synthetic PAK, read `gfx/palette.lmp` through `Content::VFS`, and pass those bytes to the palette decoder. `Quake::MipTextureDecoder` then operates only on an already-parsed `BSP29::MipTexture` plus the decoded palette; neither decoder knows about PAKs or VFS mounts. The world renderer still does not request or upload the palette-expanded miptexture pixels at this checkpoint.

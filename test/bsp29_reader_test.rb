@@ -117,6 +117,32 @@ class BSP29ReaderTest < Minitest::Test
     assert_equal [0, 1, 2, 3], texture.mipmaps.map { |mip| mip.getbyte(0) }
   end
 
+  def test_parsed_miptexture_can_be_palette_expanded_without_changing_bsp_data
+    map = Aogera::BSP29::Reader.read_bytes(build_bsp(textures: texture_lump))
+    texture = map.textures.fetch(0)
+    palette_bytes = "\0".b * Aogera::Quake::PaletteReader::BYTE_SIZE
+    [
+      [0, 10, 20, 30],
+      [1, 40, 50, 60],
+      [2, 70, 80, 90],
+      [3, 100, 110, 120]
+    ].each do |index, r, g, b|
+      offset = index * 3
+      palette_bytes.setbyte(offset, r)
+      palette_bytes.setbyte(offset + 1, g)
+      palette_bytes.setbyte(offset + 2, b)
+    end
+    palette = Aogera::Quake::PaletteReader.read_bytes(palette_bytes)
+
+    image = Aogera::Quake::MipTextureDecoder.decode(texture, palette, level: 2)
+
+    assert_equal 4, image.width
+    assert_equal 4, image.height
+    assert_equal [70, 80, 90, 255], image.pixels.bytes.first(4)
+    assert_equal 16, texture.mipmaps.fetch(2).bytesize
+    assert_equal 2, texture.mipmaps.fetch(2).getbyte(0)
+  end
+
   def test_preserves_missing_texture_directory_entries
     texture_bytes = [2, -1, -1].pack("l<l<l<")
     map = Aogera::BSP29::Reader.read_bytes(build_bsp(textures: texture_bytes))

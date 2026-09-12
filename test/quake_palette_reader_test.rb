@@ -14,6 +14,8 @@ class QuakePaletteReaderTest < Minitest::Test
     assert_equal Aogera::Quake::PaletteColor.new(r: 129, g: 130, b: 131), palette[43]
     assert_equal Aogera::Quake::PaletteColor.new(r: 253, g: 254, b: 255), palette[255]
     assert palette.colors.frozen?
+    assert_predicate palette.rgb_bytes, :frozen?
+    assert_equal bytes, palette.rgb_bytes
   end
 
   def test_palette_lookup_uses_array_bounds
@@ -46,6 +48,7 @@ class QuakePaletteReaderTest < Minitest::Test
     bytes.setbyte(0, 255)
 
     assert_equal 0, palette[0].r
+    assert_equal 0, palette.rgb_bytes.getbyte(0)
   end
 
   def test_decodes_palette_bytes_read_through_vfs_from_pak

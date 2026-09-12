@@ -89,7 +89,7 @@ MipTexture
 └── four indexed-color mip levels
 ```
 
-The BSP Reader still performs no palette or raylib texture conversion. A separate source-neutral `Quake::PaletteReader` now decodes Quake's 768-byte `gfx/palette.lmp` into 256 RGB entries, but BSP miptexture indices are not combined with that palette at this checkpoint.
+The BSP Reader still performs no palette or raylib texture conversion. A separate source-neutral `Quake::PaletteReader` decodes Quake's 768-byte `gfx/palette.lmp` into 256 RGB entries while retaining the original packed RGB lookup table. `Quake::MipTextureDecoder` can now combine one already-parsed BSP mip level with that palette into one packed RGBA buffer on demand. The original indexed mipmaps remain the authoritative BSP data; the decoder does not eagerly expand the whole mip chain or create per-pixel Ruby records. Palette-specific rendering semantics such as fullbright treatment are deliberately not collapsed into the decoded map representation: the indexed source bytes remain available so a later shader/upload step can derive those effects without reconstructing or reparsing texture data.
 
 Brush model `0` remains the static world model. Additional BSP submodels remain separate in `MapData#models`; the Reader does not flatten doors/platforms/moving brush candidates into world geometry.
 
@@ -210,7 +210,7 @@ bundle exec ruby bin/aogera-bsp29 --spectator /path/to/map.bsp
 
 The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices` and verifies/corrects polygon winding against the normalized BSP face plane. In the current v0.3.5 checkpoint, `Render::BSP29SurfaceBuilder` performs that work once at map load and stores face-level flat position buffers plus two independent coordinate domains: unwrapped Quake texture-space S/T for future repeating miptextures and local lightmap-space S/T on Quake's original 16-unit luxel grid. Texture index/name, texinfo flags, original face index, active light-style IDs, and light offset are retained without assigning atlas coordinates. Baked samples remain in one compact lighting blob rather than being copied into one Ruby String per face.
 
-`Render::BSP29World` consumes those stable surfaces, triangulates each face for the persistent raylib mesh, packs only the first stored baked-light style into the same padded grayscale atlas used since v0.3.4, and derives normalized atlas UVs at that rendering boundary. The original low-resolution lightmaps are not rebaked, upscaled, or rewritten. Faces with no baked samples use a fullbright fallback texel. Embedded miptexture pixels are still not sampled, and the decoded Quake palette is not yet supplied to rendering, so the current world remains deliberately grayscale rather than textured.
+`Render::BSP29World` consumes those stable surfaces, triangulates each face for the persistent raylib mesh, packs only the first stored baked-light style into the same padded grayscale atlas used since v0.3.4, and derives normalized atlas UVs at that rendering boundary. The original low-resolution lightmaps are not rebaked, upscaled, or rewritten. Faces with no baked samples use a fullbright fallback texel. `Render::BSP29TextureMapping` can independently convert preserved base S/T into normalized coordinates using the referenced miptexture dimensions while deliberately leaving negative and greater-than-one values unwrapped for Quake-style tiling. `Quake::MipTextureDecoder` can palette-expand the referenced indexed mip level, but those pixels are not yet uploaded or bound by `BSP29World`, so the current world remains deliberately grayscale rather than textured.
 
 Beginning with the v0.3.4 bring-up line, `bin/aogera-bsp29` no longer imports the Ruby `test_field` as gameplay state. `BSP29::Bootstrap` selects the first `info_player_start`, uses its already-normalized origin as the Aogera player entry, and converts the Quake `angle` property to `FirstPersonView` yaw. BSP mode currently creates only the bound player; it does not import Quake monsters, items, triggers, or other map entities yet.
 
@@ -240,7 +240,7 @@ The controlled fixture historically authored `info_player_start` as an Aogera fe
 
 The BSP path does not yet provide:
 
-- palette-sampled BSP base textures or raylib base-texture resources;
+- raylib/GPU base-texture resources and textured BSP world drawing;
 - animated/multi-style lightmap evaluation beyond the first stored style;
 - PVS traversal;
 - arbitrary authored actor radii for BSP static collision;

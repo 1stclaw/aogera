@@ -276,6 +276,29 @@ class BSP29RenderTest < Minitest::Test
     assert_predicate surface.lightmap_st, :frozen?
   end
 
+  def test_texture_mapping_normalizes_but_does_not_wrap_quake_texture_coordinates
+    map = square_map(
+      size: 64.0,
+      s_offset: -24.0,
+      t_offset: 8.0
+    )
+    prepared = Aogera::Render::BSP29SurfaceBuilder.build(map)
+    surface = prepared.surfaces.fetch(0)
+    texture = map.textures.fetch(surface.texture_index)
+
+    uvs = Aogera::Render::BSP29TextureMapping.normalized_uv(surface, texture)
+
+    assert_equal [
+      -1.5, 4.5,
+      2.5, 4.5,
+      2.5, 0.5,
+      -1.5, 0.5
+    ], uvs
+    assert_predicate uvs, :frozen?
+    assert_operator uvs.min, :<, 0.0
+    assert_operator uvs.max, :>, 1.0
+  end
+
   def test_surface_builder_preserves_all_light_styles_by_offset_into_one_lighting_blob
     lighting = (0...10).to_a.pack("C*").freeze
     map = square_map(
