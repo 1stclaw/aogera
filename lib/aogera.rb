@@ -66,6 +66,7 @@ require_relative "aogera/mode/dialogue"
 require_relative "aogera/mode/play"
 require_relative "aogera/mode/spectator"
 require_relative "aogera/raylib_api"
+require_relative "aogera/render/bsp29_surface_builder"
 require_relative "aogera/render/bsp29_world"
 require_relative "aogera/render/raylib_3d"
 

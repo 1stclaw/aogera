@@ -10,7 +10,7 @@ It began as a branch of Sunbird and is now developed independently. The project 
 
 Aogera 0.3.5 development starts from the 0.3.4 real-BSP milestone: BSP-native bootstrap, explicit diagnostic spectator launch, persistent world-model rendering, baked-lightmap preview, and inspection diagnostics remain the current runtime baseline. The ordinary Ruby-authored launch remains unchanged.
 
-Aogera 0.3.5 now has four incremental content checkpoints: source/decoder boundary cleanup, the minimal binary-content VFS foundation, BSP CLI integration through Quake PAK files, and source-neutral Quake palette decoding. `Content::VFS` mounts `Content::Directory` and `Content::Pak` sources behind normalized virtual paths, with later mounts taking precedence. `bin/aogera-bsp29 --pak FILE VIRTUAL_PATH` reads BSP bytes through that namespace and passes them to `BSP29::Reader.read_bytes`; direct host-filesystem BSP paths remain supported. `Quake::PaletteReader` independently decodes the 768-byte `gfx/palette.lmp` representation into 256 immutable RGB entries and is tested with bytes supplied through the same VFS/PAK path. The common VFS source contract remains deliberately limited to `read(path)` and `exist?(path)`.
+Aogera 0.3.5 now has five incremental checkpoints: source/decoder boundary cleanup, the minimal binary-content VFS foundation, BSP CLI integration through Quake PAK files, source-neutral Quake palette decoding, and a BSP surface-preparation boundary. `Content::VFS` mounts `Content::Directory` and `Content::Pak` sources behind normalized virtual paths, with later mounts taking precedence. `bin/aogera-bsp29 --pak FILE VIRTUAL_PATH` reads BSP bytes through that namespace and passes them to `BSP29::Reader.read_bytes`; direct host-filesystem BSP paths remain supported. `Quake::PaletteReader` independently decodes the 768-byte `gfx/palette.lmp` representation into 256 immutable RGB entries. `Render::BSP29SurfaceBuilder` now prepares stable map-lifetime face data once, preserving unwrapped base-texture S/T separately from local lightmap S/T while retaining the original compact BSP lighting blob by offset. `Render::BSP29World` still produces the same grayscale lightmap preview from persistent GPU resources; no base-texture or shader behavior changes in this checkpoint.
 
 Every spatial runtime entity uses:
 
@@ -53,7 +53,7 @@ The current `Level::Readers::Ruby` understands the existing Ruby/grid source for
 
 The first external reader now exists as `BSP29::Reader`. It decodes Quake 1 BSP29 into normalized `BSP29::MapData`, preserving BSP-specific structure while converting vectors, bounds, plane normals, texture axes, model origins, and entity origins to Aogera axes at 1:1 world-unit magnitude.
 
-The Reader has been validated end-to-end with an Aogera-controlled BSP29 fixture compiled by ericw-tools from the original `test_field` layout. BSP mode now renders world model `0` directly and bootstraps the player from the BSP entity lump; the matching Ruby `test_field` is no longer loaded by `bin/aogera-bsp29`. BSP world geometry is reconstructed once into a persistent raylib mesh after the graphics context opens, replacing the former per-triangle Ruby/FFI draw loop. v0.3.4 now also derives Quake BSP face lightmap extents from `TexInfo`, packs the first stored baked-light style into one grayscale atlas, and supplies real lightmap UVs to that mesh. Embedded wall-texture pixels are still intentionally ignored, so the current preview is grayscale lighting only. The spectator also draws a compact diagnostic overlay with measured FPS, camera position/orientation, BSP triangle count, persistent mesh-draw count, lightmapped-face/atlas statistics, and runtime entity count. The Ruby level path remains the normal non-BSP fallback.
+The Reader has been validated end-to-end with controlled and real BSP29 maps. BSP mode renders world model `0` directly and bootstraps the player from the BSP entity lump; the matching Ruby `test_field` is no longer loaded by `bin/aogera-bsp29`. `Render::BSP29SurfaceBuilder` now reconstructs world-model faces once at map load into stable flat numeric buffers, preserving Quake texture-space S/T, local lightmap-space S/T, texture identity/flags, face identity, and compact baked-light metadata. `Render::BSP29World` consumes that prepared data, packs the first stored baked-light style into the same grayscale atlas as before, and uploads persistent raylib mesh/model resources after the graphics context opens. The original low-resolution BSP lightmaps are neither rebaked nor upscaled; the lighting lump remains one shared binary blob referenced by face offset. Embedded wall-texture pixels are still intentionally ignored, so the current preview remains grayscale lighting only. The spectator also draws a compact diagnostic overlay with measured FPS, camera position/orientation, BSP triangle count, persistent mesh-draw count, lightmapped-face/atlas statistics, and runtime entity count. The Ruby level path remains the normal non-BSP fallback.
 
 ### Runtime movement and collision
 
@@ -83,11 +83,13 @@ bundle exec ruby bin/aogera
 
 The raylib window captures the mouse for first-person look. `Q` or `Esc` exits and the host releases the cursor during shutdown.
 
-For the controlled BSP29 test-field preview, launch the diagnostic spectator explicitly:
+For a useful direct-file rendering test, launch the diagnostic spectator against an external lightmapped Quake BSP rather than the unlit controlled fixture:
 
 ```bash
-bundle exec ruby bin/aogera-bsp29 --spectator ../bsp29-test-field/test_field.bsp
+bundle exec ruby bin/aogera-bsp29 --spectator ../quake1-bsp/e1m3.bsp
 ```
+
+The small controlled `bsp29-test-field` fixture remains useful for automated structure/collision tests, but it is not the preferred visual-lightmap target.
 
 A BSP can also be read directly from a Quake PAK without extraction. With `--pak`, the final BSP argument is a virtual path inside the archive:
 
@@ -103,7 +105,7 @@ bundle exec ruby bin/aogera-bsp29 \
 Structural and entity inspection can be performed without opening raylib in either source mode:
 
 ```bash
-bundle exec ruby bin/aogera-bsp29 ../bsp29-test-field/test_field.bsp --bsp-info
+bundle exec ruby bin/aogera-bsp29 ../quake1-bsp/e1m3.bsp --bsp-info
 bundle exec ruby bin/aogera-bsp29 --pak ../quake1-shareware/id1/pak0.pak maps/e1m3.bsp --bsp-info
 bundle exec ruby bin/aogera-bsp29 --pak ../quake1-shareware/id1/pak0.pak maps/e1m3.bsp --dump-entities
 bundle exec ruby bin/aogera-bsp29 --pak ../quake1-shareware/id1/pak0.pak maps/e1m3.bsp --dump-textures
@@ -150,7 +152,7 @@ Aogera uses Minitest directly. Run the complete suite with:
 bundle exec ruby -Itest -e 'Dir["test/**/*_test.rb"].sort.each { |file| require File.expand_path(file) }'
 ```
 
-This is the preferred project test command. The stable v0.3.4 release baseline is **306 runs / 1106 assertions / 0 failures / 0 errors / 0 skips**. The v0.3.5 source-boundary preparation checkpoint was **308 runs / 1116 assertions / 0 failures / 0 errors / 0 skips**; the VFS-foundation checkpoint was **320 runs / 1165 assertions / 0 failures / 0 errors / 0 skips**; and the PAK/BSP CLI integration checkpoint was **327 runs / 1198 assertions / 0 failures / 0 errors / 0 skips**. The current palette-decoder checkpoint is **332 runs / 1218 assertions / 0 failures / 0 errors / 0 skips**.
+This is the preferred project test command. The stable v0.3.4 release baseline is **306 runs / 1106 assertions / 0 failures / 0 errors / 0 skips**. The v0.3.5 source-boundary preparation checkpoint was **308 runs / 1116 assertions / 0 failures / 0 errors / 0 skips**; the VFS-foundation checkpoint was **320 runs / 1165 assertions / 0 failures / 0 errors / 0 skips**; and the PAK/BSP CLI integration checkpoint was **327 runs / 1198 assertions / 0 failures / 0 errors / 0 skips**. The palette-decoder checkpoint was **332 runs / 1218 assertions / 0 failures / 0 errors / 0 skips**. The current BSP surface-preparation checkpoint is **336 runs / 1246 assertions / 0 failures / 0 errors / 0 skips**.
 
 ## Runtime structure
 
@@ -185,6 +187,6 @@ Aogera 0.3.4 established the first self-contained BSP launch path: BSP29 supplie
 
 The rendering checkpoint remains deliberately incomplete but structurally useful: BSP faces are persistent GPU geometry with real baked-lightmap UVs and a grayscale atlas, while embedded indexed miptexture pixels are parsed but not yet rendered. Collision remains hybrid and explicit: compiled hull 1 is authoritative for current actor static movement, the point hull handles obstruction traces, continuous `GroundBody` handles dynamic actors, and local NPC navigation probes the same `GroundSpace`.
 
-Aogera 0.3.5 develops the content-source milestone incrementally. The preparation checkpoint separated repository-local Ruby source paths from binary content, the VFS checkpoint added directory and Quake PAK sources, the PAK/BSP checkpoint routed BSP launch/inspection through `Content::VFS`, and the current palette checkpoint adds `Quake::PaletteReader` for the canonical 256-color `gfx/palette.lmp` bytes without coupling that decoder to storage or rendering. Direct BSP file loading remains available. The next 0.3.5 work can prepare the BSP renderer's CPU-side surface/material representation and then combine embedded indexed miptextures with the existing lightmaps. WAD2, Quake UI, ZIP support, generic asset management, and broader package features remain out of scope.
+Aogera 0.3.5 develops the content/rendering milestone incrementally. The preparation checkpoint separated repository-local Ruby source paths from binary content, the VFS checkpoint added directory and Quake PAK sources, the PAK/BSP checkpoint routed BSP launch/inspection through `Content::VFS`, and the palette checkpoint added `Quake::PaletteReader` for the canonical 256-color `gfx/palette.lmp` bytes without coupling that decoder to storage or rendering. The current surface checkpoint moves BSP face interpretation out of GPU-resource ownership: `BSP29SurfaceBuilder` prepares stable face-level buffers once, keeps base-texture and lightmap coordinate domains separate, and references one compact lighting blob by offset instead of materializing per-face light sample strings. Direct BSP file loading remains available. The next 0.3.5 work can sample embedded indexed miptextures through the decoded palette and then bind base textures plus the original low-resolution baked lightmaps as separate GPU inputs. WAD2, Quake UI, ZIP support, generic asset management, and broader package features remain out of scope.
 
 Aogera favors small explicit systems, authored game worlds, mature external tools where useful, and incremental evolution instead of designing future subsystems too early.

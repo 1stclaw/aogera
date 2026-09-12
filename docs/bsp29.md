@@ -14,7 +14,7 @@ BSP29::Reader
    v
 BSP29::MapData
    |
-   +--> Render::BSP29World (world model 0 preview)
+   +--> Render::BSP29SurfaceBuilder -> Render::BSP29World (world model 0 preview)
    +--> BSP29::GroundClearance (compiled hull 1, actor movement/local probes)
    |       |
    |       +--> BSP29::GroundHull (radius-bound fixed-hull adapter)
@@ -208,7 +208,9 @@ The current BSP preview can render world model `0` from a parsed BSP29 map:
 bundle exec ruby bin/aogera-bsp29 --spectator /path/to/map.bsp
 ```
 
-The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices`, verifies/corrects polygon winding against the normalized BSP face plane, and triangulates the convex polygon. Since v0.3.4, those triangles are uploaded to persistent raylib mesh/model resources after the window opens, rather than issuing one Ruby/FFI `DrawTriangle3D` call per triangle every frame. The renderer now also reproduces Quake's 16-unit lightmap sampling grid from each face's `TexInfo`, `light_offset`, and styles, packs the first stored baked-light style into a padded grayscale atlas, and assigns lightmap UVs to the persistent mesh. Faces with no baked samples use a fullbright fallback texel. Embedded miptexture pixels are still not sampled, and the newly decoded Quake palette is not yet supplied to rendering, so the current world remains deliberately grayscale rather than textured.
+The preview reconstructs each BSP face through `Face -> SurfEdges -> Edges -> Vertices` and verifies/corrects polygon winding against the normalized BSP face plane. In the current v0.3.5 checkpoint, `Render::BSP29SurfaceBuilder` performs that work once at map load and stores face-level flat position buffers plus two independent coordinate domains: unwrapped Quake texture-space S/T for future repeating miptextures and local lightmap-space S/T on Quake's original 16-unit luxel grid. Texture index/name, texinfo flags, original face index, active light-style IDs, and light offset are retained without assigning atlas coordinates. Baked samples remain in one compact lighting blob rather than being copied into one Ruby String per face.
+
+`Render::BSP29World` consumes those stable surfaces, triangulates each face for the persistent raylib mesh, packs only the first stored baked-light style into the same padded grayscale atlas used since v0.3.4, and derives normalized atlas UVs at that rendering boundary. The original low-resolution lightmaps are not rebaked, upscaled, or rewritten. Faces with no baked samples use a fullbright fallback texel. Embedded miptexture pixels are still not sampled, and the decoded Quake palette is not yet supplied to rendering, so the current world remains deliberately grayscale rather than textured.
 
 Beginning with the v0.3.4 bring-up line, `bin/aogera-bsp29` no longer imports the Ruby `test_field` as gameplay state. `BSP29::Bootstrap` selects the first `info_player_start`, uses its already-normalized origin as the Aogera player entry, and converts the Quake `angle` property to `FirstPersonView` yaw. BSP mode currently creates only the bound player; it does not import Quake monsters, items, triggers, or other map entities yet.
 
@@ -238,7 +240,7 @@ The controlled fixture historically authored `info_player_start` as an Aogera fe
 
 The BSP path does not yet provide:
 
-- palette conversion or raylib textures;
+- palette-sampled BSP base textures or raylib base-texture resources;
 - animated/multi-style lightmap evaluation beyond the first stored style;
 - PVS traversal;
 - arbitrary authored actor radii for BSP static collision;

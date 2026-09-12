@@ -83,8 +83,8 @@ class BSP29RenderTest < Minitest::Test
     api = FakeAPI.new
 
     assert_equal 1, renderer.lightmapped_face_count
-    assert_operator renderer.lightmap_atlas_width, :>=, 8
-    assert_operator renderer.lightmap_atlas_height, :>=, 8
+    assert_equal 8, renderer.lightmap_atlas_width
+    assert_equal 8, renderer.lightmap_atlas_height
 
     renderer.prepare(api)
 
@@ -98,6 +98,14 @@ class BSP29RenderTest < Minitest::Test
     assert_includes grayscale_values, 254
 
     texcoords = api.created.fetch(0).fetch(:texcoords)
+    assert_equal [
+      0.3125, 0.5625,
+      0.5625, 0.5625,
+      0.5625, 0.3125,
+      0.3125, 0.5625,
+      0.5625, 0.3125,
+      0.3125, 0.3125
+    ], texcoords
     assert_equal 12, texcoords.length
     texcoords.each do |coordinate|
       assert_operator coordinate, :>, 0.0
@@ -216,6 +224,88 @@ class BSP29RenderTest < Minitest::Test
     assert_match(/face lightmap is outside lighting lump/, error.message)
   end
 
+  def test_surface_builder_prepares_stable_face_level_buffers
+    map = square_map(texinfo_flags: 7)
+    prepared = Aogera::Render::BSP29SurfaceBuilder.build(map)
+    surface = prepared.surfaces.fetch(0)
+
+    assert_predicate prepared.surfaces, :frozen?
+    assert_same map.lighting, prepared.lighting
+    assert_equal 0, surface.face_index
+    assert_equal 12, surface.positions.length
+    assert_equal 8, surface.texture_st.length
+    assert_predicate surface.positions, :frozen?
+    assert_predicate surface.texture_st, :frozen?
+    assert_equal 0, surface.texture_index
+    assert_equal "AOG_GROUND", surface.texture_name
+    assert_equal 7, surface.texinfo_flags
+    assert_nil surface.lightmap
+    assert_nil surface.lightmap_st
+  end
+
+  def test_surface_builder_preserves_unwrapped_texture_and_local_lightmap_coordinates
+    lighting = ([32] * 36).pack("C*").freeze
+    prepared = Aogera::Render::BSP29SurfaceBuilder.build(
+      square_map(
+        size: 64.0,
+        light_offset: 0,
+        lighting: lighting,
+        s_offset: -24.0,
+        t_offset: 8.0
+      )
+    )
+    surface = prepared.surfaces.fetch(0)
+    lightmap = surface.lightmap
+
+    assert_equal [
+      -24.0, 72.0,
+      40.0, 72.0,
+      40.0, 8.0,
+      -24.0, 8.0
+    ], surface.texture_st
+    assert_equal(-2, lightmap.min_s)
+    assert_equal 0, lightmap.min_t
+    assert_equal 6, lightmap.width
+    assert_equal 6, lightmap.height
+    assert_equal [
+      0.5, 4.5,
+      4.5, 4.5,
+      4.5, 0.5,
+      0.5, 0.5
+    ], surface.lightmap_st
+    assert_predicate surface.lightmap_st, :frozen?
+  end
+
+  def test_surface_builder_preserves_all_light_styles_by_offset_into_one_lighting_blob
+    lighting = (0...10).to_a.pack("C*").freeze
+    map = square_map(
+      size: 16.0,
+      light_offset: 2,
+      lighting: lighting,
+      styles: [0, 1, 255, 255].freeze
+    )
+    prepared = Aogera::Render::BSP29SurfaceBuilder.build(map)
+    lightmap = prepared.surfaces.fetch(0).lightmap
+
+    assert_same map.lighting, prepared.lighting
+    assert_equal [0, 1], lightmap.styles
+    assert_equal 2, lightmap.light_offset
+    assert_equal 2, lightmap.width
+    assert_equal 2, lightmap.height
+  end
+
+  def test_surface_builder_keeps_missing_texture_reference_observable
+    map = square_map
+    bad_texinfo = map.texinfo.first.with(texture_index: 99, flags: 1)
+    map = map.with(texinfo: [bad_texinfo].freeze)
+
+    surface = Aogera::Render::BSP29SurfaceBuilder.build(map).surfaces.fetch(0)
+
+    assert_equal 99, surface.texture_index
+    assert_nil surface.texture_name
+    assert_equal 1, surface.texinfo_flags
+  end
+
   private
 
   def square_map(
@@ -223,7 +313,11 @@ class BSP29RenderTest < Minitest::Test
     extra_texture_name: nil,
     size: 1.0,
     light_offset: -1,
-    lighting: "".b
+    lighting: "".b,
+    s_offset: 0.0,
+    t_offset: 0.0,
+    texinfo_flags: 0,
+    styles: [0, 255, 255, 255].freeze
   )
     vec = Aogera::BSP29::Vec3
     face = Aogera::BSP29::Face.new(
@@ -232,18 +326,18 @@ class BSP29RenderTest < Minitest::Test
       first_edge: 0,
       edge_count: 4,
       texinfo_index: 0,
-      styles: [0, 255, 255, 255].freeze,
+      styles: styles,
       light_offset: light_offset
     )
     faces = [face]
     texinfo = [
       Aogera::BSP29::TexInfo.new(
         s_axis: vec.new(x: 1.0, y: 0.0, z: 0.0),
-        s_offset: 0.0,
+        s_offset: s_offset,
         t_axis: vec.new(x: 0.0, y: 0.0, z: 1.0),
-        t_offset: 0.0,
+        t_offset: t_offset,
         texture_index: 0,
-        flags: 0
+        flags: texinfo_flags
       )
     ]
     textures = [mip_texture("AOG_GROUND")]

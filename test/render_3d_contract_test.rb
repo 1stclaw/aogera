@@ -250,10 +250,7 @@ class Render3DContractTest < Minitest::Test
         layer: 10
       )
     )
-    bsp29_map = Object.new
-    bsp29_map.define_singleton_method(:world_model) { nil }
-
-    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
+    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: empty_bsp29_map)
     renderer.prepare
     renderer.draw(
       level: Object.new,
@@ -280,10 +277,8 @@ class Render3DContractTest < Minitest::Test
       position: Aogera::Component::Position.new(x: 1.0, y: 2.0, z: 3.0)
     )
     world.spawn(position: Aogera::Component::Position.new(x: 4.0, y: 5.0, z: 6.0))
-    bsp29_map = Object.new
-    bsp29_map.define_singleton_method(:world_model) { nil }
     view = Aogera::FirstPersonView.for_direction(:east)
-    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: bsp29_map)
+    renderer = Aogera::Render::Raylib3D.new(api: api, bsp29_map: empty_bsp29_map)
     renderer.prepare
 
     renderer.draw(
@@ -326,5 +321,27 @@ class Render3DContractTest < Minitest::Test
     cubes = api.calls.select { |call| call.first == :draw_cube }.map(&:last)
     assert_equal 1, cubes.length
     assert_in_delta Aogera::Render::Raylib3D::FLOOR_HEIGHT, cubes.first[:height]
+  end
+
+  private
+
+  def empty_bsp29_map
+    Aogera::BSP29::MapData.new(
+      entities: [].freeze,
+      planes: [].freeze,
+      textures: [].freeze,
+      vertices: [].freeze,
+      visibility: "".b.freeze,
+      nodes: [].freeze,
+      texinfo: [].freeze,
+      faces: [].freeze,
+      lighting: "".b.freeze,
+      clipnodes: [].freeze,
+      leaves: [].freeze,
+      marksurfaces: [].freeze,
+      edges: [].freeze,
+      surfedges: [].freeze,
+      models: [].freeze
+    )
   end
 end

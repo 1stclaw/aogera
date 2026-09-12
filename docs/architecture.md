@@ -332,7 +332,7 @@ raylib
 
 ```text
 Ruby/grid Level -> primitive floor/wall extrusion
-BSP29::MapData -> Render::BSP29World -> reconstructed world-model batches -> persistent raylib meshes
+BSP29::MapData -> Render::BSP29SurfaceBuilder -> stable face buffers -> Render::BSP29World -> persistent raylib meshes
 ```
 
 The controlled player is omitted from the first-person entity pass. The BSP preview renders world model `0` only and intentionally bypasses any generic scene representation.
@@ -382,7 +382,8 @@ Aogera 0.3.5 development currently has:
 - a validated BSP29 Reader preserving geometry, BSP tree, clipnodes, textures, entities, visibility/light blobs, and submodels;
 - a minimal binary-content VFS with normalized virtual paths, loose-directory sources, Quake PAK sources, deterministic last-mounted-source precedence, and PAK-backed BSP CLI loading;
 - a source-neutral Quake palette decoder for the 256 RGB entries in `gfx/palette.lmp`, validated with VFS/PAK-supplied bytes but not yet wired into rendering;
-- a minimal BSP29 world-model renderer used by the controlled test-field preview;
+- a BSP29 surface-preparation boundary that preserves flat face geometry, unwrapped base-texture S/T, local lightmap S/T, texture metadata, and compact lighting-blob offsets before GPU allocation;
+- a minimal BSP29 world-model renderer that consumes those prepared surfaces and currently reproduces the same grayscale baked-lightmap preview;
 - a BSP-only `Mode::Spectator` whose camera is detached from gameplay collision for arbitrary-map inspection;
 - BSP29 compiled hull 1 through shared `GroundClearance` as the actor static movement backend;
 - BSP29 world-model node/leaf tracing for melee and interaction obstruction.
